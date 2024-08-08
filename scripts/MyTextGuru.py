@@ -46,7 +46,7 @@ def process_text(text, num_words, num_bigrams, num_trigrams):
     return words, bigrams, trigrams
 
 def main():
-    st.title("Analyseur de texte HTML")
+    st.title("MyTextGuru")
 
     # Étape 1: Importer le fichier
     uploaded_file = st.file_uploader("Importer un fichier Excel", type=["xlsx"])
