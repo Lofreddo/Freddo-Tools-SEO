@@ -6,6 +6,9 @@ PAGES = {
     "MyTextGuru": MyTextGuru
 }
 
+# Sélection de la page
+selection = st.sidebar.selectbox("Choisissez une page", list(PAGES.keys()))
+
 # Affichage du script sélectionné
 page = PAGES[selection]
 page.app()
