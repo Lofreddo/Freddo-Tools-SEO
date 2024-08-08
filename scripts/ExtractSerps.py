@@ -71,13 +71,23 @@ def main():
             if not all_results.empty:
                 @st.cache_data
                 def convert_df(df):
-                    return df.to_excel(index=False, engine='openpyxl')
+                    try:
+                        output = io.BytesIO()
+                        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                            df.to_excel(writer, index=False)
+                        processed_data = output.getvalue()
+                        return processed_data
+                    except Exception as e:
+                        st.error(f"Erreur lors de la conversion du DataFrame en Excel: {e}")
+                        return None
 
-                st.download_button(
-                    label="Télécharger les résultats",
-                    data=convert_df(all_results),
-                    file_name='results.xlsx',
-                    mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                )
+                excel_data = convert_df(all_results)
+                if excel_data:
+                    st.download_button(
+                        label="Télécharger les résultats",
+                        data=excel_data,
+                        file_name='results.xlsx',
+                        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                    )
         else:
             st.error("Veuillez entrer au moins un mot-clé.")
