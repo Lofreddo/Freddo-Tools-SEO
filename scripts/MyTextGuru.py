@@ -12,8 +12,11 @@ import sys
 def download_spacy_model(model_name):
     try:
         spacy.load(model_name)
+        print(f"Model {model_name} loaded successfully.")
     except OSError:
+        print(f"Model {model_name} not found. Downloading now...")
         subprocess.run([sys.executable, "-m", "spacy", "download", model_name])
+        print(f"Model {model_name} downloaded successfully.")
 
 # Téléchargement de la liste de stop words et de 'punkt'
 nltk.download('stopwords')
@@ -31,6 +34,7 @@ download_spacy_model(model_name)
 
 # Charger le modèle de langue française de spaCy
 nlp = spacy.load(model_name)
+print(f"Model {model_name} loaded into spaCy.")
 
 # Définir la fonction pour nettoyer le texte HTML
 def clean_html(text):
@@ -59,6 +63,7 @@ def extract_words_ngrams(text, n):
 
 # Définir la fonction principale pour traiter le fichier Excel et générer le fichier texte
 def process_text_file(uploaded_file, column_choice, num_words, num_bigrams, num_trigrams):
+    print("Processing text file...")
     df = pd.read_excel(uploaded_file)
     html_content = df[column_choice].tolist()
     cleaned_text = [clean_html(text) for text in html_content]
