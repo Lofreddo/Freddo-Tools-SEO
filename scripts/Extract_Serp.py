@@ -11,7 +11,7 @@ st.title("Recherche de mots-clés avec ValueSERP")
 keywords_input = st.text_area("Entrez vos mots-clés, un par ligne:")
 
 # Conversion des mots-clés en liste
-keywords = keywords_input.strip().split('\n')
+keywords = [keyword.strip() for keyword in keywords_input.strip().split('\n') if keyword.strip()]
 
 # Menu déroulant pour sélectionner le domaine Google
 google_domain = st.selectbox(
@@ -40,12 +40,13 @@ def fetch_results(keyword):
         'output': 'csv',
         'csv_fields': 'search.q,organic_results.position,organic_results.title,organic_results.link,organic_results.domain,organic_results.page'
     }
-    api_result = requests.get('https://api.valueserp.com/search', params)
-    if api_result.status_code == 200:
+    try:
+        api_result = requests.get('https://api.valueserp.com/search', params)
+        api_result.raise_for_status()  # Raise an error for bad status codes
         result_df = pd.read_csv(io.StringIO(api_result.text))
         return result_df
-    else:
-        st.error(f"La requête pour le mot-clé '{keyword}' a échoué avec le code d'état {api_result.status_code}.")
+    except requests.RequestException as e:
+        st.error(f"La requête pour le mot-clé '{keyword}' a échoué: {e}")
         return None
 
 # Bouton pour lancer la recherche
