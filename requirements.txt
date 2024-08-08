@@ -1,8 +1,7 @@
 pandas
 nltk
 beautifulsoup4
-treetaggerwrapper
+spacy
 scikit-learn
 streamlit
 openpyxl
--e .
