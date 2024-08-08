@@ -8,9 +8,9 @@ import streamlit as st
 from concurrent.futures import ThreadPoolExecutor
 
 # Téléchargement de la liste de stop words et de 'punkt'
-nltk.download('stopwords')
-nltk.download('punkt')
-nltk.download('averaged_perceptron_tagger')
+nltk.download('stopwords', quiet=True)
+nltk.download('punkt', quiet=True)
+nltk.download('averaged_perceptron_tagger', quiet=True)
 
 # Définir les listes de mots d'arrêt et de lettres de l'alphabet
 french_stopwords_list = nltk.corpus.stopwords.words('french')
@@ -97,3 +97,4 @@ def main():
                 file_name="resultats.txt",
                 mime="text/plain"
             )
+
