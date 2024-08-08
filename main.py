@@ -1,5 +1,5 @@
 import streamlit as st
-import MyTextGuru
+from scripts import MyTextGuru
 
 # Configuration des pages
 PAGES = {
