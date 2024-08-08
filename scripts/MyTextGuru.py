@@ -5,6 +5,15 @@ from bs4 import BeautifulSoup
 from collections import Counter
 import spacy
 import string
+import subprocess
+import sys
+
+# Vérifier et télécharger le modèle de langue française de spaCy si nécessaire
+def download_spacy_model(model_name):
+    try:
+        spacy.load(model_name)
+    except OSError:
+        subprocess.run([sys.executable, "-m", "spacy", "download", model_name])
 
 # Téléchargement de la liste de stop words et de 'punkt'
 nltk.download('stopwords')
@@ -14,8 +23,14 @@ nltk.download('punkt')
 french_stopwords_list = nltk.corpus.stopwords.words('french')
 alphabet_list = list(string.ascii_lowercase)
 
+# Nom du modèle de langue française de spaCy
+model_name = 'fr_core_news_md'
+
+# Télécharger le modèle de langue française
+download_spacy_model(model_name)
+
 # Charger le modèle de langue française de spaCy
-nlp = spacy.load('fr_core_news_md')
+nlp = spacy.load(model_name)
 
 # Définir la fonction pour nettoyer le texte HTML
 def clean_html(text):
