@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 from collections import Counter
 import string
 import streamlit as st
+from concurrent.futures import ThreadPoolExecutor
 
 # Téléchargement de la liste de stop words et de 'punkt'
 nltk.download('stopwords')
@@ -37,6 +38,13 @@ def extract_words_ngrams(text, n):
     else:
         return filtered_tokens
 
+def process_text(text, num_words, num_bigrams, num_trigrams):
+    cleaned = clean_html(text)
+    words = extract_words_ngrams(cleaned, 1)
+    bigrams = extract_words_ngrams(cleaned, 2)
+    trigrams = extract_words_ngrams(cleaned, 3)
+    return words, bigrams, trigrams
+
 def main():
     st.title("Analyseur de texte HTML")
 
@@ -58,17 +66,14 @@ def main():
             num_bigrams = st.number_input("Nombre de bigrammes à garder", min_value=1, value=30)
             num_trigrams = st.number_input("Nombre de trigrammes à garder", min_value=1, value=30)
 
-            # Nettoyer le texte HTML
-            cleaned_text = [clean_html(text) for text in html_content]
+            # Utiliser ThreadPoolExecutor pour paralléliser le traitement
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                results = list(executor.map(lambda text: process_text(text, num_words, num_bigrams, num_trigrams), html_content))
 
-            # Extraire les mots et les n-grams
-            words = []
-            bigrams = []
-            trigrams = []
-            for text in cleaned_text:
-                words.extend(extract_words_ngrams(text, 1))
-                bigrams.extend(extract_words_ngrams(text, 2))
-                trigrams.extend(extract_words_ngrams(text, 3))
+            # Extraire les résultats
+            words = [word for result in results for word in result[0]]
+            bigrams = [bigram for result in results for bigram in result[1]]
+            trigrams = [trigram for result in results for trigram in result[2]]
 
             # Compter les occurrences
             words_counter = Counter(words)
