@@ -1,5 +1,5 @@
 import streamlit as st
-from Scripts.MyTextGuru import process_text_file
+from scripts import MyTextGuru
 
 st.title("Analyse des mots et n-grams")
 
