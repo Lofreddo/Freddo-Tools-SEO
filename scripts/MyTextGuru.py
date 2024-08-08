@@ -9,15 +9,20 @@ import string
 
 # Patch for treetaggerwrapper
 import sys
-from importlib import reload
-
-if 'treetaggerwrapper' in sys.modules:
-    del sys.modules['treetaggerwrapper']
-
 import configparser
-import treetaggerwrapper
-treetaggerwrapper.configparser = configparser
-reload(treetaggerwrapper)
+import importlib
+
+def patch_treetaggerwrapper():
+    import treetaggerwrapper
+    if 'SafeConfigParser' in dir(configparser):
+        treetaggerwrapper.configparser.SafeConfigParser = configparser.ConfigParser
+    else:
+        treetaggerwrapper.configparser.SafeConfigParser = configparser.ConfigParser
+
+    importlib.reload(treetaggerwrapper)
+    return treetaggerwrapper
+
+treetaggerwrapper = patch_treetaggerwrapper()
 
 def app():
     # Téléchargement de la liste de stop words et de 'punkt'
