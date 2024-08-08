@@ -5,7 +5,6 @@ from nltk import ngrams
 from bs4 import BeautifulSoup
 from collections import Counter
 from nltk.corpus import stopwords
-from sklearn.feature_extraction.text import CountVectorizer
 import treetaggerwrapper
 import string
 import io
@@ -44,7 +43,8 @@ def extract_words_ngrams(text, n, tagger):
         return [' '.join(grams) for grams in n_grams]
     else:
         return filtered_tokens
-    def app():
+
+def app():
     st.title("MyTextGuru")
 
     # Upload du fichier Excel
