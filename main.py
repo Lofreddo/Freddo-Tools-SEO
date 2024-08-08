@@ -4,7 +4,7 @@ from scripts.MyTextGuru import clean_html, extract_words_ngrams
 from collections import Counter
 
 # Interface Streamlit
-st.title("Analyseur de texte HTML")
+st.title("MyTextGuru")
 
 # Étape 1: Importer le fichier
 uploaded_file = st.file_uploader("Importer un fichier Excel", type=["xlsx"])
