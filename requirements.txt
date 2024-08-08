@@ -1,7 +1,5 @@
+streamlit
 pandas
 nltk
 beautifulsoup4
-spacy
-scikit-learn
-streamlit
 openpyxl
