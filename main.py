@@ -1,10 +1,10 @@
 import streamlit as st
-from scripts import MyTextGuru, Extract-Serp,
+from scripts import MyTextGuru, Extract_Serp
 
 # Configuration des pages
 PAGES = {
     "MyTextGuru": MyTextGuru,
-    "Extract Serp": Extract-Serp
+    "Extract Serp": Extract_Serp
 }
 
 # Créer une sidebar pour la navigation
