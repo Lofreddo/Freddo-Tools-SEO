@@ -7,6 +7,7 @@ from collections import Counter
 from nltk.corpus import stopwords
 import spacy
 import string
+from io import BytesIO
 
 # Téléchargement de la liste de stop words et de 'punkt'
 nltk.download('stopwords')
@@ -95,14 +96,13 @@ def app():
         df['Trigrammes les plus courants'] = ', '.join(most_common_trigrams)
 
         # Enregistrer le DataFrame dans un nouveau fichier Excel
-        output = 'nouveau_fichier.xlsx'
+        output = BytesIO()
         df.to_excel(output, index=False)
-        st.write("Le fichier a été enregistré sous le nom 'nouveau_fichier.xlsx'. Vous pouvez le télécharger en utilisant le lien ci-dessous.")
-        
-        with open(output, 'rb') as file:
-            btn = st.download_button(
-                label="Télécharger le fichier Excel",
-                data=file,
-                file_name=output,
-                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            )
+        output.seek(0)
+
+        st.download_button(
+            label="Télécharger le fichier Excel",
+            data=output,
+            file_name='nouveau_fichier.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
