@@ -1,6 +1,7 @@
-streamlit
 pandas
 nltk
 beautifulsoup4
-spacy==3.5.0
+treetaggerwrapper
+scikit-learn
+streamlit
 openpyxl
