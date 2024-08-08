@@ -73,7 +73,7 @@ def main():
                 def convert_df(df):
                     try:
                         output = io.BytesIO()
-                        with pd.ExcelWriter(output, engine='openpyxl', options={'encoding': 'utf-8'}) as writer:
+                        with pd.ExcelWriter(output, engine='openpyxl') as writer:
                             df.to_excel(writer, index=False)
                         processed_data = output.getvalue()
                         return processed_data
