@@ -1,0 +1,6 @@
+streamlit
+pandas
+nltk
+beautifulsoup4
+treetaggerwrapper
+openpyxl
