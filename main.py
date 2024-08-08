@@ -61,5 +61,5 @@ if uploaded_file is not None:
 
 # Configuration des pages
 PAGES = {
-    "MyTextGuru": clean_html, extract_words_ngrams
+    "MyTextGuru": MyTextGuru
 }
