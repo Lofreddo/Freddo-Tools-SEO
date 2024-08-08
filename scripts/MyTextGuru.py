@@ -24,7 +24,12 @@ def app():
     # Interface Streamlit pour charger le fichier Excel
     uploaded_file = st.file_uploader("Choisissez un fichier Excel", type="xlsx")
     if uploaded_file is not None:
+        # Lire le fichier Excel
         df = pd.read_excel(uploaded_file)
+        if 'hn_content' not in df.columns:
+            st.error("Le fichier Excel doit contenir une colonne 'hn_content'.")
+            return
+
         html_content = df['hn_content'].tolist()
 
         # Fonction pour nettoyer le texte HTML
@@ -90,6 +95,14 @@ def app():
         df['Trigrammes les plus courants'] = ', '.join(most_common_trigrams)
 
         # Enregistrer le DataFrame dans un nouveau fichier Excel
-        df.to_excel('nouveau_fichier.xlsx', index=False)
+        output = 'nouveau_fichier.xlsx'
+        df.to_excel(output, index=False)
         st.write("Le fichier a été enregistré sous le nom 'nouveau_fichier.xlsx'. Vous pouvez le télécharger en utilisant le lien ci-dessous.")
-        st.download_button(label="Télécharger le fichier Excel", data=df.to_excel(index=False), file_name='nouveau_fichier.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        
+        with open(output, 'rb') as file:
+            btn = st.download_button(
+                label="Télécharger le fichier Excel",
+                data=file,
+                file_name=output,
+                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
