@@ -1,4 +1,3 @@
-import streamlit as st
 import pandas as pd
 import nltk
 from nltk import ngrams
@@ -24,7 +23,7 @@ def clean_html(text):
         return ""
 
 # Définir la fonction pour extraire les mots et les n-grams
-def extract_words_ngrams(text, n):
+def extract_words_ngrams(text, n, tagger):
     tokens = nltk.word_tokenize(text)
     pos_tokens = treetaggerwrapper.make_tags(tagger.tag_text(text))
 
@@ -39,20 +38,9 @@ def extract_words_ngrams(text, n):
     else:
         return filtered_tokens
 
-# Interface utilisateur avec Streamlit
-st.title("Analyse des mots et n-grams")
-
-uploaded_file = st.file_uploader("Importer un fichier Excel", type="xlsx")
-
-if uploaded_file is not None:
+# Définir la fonction principale pour traiter le fichier Excel et générer le fichier texte
+def process_text_file(uploaded_file, column_choice, num_words, num_bigrams, num_trigrams):
     df = pd.read_excel(uploaded_file)
-    columns = df.columns.tolist()
-    column_choice = st.selectbox("Sélectionner la colonne contenant le contenu HTML", columns)
-
-    num_words = st.number_input("Nombre de mots uniques à garder", min_value=1, value=50)
-    num_bigrams = st.number_input("Nombre de bigrammes à garder", min_value=1, value=30)
-    num_trigrams = st.number_input("Nombre de trigrammes à garder", min_value=1, value=30)
-
     html_content = df[column_choice].tolist()
     cleaned_text = [clean_html(text) for text in html_content]
 
@@ -62,9 +50,9 @@ if uploaded_file is not None:
     bigrams = []
     trigrams = []
     for text in cleaned_text:
-        words.extend(extract_words_ngrams(text, 1))
-        bigrams.extend(extract_words_ngrams(text, 2))
-        trigrams.extend(extract_words_ngrams(text, 3))
+        words.extend(extract_words_ngrams(text, 1, tagger))
+        bigrams.extend(extract_words_ngrams(text, 2, tagger))
+        trigrams.extend(extract_words_ngrams(text, 3, tagger))
 
     words_counter = Counter(words)
     bigrams_counter = Counter(bigrams)
@@ -74,15 +62,11 @@ if uploaded_file is not None:
     most_common_bigrams = [bigram for bigram, count in bigrams_counter.most_common(num_bigrams)]
     most_common_trigrams = [trigram for trigram, count in trigrams_counter.most_common(num_trigrams)]
 
-    with open("output.txt", "w", encoding='utf-8') as f:
-        f.write("Mots les plus courants:\n")
-        f.write(", ".join(most_common_words) + "\n\n")
-        f.write("Bigrammes les plus courants:\n")
-        f.write(", ".join(most_common_bigrams) + "\n\n")
-        f.write("Trigrammes les plus courants:\n")
-        f.write(", ".join(most_common_trigrams))
+    output_text = "Mots les plus courants:\n"
+    output_text += ", ".join(most_common_words) + "\n\n"
+    output_text += "Bigrammes les plus courants:\n"
+    output_text += ", ".join(most_common_bigrams) + "\n\n"
+    output_text += "Trigrammes les plus courants:\n"
+    output_text += ", ".join(most_common_trigrams)
 
-    with open("output.txt", "r", encoding='utf-8') as f:
-        st.download_button('Télécharger le fichier de sortie', f, file_name='output.txt')
-
-st.write("Veuillez importer un fichier Excel pour commencer.")
+    return output_text
