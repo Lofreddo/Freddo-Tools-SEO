@@ -43,7 +43,7 @@ def main():
         }
         api_result = requests.get('https://api.valueserp.com/search', params)
         if api_result.status_code == 200:
-            result_df = pd.read_csv(io.StringIO(api_result.text))
+            result_df = pd.read_csv(io.StringIO(api_result.text), encoding='utf-8')
             return result_df
         else:
             st.error(f"La requête pour le mot-clé '{keyword}' a échoué avec le code d'état {api_result.status_code}.")
