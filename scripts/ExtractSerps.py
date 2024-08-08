@@ -42,8 +42,16 @@ def main():
             'csv_fields': 'search.q,organic_results.position,organic_results.title,organic_results.link,organic_results.domain,organic_results.page'
         }
         api_result = requests.get('https://api.valueserp.com/search', params)
+        
         if api_result.status_code == 200:
-            result_df = pd.read_csv(io.StringIO(api_result.text), encoding='utf-8')
+            # Vérifiez l'encodage spécifié dans les en-têtes de la réponse
+            encoding = api_result.apparent_encoding if api_result.encoding is None else api_result.encoding
+            
+            # Décodez le contenu de la réponse en utilisant l'encodage approprié
+            decoded_content = api_result.content.decode(encoding)
+            
+            # Lire les données dans un DataFrame
+            result_df = pd.read_csv(io.StringIO(decoded_content), encoding='utf-8')
             return result_df
         else:
             st.error(f"La requête pour le mot-clé '{keyword}' a échoué avec le code d'état {api_result.status_code}.")
