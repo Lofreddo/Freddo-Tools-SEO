@@ -5,3 +5,7 @@ from scripts import MyTextGuru
 PAGES = {
     "MyTextGuru": MyTextGuru
 }
+
+# Affichage du script sélectionné
+page = PAGES[selection]
+page.app()
