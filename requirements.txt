@@ -2,5 +2,5 @@ streamlit
 pandas
 nltk
 beautifulsoup4
-spacy
+spacy==3.5.0
 openpyxl
