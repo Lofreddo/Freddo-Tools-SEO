@@ -3,7 +3,7 @@ from scripts import MyTextGuru
 
 # Configuration des pages
 PAGES = {
-    "MyTextGuru": MyTextGuru
+    "MyTextGuru": MyTextGuru,
 }
 
 # Créer une sidebar pour la navigation
