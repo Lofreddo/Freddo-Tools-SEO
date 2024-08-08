@@ -3,7 +3,7 @@ import nltk
 from nltk import ngrams
 from bs4 import BeautifulSoup
 from collections import Counter
-import treetaggerwrapper
+import spacy
 import string
 
 # Téléchargement de la liste de stop words et de 'punkt'
@@ -14,6 +14,9 @@ nltk.download('punkt')
 french_stopwords_list = nltk.corpus.stopwords.words('french')
 alphabet_list = list(string.ascii_lowercase)
 
+# Charger le modèle de langue française de spaCy
+nlp = spacy.load('fr_core_news_md')
+
 # Définir la fonction pour nettoyer le texte HTML
 def clean_html(text):
     if isinstance(text, str):
@@ -23,13 +26,14 @@ def clean_html(text):
         return ""
 
 # Définir la fonction pour extraire les mots et les n-grams
-def extract_words_ngrams(text, n, tagger):
-    tokens = nltk.word_tokenize(text)
-    pos_tokens = treetaggerwrapper.make_tags(tagger.tag_text(text))
+def extract_words_ngrams(text, n):
+    doc = nlp(text)
+    tokens = [token.text for token in doc]
+    pos_tokens = [(token.text, token.pos_) for token in doc]
 
     filtered_tokens = []
-    for token, pos_token in zip(tokens, pos_tokens):
-        if token not in french_stopwords_list and token.isalpha() and isinstance(pos_token, treetaggerwrapper.Tag) and not (pos_token.pos.startswith('VER') or pos_token.pos.startswith('AUX')) and token not in alphabet_list:
+    for token, pos in pos_tokens:
+        if token not in french_stopwords_list and token.isalpha() and pos not in ['VERB', 'AUX'] and token not in alphabet_list:
             filtered_tokens.append(token)
 
     if n > 1:
@@ -44,15 +48,13 @@ def process_text_file(uploaded_file, column_choice, num_words, num_bigrams, num_
     html_content = df[column_choice].tolist()
     cleaned_text = [clean_html(text) for text in html_content]
 
-    tagger = treetaggerwrapper.TreeTagger(TAGDIR='C:/TreeTagger', TAGLANG='fr')
-
     words = []
     bigrams = []
     trigrams = []
     for text in cleaned_text:
-        words.extend(extract_words_ngrams(text, 1, tagger))
-        bigrams.extend(extract_words_ngrams(text, 2, tagger))
-        trigrams.extend(extract_words_ngrams(text, 3, tagger))
+        words.extend(extract_words_ngrams(text, 1))
+        bigrams.extend(extract_words_ngrams(text, 2))
+        trigrams.extend(extract_words_ngrams(text, 3))
 
     words_counter = Counter(words)
     bigrams_counter = Counter(bigrams)
