@@ -58,3 +58,8 @@ if uploaded_file is not None:
             file_name="resultats.txt",
             mime="text/plain"
         )
+
+# Configuration des pages
+PAGES = {
+    "MyTextGuru": clean_html, extract_words_ngrams
+}
