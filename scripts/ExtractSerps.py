@@ -44,18 +44,18 @@ def main():
         api_result = requests.get('https://api.valueserp.com/search', params)
         
         if api_result.status_code == 200:
-            # Vérifiez l'encodage spécifié dans les en-têtes de la réponse
-            encoding = api_result.apparent_encoding if api_result.encoding is None else api_result.encoding
-            
-            # Décodez le contenu de la réponse en utilisant l'encodage approprié
-            decoded_content = api_result.content.decode(encoding)
-            
-            # Lire les données dans un DataFrame
-            result_df = pd.read_csv(io.StringIO(decoded_content), encoding='utf-8')
+            # Lire les données dans un DataFrame en spécifiant explicitement l'encodage
+            result_df = pd.read_csv(io.StringIO(api_result.text), encoding='utf-8')
             return result_df
         else:
             st.error(f"La requête pour le mot-clé '{keyword}' a échoué avec le code d'état {api_result.status_code}.")
             return None
+
+    # Fonction pour nettoyer et réencoder les données en UTF-8
+    def clean_dataframe(df):
+        for column in df.columns:
+            df[column] = df[column].apply(lambda x: x.encode('latin1').decode('utf-8') if isinstance(x, str) else x)
+        return df
 
     # Bouton pour lancer la recherche
     if st.button("Lancer la recherche"):
@@ -71,6 +71,9 @@ def main():
             for result_df in results:
                 if result_df is not None:
                     all_results = pd.concat([all_results, result_df], ignore_index=True)
+
+            # Nettoyer et réencoder les données
+            all_results = clean_dataframe(all_results)
 
             # Affiche les résultats dans Streamlit
             st.dataframe(all_results)
