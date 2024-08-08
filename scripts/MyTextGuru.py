@@ -5,8 +5,19 @@ from nltk import ngrams
 from bs4 import BeautifulSoup
 from collections import Counter
 from nltk.corpus import stopwords
-import treetaggerwrapper
 import string
+
+# Patch for treetaggerwrapper
+import sys
+from importlib import reload
+
+if 'treetaggerwrapper' in sys.modules:
+    del sys.modules['treetaggerwrapper']
+
+import configparser
+import treetaggerwrapper
+treetaggerwrapper.configparser = configparser
+reload(treetaggerwrapper)
 
 def app():
     # Téléchargement de la liste de stop words et de 'punkt'
