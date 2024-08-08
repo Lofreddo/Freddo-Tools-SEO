@@ -13,9 +13,9 @@ nltk.download('stopwords')
 nltk.download('punkt')
 
 # Votre ami a suggéré d'utiliser cette liste de mots d'arrêt
-french_stopwords_list = nltk.corpus.stopwords.words('french')
+french_stopwords_list = set(nltk.corpus.stopwords.words('french'))
 # Votre ami a suggéré d'utiliser cette liste de lettres de l'alphabet
-alphabet_list = list(string.ascii_lowercase)
+alphabet_list = set(string.ascii_lowercase)
 
 # Charger le modèle de langue français de spacy
 nlp = spacy.load('fr_core_news_sm')
