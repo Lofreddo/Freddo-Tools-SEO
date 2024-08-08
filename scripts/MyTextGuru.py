@@ -5,35 +5,22 @@ from nltk import ngrams
 from bs4 import BeautifulSoup
 from collections import Counter
 from nltk.corpus import stopwords
+import spacy
 import string
 
-# Patch for treetaggerwrapper
-import sys
-import configparser
-import importlib
+# Téléchargement de la liste de stop words et de 'punkt'
+nltk.download('stopwords')
+nltk.download('punkt')
 
-def patch_treetaggerwrapper():
-    import treetaggerwrapper
-    if 'SafeConfigParser' in dir(configparser):
-        treetaggerwrapper.configparser.SafeConfigParser = configparser.ConfigParser
-    else:
-        treetaggerwrapper.configparser.SafeConfigParser = configparser.ConfigParser
+# Votre ami a suggéré d'utiliser cette liste de mots d'arrêt
+french_stopwords_list = nltk.corpus.stopwords.words('french')
+# Votre ami a suggéré d'utiliser cette liste de lettres de l'alphabet
+alphabet_list = list(string.ascii_lowercase)
 
-    importlib.reload(treetaggerwrapper)
-    return treetaggerwrapper
-
-treetaggerwrapper = patch_treetaggerwrapper()
+# Charger le modèle de langue français de spacy
+nlp = spacy.load('fr_core_news_sm')
 
 def app():
-    # Téléchargement de la liste de stop words et de 'punkt'
-    nltk.download('stopwords')
-    nltk.download('punkt')
-
-    # Votre ami a suggéré d'utiliser cette liste de mots d'arrêt
-    french_stopwords_list = nltk.corpus.stopwords.words('french')
-    # Votre ami a suggéré d'utiliser cette liste de lettres de l'alphabet
-    alphabet_list = list(string.ascii_lowercase)
-
     # Interface Streamlit pour charger le fichier Excel
     uploaded_file = st.file_uploader("Choisissez un fichier Excel", type="xlsx")
     if uploaded_file is not None:
@@ -51,19 +38,17 @@ def app():
         # Nettoyer le texte HTML
         cleaned_text = [clean_html(text) for text in html_content]
 
-        tagger = treetaggerwrapper.TreeTagger(TAGDIR='C:/TreeTagger', TAGLANG='fr')
-
         # Fonction pour extraire les mots et les n-grams
         def extract_words_ngrams(text, n):
-            tokens = nltk.word_tokenize(text)
-            pos_tokens = treetaggerwrapper.make_tags(tagger.tag_text(text))
+            doc = nlp(text)
+            filtered_tokens = [
+                token.text for token in doc 
+                if token.text not in french_stopwords_list 
+                and token.is_alpha 
+                and token.pos_ not in ['VERB', 'AUX'] 
+                and token.text not in alphabet_list
+            ]
 
-            # Ignore les mots vides, non alphabétiques, les verbes, les auxiliaires et les lettres seules
-            filtered_tokens = []
-            for token, pos_token in zip(tokens, pos_tokens):
-                if token not in french_stopwords_list and token.isalpha() and isinstance(pos_token, treetaggerwrapper.Tag) and not (pos_token.pos.startswith('VER') or pos_token.pos.startswith('AUX')) and token not in alphabet_list:
-                    filtered_tokens.append(token)
-            
             if n > 1:
                 n_grams = ngrams(filtered_tokens, n)
                 return [' '.join(grams) for grams in n_grams]
