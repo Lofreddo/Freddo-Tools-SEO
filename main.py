@@ -1,10 +1,9 @@
 import streamlit as st
-from scripts import MyTextGuru, AnotherScript
+from scripts import MyTextGuru
 
 # Configuration des pages
 PAGES = {
-    "MyTextGuru": MyTextGuru,
-    "Another Script": AnotherScript  # Ajouter ici d'autres scripts
+    "MyTextGuru": MyTextGuru
 }
 
 # Créer une sidebar pour la navigation
