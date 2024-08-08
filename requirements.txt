@@ -5,3 +5,4 @@ treetaggerwrapper
 scikit-learn
 streamlit
 openpyxl
+-e .
