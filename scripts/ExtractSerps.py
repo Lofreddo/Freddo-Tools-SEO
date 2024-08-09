@@ -1,8 +1,12 @@
+import os  # Ajouter cette ligne
 import requests
 import pandas as pd
 import io
 import concurrent.futures
 import streamlit as st
+
+# Récupérer la clé API à partir des variables d'environnement
+VALUSERP_API_KEY = os.getenv('VALUSERP_API_KEY')  # Ajouter cette ligne
 
 def main():
     # Titre de l'application
