@@ -57,6 +57,11 @@ def main():
                 master_spin_text = uploaded_txt_file.read().decode("utf-8")
 
                 results = []
+
+                # Setup a progress bar
+                progress_bar = st.progress(0)
+                total_rows = len(df)
+
                 for index, row in df.iterrows():
                     # Récupérer la valeur de la clé sélectionnée pour construire l'URL
                     url_component_value = row[selected_key]
@@ -64,16 +69,15 @@ def main():
                         st.warning(f"La valeur de la clé sélectionnée pour la ligne {index + 1} est vide ou non valide. Ignorée.")
                         continue
                     
-                    start_time = time.time()
-
                     replacements = {key: '' if pd.isna(value) else str(value) for key, value in row.items()}
                     
                     text = master_spin(master_spin_text, replacements)
                     url_component = transform_text(url_component_value)
                     h1_content = extract_h1_content(text)
-                    end_time = time.time()
-                    st.write(f"Texte généré pour {url_component_value} en {end_time - start_time} secondes.")
                     results.append([url_component_value, text, f"{url_prefix}-{url_component}", h1_content])
+
+                    # Update progress bar
+                    progress_bar.progress((index + 1) / total_rows)
 
                 output_df = pd.DataFrame(results, columns=[selected_key, "Texte", "URL", "H1_Content"])
 
