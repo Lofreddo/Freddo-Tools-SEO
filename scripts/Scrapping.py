@@ -69,8 +69,8 @@ def generate_output(urls):
 
     df = pd.DataFrame({
         'url': urls,
-        'content': [content for content, _ in contents],
-        'structure_hn': [structure for _, structure in contents]
+        'content': [content if content is not None else "" for content, _ in contents],
+        'structure_hn': [structure if structure is not None else "" for _, structure in contents]
     })
 
     return df
