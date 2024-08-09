@@ -16,13 +16,23 @@ def get_hn_and_content(url):
 
     soup = BeautifulSoup(response.content, 'html.parser')
 
+    # Supprimer les sections de navigation et footers
+    for nav_tag in soup.find_all(['nav', 'footer']):
+        nav_tag.decompose()  # Retirer ces sections du soup
+
+    # Gérer le cas où <body> est absent
+    if not soup.body:
+        content_container = soup
+    else:
+        content_container = soup.body
+
     hn_structure = ""
-    for tag in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+    for tag in content_container.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
         if tag.get_text().strip():
             hn_structure += f"<{tag.name}>{tag.get_text()}</{tag.name}>\n"
 
     html_content = ""
-    for tag in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'ul', 'li', 'ol']):
+    for tag in content_container.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'ul', 'li', 'ol']):
         for child in tag.find_all(True):
             if child.name in ['b', 'i', 'em', 'strong']:
                 child.replace_with(child.get_text())
