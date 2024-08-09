@@ -7,37 +7,16 @@ from concurrent.futures import ThreadPoolExecutor
 
 # Fonction pour filtrer les éléments non pertinents
 def filter_tags(soup):
-    # Supprimer les balises de navigation, footers, et listes de liens
-    for tag in soup.find_all(['nav', 'footer', 'path', 'svg']):
-        tag.decompose()  # Retirer ces sections du soup
+    # Supprimer les balises de header et footer basées sur des tags, classes ou ID communs
+    for tag in soup.find_all(['header', 'footer']):
+        tag.decompose()
 
-    # Supprimer les sections avec des liens vers les réseaux sociaux
-    social_keywords = ['facebook', 'twitter', 'instagram', 'linkedin', 'youtube', 'social']
-    for link in soup.find_all('a', href=True):
-        if any(keyword in link['href'].lower() for keyword in social_keywords):
-            link.decompose()
+    # Supprimer les balises non pertinentes tout en conservant le contenu des balises pertinentes
+    for tag in soup.find_all(True):  # True trouve toutes les balises
+        if tag.name not in ['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'li', 'ol']:
+            tag.decompose()
 
-    # Supprimer les listes de liens qui sont souvent en bas de page
-    for ul in soup.find_all('ul'):
-        if ul.find_all('a', href=True):
-            ul.decompose()
-
-    # Supprimer les balises <a> mais garder leur contenu
-    for a_tag in soup.find_all('a'):
-        a_tag.unwrap()
-
-    # Supprimer les balises <span>, <img>, <table>, <td>, <tr> mais conserver le contenu pertinent
-    for tag in soup.find_all(['span', 'img', 'table', 'td', 'tr']):
-        if any(child.name in ['p', 'li', 'ul', 'ol', 'h1', 'h2', 'h3', 'h4', 'h5'] for child in tag.find_all(True)):
-            tag.unwrap()  # Déplie la balise et garde son contenu
-        else:
-            tag.decompose()  # Supprime la balise et son contenu
-
-    # Supprimer les balises <em> et leur contenu
-    for em_tag in soup.find_all('em'):
-        em_tag.decompose()
-
-# Fonction pour extraire le contenu des balises hn et HTML
+# Fonction pour extraire le contenu et la structure des balises hn
 def get_hn_and_content(url):
     with requests.Session() as session:
         try:
@@ -54,15 +33,21 @@ def get_hn_and_content(url):
     # Gérer le cas où <body> est absent
     content_container = soup.body if soup.body else soup
 
-    # Extraire uniquement les balises pertinentes
+    # Extraire le contenu et la structure des balises hn
     html_content = ""
+    structure_hn = []
+    
     for tag in content_container.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'li', 'ol']):
-        # Supprimer les attributs pour éviter de conserver les classes CSS
-        tag.attrs = {}
+        tag.attrs = {}  # Supprimer les attributs CSS et autres
         if tag.get_text().strip():
             html_content += str(tag) + '\n'
+            if tag.name.startswith('h'):
+                structure_hn.append(tag.name)
 
-    return html_content
+    # Combiner la structure hn en une chaîne de caractères
+    structure_hn_str = " > ".join(structure_hn)
+
+    return html_content, structure_hn_str
 
 # Fonction pour traiter les URLs en parallèle
 def process_urls_in_parallel(urls, max_workers=10):
@@ -76,7 +61,8 @@ def generate_output(urls):
 
     df = pd.DataFrame({
         'url': urls,
-        'content': contents
+        'content': [content for content, _ in contents],
+        'structure_hn': [structure for _, structure in contents]
     })
 
     return df
@@ -85,23 +71,18 @@ def generate_output(urls):
 def main():
     st.title("Scraping Tool")
 
-    # Zone de texte pour entrer les URLs
     st.subheader("Entrez les URLs à scraper (une URL par ligne):")
     urls_input = st.text_area("Entrez vos URLs ici", height=200)
 
-    # Convertir les URLs en une liste
     urls = urls_input.splitlines()
 
-    # Ajouter un bouton pour lancer le scraping
     if st.button("Lancer le scraping"):
         if urls:
             df = generate_output(urls)
 
-            # Afficher les résultats dans Streamlit
             st.subheader("Aperçu des résultats")
             st.write(df.head())
 
-            # Ajouter un bouton pour télécharger le fichier Excel
             buffer = BytesIO()
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
                 df.to_excel(writer, index=False)
