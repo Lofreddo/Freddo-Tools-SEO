@@ -10,7 +10,7 @@ def clean_html_content(soup):
     # Supprimer les balises <span>, <div>, <label>
     for tag in soup.find_all(['span', 'div', 'label']):
         tag.decompose()
-    
+
     # Supprimer les balises <a> en conservant le contenu, sauf si elles contiennent des liens vers les réseaux sociaux
     social_keywords = ['facebook', 'twitter', 'instagram', 'linkedin', 'youtube', 'social']
     for a_tag in soup.find_all('a', href=True):
@@ -19,9 +19,9 @@ def clean_html_content(soup):
         else:
             a_tag.unwrap()  # Supprime la balise <a> mais conserve son contenu
 
-    # Supprimer les attributs (classes CSS, id, etc.) des balises restantes, sauf les balises hn et p
-    for tag in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'li', 'ol']):
-        tag.attrs = {}  # On supprime les attributs pour garder uniquement les balises
+    # Supprimer les attributs (classes CSS, id, etc.) des balises restantes
+    for tag in soup.find_all(True):
+        tag.attrs = {}
 
     return soup
 
@@ -31,7 +31,7 @@ def get_hn_and_content(url):
         response = requests.get(url)
         response.raise_for_status()
     except requests.RequestException as e:
-        return "", ""
+        return None, None
 
     soup = BeautifulSoup(response.content, 'html.parser')
 
@@ -41,6 +41,9 @@ def get_hn_and_content(url):
 
     # Nettoyer le contenu HTML en fonction des exigences
     clean_soup = clean_html_content(soup)
+
+    # Ajout d'un diagnostic pour vérifier l'état du soup après nettoyage
+    print(f"URL: {url}\nCleaned HTML:\n{clean_soup.prettify()[:1000]}...\n")
 
     html_content = ""
     structure_hn = []
