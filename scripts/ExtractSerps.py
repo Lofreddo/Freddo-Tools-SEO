@@ -1,4 +1,4 @@
-import os
+import os  # Importer la bibliothèque pour accéder aux variables d'environnement
 import requests
 import pandas as pd
 import io
@@ -8,16 +8,7 @@ import streamlit as st
 # Récupérer la clé API à partir des variables d'environnement
 VALUSERP_API_KEY = os.getenv('VALUSERP_API_KEY')
 
-# Vérifier si la clé API est récupérée correctement
-if VALUSERP_API_KEY:
-    st.write("Clé API récupérée avec succès.")
-else:
-    st.error("Erreur : Clé API non trouvée. Veuillez vérifier la configuration des secrets dans Streamlit Cloud.")
-
 def main():
-    if not VALUSERP_API_KEY:
-        st.stop()  # Arrêter l'application si la clé API n'est pas récupérée
-
     # Titre de l'application
     st.title("Recherche de mots-clés avec ValueSERP")
 
@@ -42,7 +33,7 @@ def main():
     # Fonction pour récupérer les résultats de recherche
     def fetch_results(keyword):
         params = {
-            'api_key': VALUSERP_API_KEY,
+            'api_key': VALUSERP_API_KEY,  # Utilisation de la variable d'environnement pour la clé API
             'q': keyword,
             'location': 'Paris,Paris,Ile-de-France,France',
             'google_domain': google_domain,
