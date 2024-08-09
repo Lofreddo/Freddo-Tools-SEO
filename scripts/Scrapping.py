@@ -15,9 +15,9 @@ def clean_html_content(soup):
     social_keywords = ['facebook', 'twitter', 'instagram', 'linkedin', 'youtube', 'social']
     for a_tag in soup.find_all('a', href=True):
         if any(keyword in a_tag['href'].lower() for keyword in social_keywords):
-            a_tag.decompose()
+            a_tag.decompose()  # Supprime la balise entière si elle contient un lien vers les réseaux sociaux
         else:
-            a_tag.unwrap()
+            a_tag.unwrap()  # Supprime la balise <a> mais conserve son contenu
 
     # Supprimer les attributs (classes CSS, id, etc.) des balises restantes
     for tag in soup.find_all(True):
@@ -47,7 +47,8 @@ def get_hn_and_content(url):
     
     for tag in clean_soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'li', 'ol']):
         # Conserver la balise HTML dans le contenu nettoyé
-        html_content += str(tag) + '\n'
+        if tag.get_text(strip=True):  # Vérifie si le texte n'est pas vide
+            html_content += str(tag) + '\n'
         # Ajouter la balise dans la structure hn, avec son contenu
         if tag.name.startswith('h'):
             structure_hn.append(f"<{tag.name}>{tag.get_text(strip=True)}</{tag.name}>")
