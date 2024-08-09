@@ -23,10 +23,13 @@ def get_hn_and_content(url):
     structure_hn = []
     
     for tag in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'li', 'ol']):
-        structure_hn.append(tag.name)
-        html_content += tag.get_text(strip=True) + '\n'
+        # Conserver la balise HTML dans le contenu
+        html_content += str(tag) + '\n'
+        # Ajouter la balise dans la structure hn, avec son contenu
+        if tag.name.startswith('h'):
+            structure_hn.append(f"<{tag.name}>{tag.get_text(strip=True)}</{tag.name}>")
 
-    structure_hn_str = " > ".join(structure_hn)
+    structure_hn_str = "\n".join(structure_hn)
 
     return html_content.strip(), structure_hn_str
 
