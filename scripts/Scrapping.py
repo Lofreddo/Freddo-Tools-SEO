@@ -5,11 +5,11 @@ import pandas as pd
 from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor
 
-# Fonction pour filtrer et nettoyer le contenu HTML
+# Fonction pour nettoyer le contenu HTML en fonction des exigences
 def clean_html_content(soup):
-    # Supprimer les balises <span>, <div>, <label>
+    # Supprimer les balises <span>, <div>, <label> mais conserver leur contenu
     for tag in soup.find_all(['span', 'div', 'label']):
-        tag.decompose()
+        tag.unwrap()
 
     # Supprimer les balises <a> en conservant le contenu, sauf si elles contiennent des liens vers les réseaux sociaux
     social_keywords = ['facebook', 'twitter', 'instagram', 'linkedin', 'youtube', 'social']
@@ -19,7 +19,7 @@ def clean_html_content(soup):
         else:
             a_tag.unwrap()  # Supprime la balise <a> mais conserve son contenu
 
-    # Supprimer les attributs (classes CSS, id, etc.) des balises restantes
+    # Supprimer les classes CSS et autres attributs des balises restantes
     for tag in soup.find_all(True):
         tag.attrs = {}
 
@@ -39,11 +39,8 @@ def get_hn_and_content(url):
     for tag in soup.find_all(['header', 'footer']):
         tag.decompose()
 
-    # Nettoyer le contenu HTML en fonction des exigences
+    # Nettoyer le contenu HTML selon les critères définis
     clean_soup = clean_html_content(soup)
-
-    # Ajout d'un diagnostic pour vérifier l'état du soup après nettoyage
-    st.write(f"URL: {url}\nCleaned HTML:\n{clean_soup.prettify()[:1000]}...\n")
 
     html_content = ""
     structure_hn = []
@@ -72,8 +69,8 @@ def generate_output(urls):
 
     df = pd.DataFrame({
         'url': urls,
-        'content': [content if content is not None else "" for content, _ in contents],
-        'structure_hn': [structure if structure is not None else "" for _, structure in contents]
+        'content': [content for content, _ in contents],
+        'structure_hn': [structure for _, structure in contents]
     })
 
     return df
