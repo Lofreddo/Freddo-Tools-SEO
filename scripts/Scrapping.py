@@ -18,12 +18,13 @@ def filter_tags(soup):
 
 # Fonction pour extraire le contenu et la structure des balises hn
 def get_hn_and_content(url):
-    with requests.Session() as session:
-        try:
+    try:
+        with requests.Session() as session:
             response = session.get(url)
             response.raise_for_status()
-        except requests.RequestException as e:
-            return None, None
+    except requests.RequestException as e:
+        st.error(f"Erreur lors de la récupération de l'URL {url}: {e}")
+        return None, None
 
     soup = BeautifulSoup(response.content, 'html.parser')
 
@@ -43,6 +44,9 @@ def get_hn_and_content(url):
             html_content += str(tag) + '\n'
             if tag.name.startswith('h'):
                 structure_hn.append(tag.name)
+
+    if not html_content:  # Vérifie si du contenu a été récupéré
+        st.warning(f"Aucun contenu pertinent trouvé pour l'URL {url}")
 
     # Combiner la structure hn en une chaîne de caractères
     structure_hn_str = " > ".join(structure_hn)
