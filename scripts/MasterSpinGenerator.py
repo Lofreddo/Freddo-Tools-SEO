@@ -4,6 +4,7 @@ import re
 import random
 import unidecode
 import time
+from io import BytesIO
 
 def master_spin(text, replacements):
     def replace_condition(match):
@@ -81,12 +82,19 @@ def main():
 
                 output_df = pd.DataFrame(results, columns=[selected_key, "Texte", "URL", "H1_Content"])
 
+                # Convert DataFrame to Excel and save to BytesIO
+                buffer = BytesIO()
+                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                    output_df.to_excel(writer, index=False)
+                buffer.seek(0)
+
                 # Create download button
                 st.success("Génération terminée !")
                 st.download_button(
                     label="Télécharger le fichier de sortie",
-                    data=output_df.to_excel(index=False, engine='openpyxl'),
-                    file_name="textes-villes-pf.xlsx"
+                    data=buffer,
+                    file_name="textes-villes-pf.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
             else:
                 st.error("Veuillez importer les fichiers requis.")
