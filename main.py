@@ -5,7 +5,7 @@ from scripts import MyTextGuru, ExtractSerps, MasterSpinGenerator
 PAGES = {
     "MyTextGuru": MyTextGuru,
     "ExtractSerps": ExtractSerps,
-    'MasterSpinGenerator": MasterSpinGenerator
+    "MasterSpinGenerator": MasterSpinGenerator
 }
 
 # Créer une sidebar pour la navigation
