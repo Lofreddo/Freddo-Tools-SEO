@@ -19,9 +19,9 @@ def clean_html_content(soup):
         else:
             a_tag.unwrap()  # Supprime la balise <a> mais conserve son contenu
 
-    # Supprimer les attributs (classes CSS, id, etc.) des balises restantes
-    for tag in soup.find_all(True):
-        tag.attrs = {}
+    # Supprimer les attributs (classes CSS, id, etc.) des balises restantes, sauf les balises hn et p
+    for tag in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'li', 'ol']):
+        tag.attrs = {}  # On supprime les attributs pour garder uniquement les balises
 
     return soup
 
@@ -31,7 +31,7 @@ def get_hn_and_content(url):
         response = requests.get(url)
         response.raise_for_status()
     except requests.RequestException as e:
-        return None, None
+        return "", ""
 
     soup = BeautifulSoup(response.content, 'html.parser')
 
