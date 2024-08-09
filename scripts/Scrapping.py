@@ -10,11 +10,11 @@ import re
 def clean_html_content(soup):
     # Supprimer les balises <span>, <div>, <label>, <img>, <path>, <svg>, <em>, <th>
     # en conservant leur contenu
-    for tag in soup.find_all(['span', 'div', 'label', 'img', 'path', 'svg', 'em', 'th']):
+    for tag in soup.find_all(['span', 'div', 'label', 'img', 'path', 'svg', 'em', 'th', 'strong']):
         tag.unwrap()
 
-    # Supprimer les balises <tr>, <td>, <table> et leur contenu
-    for tag in soup.find_all(['tr', 'td', 'table']):
+    # Supprimer les balises <tr>, <td>, <table>, <button> et leur contenu
+    for tag in soup.find_all(['tr', 'td', 'table', 'button']):
         tag.decompose()
 
     # Supprimer les balises <a> en conservant le contenu, sauf si elles contiennent des liens vers les réseaux sociaux
