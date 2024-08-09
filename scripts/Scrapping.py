@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 def filter_tags(soup):
     # Supprimer les balises de navigation, footers, et listes de liens
     for tag in soup.find_all(['nav', 'footer', 'path', 'svg']):
-        tag.decompose()
+        tag.decompose()  # Retirer ces sections du soup
 
     # Supprimer les sections avec des liens vers les réseaux sociaux
     social_keywords = ['facebook', 'twitter', 'instagram', 'linkedin', 'youtube', 'social']
@@ -21,6 +21,14 @@ def filter_tags(soup):
     for ul in soup.find_all('ul'):
         if ul.find_all('a', href=True):
             ul.decompose()
+
+    # Supprimer les balises <span>, <img>, <table>, <td>, <tr> mais conserver le contenu pertinent
+    for tag in soup.find_all(['span', 'img', 'table', 'td', 'tr']):
+        # Remplacer la balise par son contenu si celui-ci contient des balises intéressantes
+        if any(child.name in ['p', 'li', 'ul', 'ol', 'h1', 'h2', 'h3', 'h4', 'h5'] for child in tag.find_all(True)):
+            tag.unwrap()  # Déplie la balise et garde son contenu
+        else:
+            tag.decompose()  # Supprime la balise et son contenu
 
 # Fonction pour extraire le contenu des balises hn et HTML
 def get_hn_and_content(url):
@@ -41,7 +49,7 @@ def get_hn_and_content(url):
 
     # Extraire uniquement les balises pertinentes
     html_content = ""
-    for tag in content_container.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'li', 'ol', 'span']):
+    for tag in content_container.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'li', 'ol']):
         # Supprimer les attributs pour éviter de conserver les classes CSS
         tag.attrs = {}
         if tag.get_text().strip():
