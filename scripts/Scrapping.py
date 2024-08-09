@@ -5,6 +5,26 @@ import pandas as pd
 from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor
 
+# Fonction pour filtrer et nettoyer le contenu HTML
+def clean_html_content(soup):
+    # Supprimer les balises <span>, <div>, <label>
+    for tag in soup.find_all(['span', 'div', 'label']):
+        tag.decompose()
+    
+    # Supprimer les balises <a> en conservant le contenu, sauf si elles contiennent des liens vers les réseaux sociaux
+    social_keywords = ['facebook', 'twitter', 'instagram', 'linkedin', 'youtube', 'social']
+    for a_tag in soup.find_all('a', href=True):
+        if any(keyword in a_tag['href'].lower() for keyword in social_keywords):
+            a_tag.decompose()
+        else:
+            a_tag.unwrap()
+
+    # Supprimer les attributs (classes CSS, id, etc.) des balises restantes
+    for tag in soup.find_all(True):
+        tag.attrs = {}
+
+    return soup
+
 # Fonction pour extraire le contenu et la structure des balises hn
 def get_hn_and_content(url):
     try:
@@ -19,11 +39,14 @@ def get_hn_and_content(url):
     for tag in soup.find_all(['header', 'footer']):
         tag.decompose()
 
+    # Nettoyer le contenu HTML en fonction des exigences
+    clean_soup = clean_html_content(soup)
+
     html_content = ""
     structure_hn = []
     
-    for tag in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'li', 'ol']):
-        # Conserver la balise HTML dans le contenu
+    for tag in clean_soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'li', 'ol']):
+        # Conserver la balise HTML dans le contenu nettoyé
         html_content += str(tag) + '\n'
         # Ajouter la balise dans la structure hn, avec son contenu
         if tag.name.startswith('h'):
