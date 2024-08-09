@@ -37,6 +37,14 @@ def filter_tags(soup):
     for em_tag in soup.find_all('em'):
         em_tag.decompose()
 
+# Fonction pour supprimer le contenu avant la première balise <h1>
+def remove_content_before_first_h1(soup):
+    first_h1 = soup.find('h1')
+    if first_h1:
+        # Supprimer tous les éléments qui précèdent la première balise <h1>
+        for element in first_h1.find_all_previous():
+            element.decompose()
+
 # Fonction pour extraire le contenu des balises hn et HTML
 def get_hn_and_content(url):
     with requests.Session() as session:
@@ -47,6 +55,9 @@ def get_hn_and_content(url):
             return None, None
 
     soup = BeautifulSoup(response.content, 'html.parser')
+
+    # Supprimer le contenu avant la première balise <h1>
+    remove_content_before_first_h1(soup)
 
     # Filtrer les éléments non pertinents
     filter_tags(soup)
