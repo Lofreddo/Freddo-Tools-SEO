@@ -26,17 +26,41 @@ def main():
         ["desktop", "mobile"]
     )
 
+ # Menu déroulant pour sélectionner le nombre de résultats par mots-clés
+    num = st.selectbox(
+        "Sélectionnez le nombre de résultats:",
+        ["10", "20", "30", "40", "50", "100"]
+    )
+
+# Menu déroulant pour sélectionner le pays
+    gl = st.selectbox(
+        "Sélectionnez le pays:",
+        ["fr", "es", "de", "en"]
+    )
+
+# Menu déroulant pour sélectionner la langue
+    hl = st.selectbox(
+        "Sélectionnez la langue:",
+        ["fr", "es", "de", "en"]
+    )
+
+# Menu déroulant pour sélectionner la location
+    location = st.selectbox(
+        "Sélectionnez la langue:",
+        ["France", "United Kingdom", "United States", "Spain", "Germany"]
+    )
+    
     # Fonction pour récupérer les résultats de recherche
     def fetch_results(keyword):
         params = {
             'api_key': '81293DFA2CEF4FE49DB08E002D947143',
             'q': keyword,
-            'location': 'Paris,Paris,Ile-de-France,France',
+            'location': location,
             'google_domain': google_domain,
-            'gl': 'fr',
-            'hl': 'fr',
+            'gl': gl,
+            'hl': hl,
             'device': device,
-            'num': '100',
+            'num': num,
             'page': '1',
             'output': 'csv',
             'csv_fields': 'search.q,organic_results.position,organic_results.title,organic_results.link,organic_results.domain,organic_results.page'
