@@ -43,7 +43,7 @@ def get_hn_and_content(url):
     clean_soup = clean_html_content(soup)
 
     # Ajout d'un diagnostic pour vérifier l'état du soup après nettoyage
-    print(f"URL: {url}\nCleaned HTML:\n{clean_soup.prettify()[:1000]}...\n")
+    st.write(f"URL: {url}\nCleaned HTML:\n{clean_soup.prettify()[:1000]}...\n")
 
     html_content = ""
     structure_hn = []
