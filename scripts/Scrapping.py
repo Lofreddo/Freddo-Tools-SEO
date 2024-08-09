@@ -65,6 +65,12 @@ def get_hn_and_content(url):
     # Gérer le cas où <body> est absent
     content_container = soup.body if soup.body else soup
 
+    # Extraire la structure <hn>
+    hn_structure = ""
+    for tag in content_container.find_all(['h1', 'h2', 'h3', 'h4', 'h5']):
+        if tag.get_text().strip():
+            hn_structure += f"<{tag.name}>{tag.get_text()}</{tag.name}>\n"
+
     # Extraire uniquement les balises pertinentes
     html_content = ""
     for tag in content_container.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'li', 'ol']):
@@ -73,7 +79,7 @@ def get_hn_and_content(url):
         if tag.get_text().strip():
             html_content += str(tag) + '\n'
 
-    return html_content
+    return hn_structure, html_content
 
 # Fonction pour traiter les URLs en parallèle
 def process_urls_in_parallel(urls, max_workers=10):
@@ -83,11 +89,14 @@ def process_urls_in_parallel(urls, max_workers=10):
 
 # Fonction pour générer la sortie en DataFrame
 def generate_output(urls):
-    contents = process_urls_in_parallel(urls)
+    results = process_urls_in_parallel(urls)
+
+    hn_structures, html_contents = zip(*results)
 
     df = pd.DataFrame({
         'url': urls,
-        'content': contents
+        'url_hn': hn_structures,
+        'content': html_contents
     })
 
     return df
