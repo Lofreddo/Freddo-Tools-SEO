@@ -1,12 +1,8 @@
-import os  # Importer la bibliothèque pour accéder aux variables d'environnement
 import requests
 import pandas as pd
 import io
 import concurrent.futures
 import streamlit as st
-
-# Récupérer la clé API à partir des variables d'environnement
-VALUSERP_API_KEY = os.getenv('VALUSERP_API_KEY')
 
 def main():
     # Titre de l'application
@@ -33,7 +29,7 @@ def main():
     # Fonction pour récupérer les résultats de recherche
     def fetch_results(keyword):
         params = {
-            'api_key': VALUSERP_API_KEY,  # Utilisation de la variable d'environnement pour la clé API
+            'api_key': '81293DFA2CEF4FE49DB08E002D947143',
             'q': keyword,
             'location': 'Paris,Paris,Ile-de-France,France',
             'google_domain': google_domain,
