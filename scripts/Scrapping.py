@@ -4,12 +4,13 @@ from bs4 import BeautifulSoup
 import pandas as pd
 from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor
+import re
 
 # Fonction pour nettoyer le contenu HTML en fonction des exigences
 def clean_html_content(soup):
-    # Supprimer les balises <span>, <div>, <label>, <img>, <table>, <tr>, <td>, <path>, <svg>
+    # Supprimer les balises <span>, <div>, <label>, <img>, <table>, <tr>, <td>, <path>, <svg>, <em>, <th>
     # en conservant leur contenu
-    for tag in soup.find_all(['span', 'div', 'label', 'img', 'table', 'tr', 'td', 'path', 'svg']):
+    for tag in soup.find_all(['span', 'div', 'label', 'img', 'table', 'tr', 'td', 'path', 'svg', 'em', 'th']):
         tag.unwrap()
 
     # Supprimer les balises <a> en conservant le contenu, sauf si elles contiennent des liens vers les réseaux sociaux
@@ -25,6 +26,20 @@ def clean_html_content(soup):
         tag.attrs = {}
 
     return soup
+
+# Fonction pour supprimer les balises vides et nettoyer les espaces inutiles
+def remove_empty_tags_and_clean_spaces(soup):
+    # Supprimer les balises vides
+    for tag in soup.find_all():
+        if not tag.get_text(strip=True):  # Si la balise ne contient pas de texte
+            tag.decompose()
+
+    # Convertir le HTML en texte brut et nettoyer les espaces
+    clean_html = str(soup)
+    clean_html = re.sub(r'\s+', ' ', clean_html)  # Remplacer les espaces multiples par un seul espace
+    clean_html = clean_html.strip()  # Supprimer les espaces en début et fin de texte
+
+    return clean_html
 
 # Fonction pour extraire le contenu et la structure des balises hn
 def get_hn_and_content(url):
@@ -43,16 +58,12 @@ def get_hn_and_content(url):
     # Nettoyer le contenu HTML selon les critères définis
     clean_soup = clean_html_content(soup)
 
-    html_content = ""
+    # Supprimer les balises vides et nettoyer les espaces inutiles
+    html_content = remove_empty_tags_and_clean_spaces(clean_soup)
+
     structure_hn = []
-    
-    for tag in clean_soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'li', 'ol']):
-        # Conserver la balise HTML dans le contenu nettoyé
-        if tag.get_text(strip=True):  # Vérifie si le texte n'est pas vide
-            html_content += str(tag) + '\n'
-        # Ajouter la balise dans la structure hn, avec son contenu
-        if tag.name.startswith('h'):
-            structure_hn.append(f"<{tag.name}>{tag.get_text(strip=True)}</{tag.name}>")
+    for tag in clean_soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5']):
+        structure_hn.append(f"<{tag.name}>{tag.get_text(strip=True)}</{tag.name}>")
 
     structure_hn_str = "\n".join(structure_hn)
 
