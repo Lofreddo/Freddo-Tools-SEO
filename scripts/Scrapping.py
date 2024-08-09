@@ -7,8 +7,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 # Fonction pour nettoyer le contenu HTML en fonction des exigences
 def clean_html_content(soup):
-    # Supprimer les balises <span>, <div>, <label> mais conserver leur contenu
-    for tag in soup.find_all(['span', 'div', 'label']):
+    # Supprimer les balises <span>, <div>, <label>, <img>, <table>, <tr>, <td>, <path>, <svg>
+    # en conservant leur contenu
+    for tag in soup.find_all(['span', 'div', 'label', 'img', 'table', 'tr', 'td', 'path', 'svg']):
         tag.unwrap()
 
     # Supprimer les balises <a> en conservant le contenu, sauf si elles contiennent des liens vers les réseaux sociaux
