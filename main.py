@@ -1,11 +1,12 @@
 import streamlit as st
-from scripts import MyTextGuru, ExtractSerps, MasterSpinGenerator
+from scripts import MyTextGuru, ExtractSerps, MasterSpinGenerator, Scrapping
 
 # Configuration des pages
 PAGES = {
     "MyTextGuru": MyTextGuru,
     "ExtractSerps": ExtractSerps,
     "MasterSpinGenerator": MasterSpinGenerator
+    "Scrapping": Scrapping
 }
 
 # Créer une sidebar pour la navigation
