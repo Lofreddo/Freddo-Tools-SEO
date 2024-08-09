@@ -5,6 +5,23 @@ import pandas as pd
 from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor
 
+# Fonction pour filtrer les éléments non pertinents
+def filter_tags(soup):
+    # Supprimer les balises de navigation, footers, et listes de liens
+    for tag in soup.find_all(['nav', 'footer', 'path', 'svg']):
+        tag.decompose()
+
+    # Supprimer les sections avec des liens vers les réseaux sociaux
+    social_keywords = ['facebook', 'twitter', 'instagram', 'linkedin', 'youtube', 'social']
+    for link in soup.find_all('a', href=True):
+        if any(keyword in link['href'].lower() for keyword in social_keywords):
+            link.decompose()
+
+    # Supprimer les listes de liens qui sont souvent en bas de page
+    for ul in soup.find_all('ul'):
+        if ul.find_all('a', href=True):
+            ul.decompose()
+
 # Fonction pour extraire le contenu des balises hn et HTML
 def get_hn_and_content(url):
     with requests.Session() as session:
@@ -16,31 +33,21 @@ def get_hn_and_content(url):
 
     soup = BeautifulSoup(response.content, 'html.parser')
 
-    # Supprimer les sections de navigation et footers
-    for nav_tag in soup.find_all(['nav', 'footer']):
-        nav_tag.decompose()  # Retirer ces sections du soup
+    # Filtrer les éléments non pertinents
+    filter_tags(soup)
 
     # Gérer le cas où <body> est absent
-    if not soup.body:
-        content_container = soup
-    else:
-        content_container = soup.body
+    content_container = soup.body if soup.body else soup
 
-    hn_structure = ""
-    for tag in content_container.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
-        if tag.get_text().strip():
-            hn_structure += f"<{tag.name}>{tag.get_text()}</{tag.name}>\n"
-
+    # Extraire uniquement les balises pertinentes
     html_content = ""
-    for tag in content_container.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'ul', 'li', 'ol']):
-        for child in tag.find_all(True):
-            if child.name in ['b', 'i', 'em', 'strong']:
-                child.replace_with(child.get_text())
+    for tag in content_container.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'li', 'ol', 'span']):
+        # Supprimer les attributs pour éviter de conserver les classes CSS
         tag.attrs = {}
         if tag.get_text().strip():
             html_content += str(tag) + '\n'
 
-    return hn_structure, html_content
+    return html_content
 
 # Fonction pour traiter les URLs en parallèle
 def process_urls_in_parallel(urls, max_workers=10):
@@ -50,14 +57,11 @@ def process_urls_in_parallel(urls, max_workers=10):
 
 # Fonction pour générer la sortie en DataFrame
 def generate_output(urls):
-    results = process_urls_in_parallel(urls)
-
-    hn_structures, html_contents = zip(*results)
+    contents = process_urls_in_parallel(urls)
 
     df = pd.DataFrame({
         'url': urls,
-        'url_hn': hn_structures,
-        'url_content': html_contents
+        'content': contents
     })
 
     return df
