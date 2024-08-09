@@ -22,13 +22,20 @@ def filter_tags(soup):
         if ul.find_all('a', href=True):
             ul.decompose()
 
+    # Supprimer les balises <a> mais garder leur contenu
+    for a_tag in soup.find_all('a'):
+        a_tag.unwrap()
+
     # Supprimer les balises <span>, <img>, <table>, <td>, <tr> mais conserver le contenu pertinent
     for tag in soup.find_all(['span', 'img', 'table', 'td', 'tr']):
-        # Remplacer la balise par son contenu si celui-ci contient des balises intéressantes
         if any(child.name in ['p', 'li', 'ul', 'ol', 'h1', 'h2', 'h3', 'h4', 'h5'] for child in tag.find_all(True)):
             tag.unwrap()  # Déplie la balise et garde son contenu
         else:
             tag.decompose()  # Supprime la balise et son contenu
+
+    # Supprimer les balises <em> et leur contenu
+    for em_tag in soup.find_all('em'):
+        em_tag.decompose()
 
 # Fonction pour extraire le contenu des balises hn et HTML
 def get_hn_and_content(url):
