@@ -8,10 +8,14 @@ import re
 
 # Fonction pour nettoyer le contenu HTML en fonction des exigences
 def clean_html_content(soup):
-    # Supprimer les balises <span>, <div>, <label>, <img>, <table>, <tr>, <td>, <path>, <svg>, <em>, <th>
+    # Supprimer les balises <span>, <div>, <label>, <img>, <path>, <svg>, <em>, <th>
     # en conservant leur contenu
-    for tag in soup.find_all(['span', 'div', 'label', 'img', 'table', 'tr', 'td', 'path', 'svg', 'em', 'th']):
+    for tag in soup.find_all(['span', 'div', 'label', 'img', 'path', 'svg', 'em', 'th']):
         tag.unwrap()
+
+    # Supprimer les balises <tr>, <td>, <table> et leur contenu
+    for tag in soup.find_all(['tr', 'td', 'table']):
+        tag.decompose()
 
     # Supprimer les balises <a> en conservant le contenu, sauf si elles contiennent des liens vers les réseaux sociaux
     social_keywords = ['facebook', 'twitter', 'instagram', 'linkedin', 'youtube', 'social']
@@ -24,6 +28,11 @@ def clean_html_content(soup):
     # Supprimer les classes CSS et autres attributs des balises restantes
     for tag in soup.find_all(True):
         tag.attrs = {}
+
+    # Supprimer les balises vides
+    for tag in soup.find_all():
+        if not tag.get_text(strip=True):  # Si la balise est vide après avoir supprimé les espaces
+            tag.decompose()
 
     return soup
 
@@ -57,8 +66,14 @@ def get_hn_and_content(url):
 
     structure_hn_str = "\n".join(structure_hn)
 
+    # Supprimer les tabulations et remplacer par un espace unique
+    html_content = re.sub(r'\t+', ' ', html_content)
+
     # Supprimer les doubles espaces dans le contenu
     html_content = re.sub(' +', ' ', html_content)
+
+    # Supprimer les lignes vides
+    html_content = "\n".join([line for line in html_content.splitlines() if line.strip()])
 
     return html_content.strip(), structure_hn_str
 
