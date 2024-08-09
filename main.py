@@ -5,7 +5,7 @@ from scripts import MyTextGuru, ExtractSerps, MasterSpinGenerator, Scrapping
 PAGES = {
     "MyTextGuru": MyTextGuru,
     "ExtractSerps": ExtractSerps,
-    "MasterSpinGenerator": MasterSpinGenerator
+    "MasterSpinGenerator": MasterSpinGenerator,
     "Scrapping": Scrapping
 }
 
