@@ -29,7 +29,7 @@ def main():
     # Fonction pour récupérer les résultats de recherche
     def fetch_results(keyword):
         params = {
-            'api_key': 'VALUSERP_API_KEY',
+            'api_key': VALUSERP_API_KEY,
             'q': keyword,
             'location': 'Paris,Paris,Ile-de-France,France',
             'google_domain': google_domain,
