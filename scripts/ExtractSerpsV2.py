@@ -1,7 +1,6 @@
 import requests
 import pandas as pd
 import io
-import concurrent.futures
 import streamlit as st
 import uuid
 import time
@@ -55,21 +54,24 @@ def main():
     # Préfixe pour les Batchs
     batch_prefix = st.text_input("Entrez un préfixe pour les Batchs:")
 
-    def create_batch(keyword_batch, batch_name):
-        # Création du batch
+    def create_batch(batch_name):
+        # Création du batch avec le type "web" pour Google Web Search
         body = {
             "name": batch_name,
             "enabled": True,
             "schedule_type": "manual",
             "priority": "normal",
-            "notification_as_csv": True
+            "notification_as_csv": True,
+            "searches_type": "web"
         }
         
         api_result = requests.post(f'https://api.valueserp.com/batches?api_key=81293DFA2CEF4FE49DB08E002D947143', json=body)
         api_response = api_result.json()
         batch_id = api_response['batch']['id']
+        return batch_id
 
-        # Ajout des recherches dans le batch
+    def add_keywords_to_batch(batch_id, keyword_batch):
+        # Ajout des mots-clés dans le batch
         for keyword in keyword_batch:
             search_params = {
                 'q': keyword,
@@ -80,12 +82,9 @@ def main():
                 'device': device,
                 'num': num,
             }
-            requests.post(f'https://api.valueserp.com/batches/{batch_id}/searches?api_key=81293DFA2CEF4FE49DB08E002D947143', json=search_params)
-
-        # Démarrage du batch après l'avoir créé et rempli
-        start_batch(batch_id)
-
-        return batch_id
+            api_result = requests.post(f'https://api.valueserp.com/batches/{batch_id}/searches?api_key=81293DFA2CEF4FE49DB08E002D947143', json=search_params)
+            if api_result.status_code != 200:
+                st.error(f"Erreur lors de l'ajout du mot-clé '{keyword}' au batch '{batch_id}'. Code d'état : {api_result.status_code}")
 
     def start_batch(batch_id):
         # Démarrage du batch
@@ -126,7 +125,13 @@ def main():
             for keyword_batch in split_keywords(keywords):
                 # Création d'un batch avec un nom unique
                 batch_name = f"{batch_prefix}_{uuid.uuid4()}"
-                batch_id = create_batch(keyword_batch, batch_name)
+                batch_id = create_batch(batch_name)
+
+                # Ajout des mots-clés au batch
+                add_keywords_to_batch(batch_id, keyword_batch)
+
+                # Démarrage du batch
+                start_batch(batch_id)
 
                 # Récupération des résultats du batch
                 result_df = fetch_batch_results(batch_id)
