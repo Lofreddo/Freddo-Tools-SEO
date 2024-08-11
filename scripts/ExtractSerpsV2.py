@@ -3,6 +3,7 @@ import pandas as pd
 import io
 import streamlit as st
 import uuid
+import time
 
 def main():
     st.title("Recherche de mots-clés avec ValueSERP en Batches")
@@ -145,6 +146,9 @@ def main():
 
                 if batch_id:
                     start_batch(batch_id)
+
+                    # Ajouter un délai pour attendre que les résultats soient prêts
+                    time.sleep(90)
 
                     result_sets = list_result_sets(batch_id)
 
