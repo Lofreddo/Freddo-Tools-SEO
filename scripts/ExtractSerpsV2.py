@@ -92,23 +92,23 @@ def main():
         else:
             st.error(f"Échec du démarrage du batch {batch_id}. Code d'état : {api_result.status_code}")
 
-    def list_result_sets(batch_id):
-        params = {
-            'api_key': '81293DFA2CEF4FE49DB08E002D947143'
-        }
-        results_url = f'https://api.valueserp.com/batches/{batch_id}/results'
-        api_result = requests.get(results_url, params=params)
-        
-        if api_result.status_code == 200:
-            results = api_result.json().get("results", [])
-            if results:
-                st.write(f"Résultats trouvés pour le batch {batch_id}")
-                return results
-            else:
-                st.write(f"Aucun résultat disponible pour le batch {batch_id}")
+  def list_result_sets(batch_id):
+    params = {
+        'api_key': '81293DFA2CEF4FE49DB08E002D947143'
+    }
+    results_url = f'https://api.valueserp.com/batches/{batch_id}/results'
+    api_result = requests.get(results_url, params)
+
+    if api_result.status_code == 200:
+        results = api_result.json().get("results", [])
+        if results:
+            st.write(f"Résultats trouvés pour le batch {batch_id}")
+            return results
         else:
-            st.error(f"Erreur lors de la récupération des résultats pour le batch {batch_id}. Code d'état : {api_result.status_code}")
-        return []
+            st.write(f"Aucun résultat disponible pour le batch {batch_id}")
+    else:
+        st.error(f"Erreur lors de la récupération des résultats pour le batch {batch_id}. Code d'état : {api_result.status_code}")
+    return []
 
     def get_result_set_data(result_set_id):
         params = {
