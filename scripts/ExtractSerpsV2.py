@@ -114,15 +114,23 @@ def main():
         params = {
             'api_key': '81293DFA2CEF4FE49DB08E002D947143'
         }
-        # Construction de l'URL à partir du préfixe de fichier de recherche
-        result_set_url = f'https://api.valueserp.com{result_set["searchFilePrefix"]}.csv'
-        api_result = requests.get(result_set_url, params=params)
-        
-        if api_result.status_code == 200:
-            result_df = pd.read_csv(io.StringIO(api_result.text), encoding='utf-8')
-            return result_df
+
+        # Afficher le contenu du result_set pour diagnostiquer
+        st.write("Contenu de result_set:", result_set)
+
+        # Vérifier si 'searchFilePrefix' existe dans result_set
+        if "searchFilePrefix" in result_set:
+            result_set_url = f'https://api.valueserp.com{result_set["searchFilePrefix"]}.csv'
+            api_result = requests.get(result_set_url, params=params)
+            
+            if api_result.status_code == 200:
+                result_df = pd.read_csv(io.StringIO(api_result.text), encoding='utf-8')
+                return result_df
+            else:
+                st.error(f"Erreur lors de la récupération des données du jeu de résultats '{result_set['id']}'. Code d'état : {api_result.status_code}")
         else:
-            st.error(f"Erreur lors de la récupération des données du jeu de résultats '{result_set['id']}'. Code d'état : {api_result.status_code}")
+            st.error(f"'searchFilePrefix' introuvable dans result_set. Voici ce que nous avons reçu : {result_set}")
+
         return pd.DataFrame()
 
     def download_and_merge_results(batch_id, result_sets):
