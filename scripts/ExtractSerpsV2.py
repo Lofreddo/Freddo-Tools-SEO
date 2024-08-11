@@ -74,7 +74,6 @@ def main():
         if api_result.status_code == 200:
             api_response = api_result.json()
             st.write(f"Batch {batch_name} créé avec succès avec les mots-clés.")
-            st.write("Réponse complète de l'API pour la création du batch : ", api_response)
             return api_response['batch']['id']
         else:
             st.error(f"Erreur lors de la création du batch '{batch_name}'. Code d'état : {api_result.status_code}")
@@ -99,12 +98,7 @@ def main():
         }
         results_url = f'https://api.valueserp.com/batches/{batch_id}/results'
         api_result = requests.get(results_url, params=params)
-
-        st.write(f"Tentative de récupération des résultats pour le batch ID : {batch_id}")
-        st.write(f"URL appelée : {results_url}")
-        st.write(f"Statut de la réponse : {api_result.status_code}")
-        st.write(f"Contenu de la réponse : {api_result.json()}")
-
+        
         if api_result.status_code == 200:
             results = api_result.json().get("results", [])
             if results:
@@ -117,19 +111,17 @@ def main():
         return []
 
     def get_result_set_data(batch_id, result_set):
-        params = {
-            'api_key': '81293DFA2CEF4FE49DB08E002D947143'
-        }
-        # Utilisation du searchFilePrefix pour récupérer le fichier CSV des résultats
-        result_set_url = f'https://api.valueserp.com{result_set["searchFilePrefix"]}.csv'
-        st.write(f"Téléchargement des résultats depuis : {result_set_url}")
-        api_result = requests.get(result_set_url, params=params)
+        result_set_url = f'https://api.valueserp.com/batches/{batch_id}/results'
+        csv_result = requests.get(result_set_url)
         
-        if api_result.status_code == 200:
-            result_df = pd.read_csv(io.StringIO(api_result.text), encoding='utf-8')
-            return result_df
+        if csv_result.status_code == 200:
+            try:
+                result_df = pd.read_csv(io.StringIO(csv_result.text), encoding='utf-8')
+                return result_df
+            except Exception as e:
+                st.error(f"Erreur lors de la lecture du CSV pour le batch {batch_id}: {e}")
         else:
-            st.error(f"Erreur lors de la récupération des données du jeu de résultats pour le batch '{batch_id}'. Code d'état : {api_result.status_code}")
+            st.error(f"Erreur lors de la récupération des données du jeu de résultats '{result_set['id']}'. Code d'état : {csv_result.status_code}")
         return pd.DataFrame()
 
     def download_and_merge_results(batch_id, result_sets):
