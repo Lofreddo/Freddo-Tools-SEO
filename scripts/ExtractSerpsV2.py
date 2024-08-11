@@ -1,57 +1,49 @@
+import requests
+import pandas as pd
+import io
+import streamlit as st
+import uuid
+
 def main():
-    # Titre de l'application
     st.title("Recherche de mots-clés avec ValueSERP en Batches")
 
-    # Zone de texte pour entrer les mots-clés
     keywords_input = st.text_area("Entrez vos mots-clés, un par ligne:")
-
-    # Conversion des mots-clés en liste
     keywords = keywords_input.strip().split('\n')
 
-    # Menu déroulant pour sélectionner le domaine Google
     google_domain = st.selectbox(
         "Sélectionnez le domaine Google:",
         ["google.fr", "google.com", "google.co.uk", "google.de", "google.es"]
     )
 
-    # Menu déroulant pour sélectionner le dispositif
     device = st.selectbox(
         "Sélectionnez le dispositif:",
         ["desktop", "mobile"]
     )
 
-    # Menu déroulant pour sélectionner le nombre de résultats par mots-clés
     num = st.selectbox(
         "Sélectionnez le nombre de résultats:",
         ["10", "20", "30", "40", "50", "100"]
     )
 
-    # Menu déroulant pour sélectionner le pays
     gl = st.selectbox(
         "Sélectionnez le pays:",
         ["fr", "es", "de", "en"]
     )
 
-    # Menu déroulant pour sélectionner la langue
     hl = st.selectbox(
         "Sélectionnez la langue:",
         ["fr", "es", "de", "en"]
     )
 
-    # Menu déroulant pour sélectionner la location
     location = st.selectbox(
         "Sélectionnez la location:",
         ["France", "United Kingdom", "United States", "Spain", "Germany"]
     )
 
-    # Préfixe pour les Batchs
     batch_prefix = st.text_input("Entrez un préfixe pour les Batchs:")
-
-    # Adresse email pour l'envoi des notifications
     notification_email = st.text_input("Entrez une adresse email pour les notifications:")
 
     def create_batch_with_keywords(batch_name, keyword_batch):
-        # Création du batch avec les mots-clés ajoutés directement
         searches = []
         for keyword in keyword_batch:
             search_params = {
@@ -71,9 +63,9 @@ def main():
             "schedule_type": "manual",
             "priority": "normal",
             "notification_as_csv": True,
-            "searches_type": "web",  # Définit explicitement le type de recherche
-            "searches": searches,  # Ajoute les recherches directement dans la création du batch
-            "notification_email": notification_email  # Ajoute l'email pour les notifications
+            "searches_type": "web",
+            "searches": searches,
+            "notification_email": notification_email
         }
         
         api_result = requests.post(f'https://api.valueserp.com/batches?api_key=81293DFA2CEF4FE49DB08E002D947143', json=body)
@@ -85,7 +77,6 @@ def main():
         return api_response['batch']['id']
 
     def start_batch(batch_id):
-        # Démarrage du batch
         params = {
             'api_key': '81293DFA2CEF4FE49DB08E002D947143'
         }
@@ -98,7 +89,6 @@ def main():
             st.error(f"Échec du démarrage du batch {batch_id}. Code d'état : {api_result.status_code}")
 
     def get_csv_download_links(batch_id):
-        # Récupérer les liens de téléchargement des fichiers CSV pour un Batch
         params = {
             'api_key': '81293DFA2CEF4FE49DB08E002D947143'
         }
@@ -117,7 +107,6 @@ def main():
         return []
 
     def download_and_merge_csv(download_links):
-        # Télécharger et fusionner les fichiers CSV
         all_results = pd.DataFrame()
         for link in download_links:
             response = requests.get(link)
@@ -129,36 +118,28 @@ def main():
         return all_results
 
     def split_keywords(keywords, batch_size=100):
-        # Découpe la liste de mots-clés en sous-listes de taille batch_size
         for i in range(0, len(keywords), batch_size):
             yield keywords[i:i + batch_size]
 
-    # Bouton pour lancer la recherche
     if st.button("Lancer la recherche"):
         if keywords:
             all_results = pd.DataFrame()
 
             for keyword_batch in split_keywords(keywords):
-                # Création d'un batch avec un nom unique et ajout des mots-clés directement
                 batch_name = f"{batch_prefix}_{uuid.uuid4()}"
                 batch_id = create_batch_with_keywords(batch_name, keyword_batch)
 
-                # Démarrage du batch
                 start_batch(batch_id)
 
-                # Récupérer les liens de téléchargement CSV
                 download_links = get_csv_download_links(batch_id)
 
-                # Télécharger et fusionner les fichiers CSV
                 if download_links:
                     batch_results = download_and_merge_csv(download_links)
                     all_results = pd.concat([all_results, batch_results], ignore_index=True)
 
             if not all_results.empty:
-                # Affiche les résultats dans Streamlit
                 st.dataframe(all_results)
 
-                # Ajoutez un bouton pour télécharger le fichier Excel fusionné
                 @st.cache_data
                 def convert_df(df):
                     try:
