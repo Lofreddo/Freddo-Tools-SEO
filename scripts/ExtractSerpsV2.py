@@ -2,18 +2,29 @@ import requests
 import pandas as pd
 import io
 import time
-import concurrent.futures
+import uuid
 import streamlit as st
 
 # Fonction pour créer un batch avec des mots-clés
-def create_batch_with_keywords(name, keywords):
+def create_batch_with_keywords(name, keywords, google_domain, device, num, gl, hl, location, notification_email):
     body = {
         "name": name,
         "enabled": True,
         "schedule_type": "manual",
         "priority": "normal",
+        "notification_email": notification_email,
         "notification_as_csv": True,
-        "keywords": keywords
+        "keywords": [
+            {
+                "q": keyword,
+                "location": location,
+                "google_domain": google_domain,
+                "gl": gl,
+                "hl": hl,
+                "device": device,
+                "num": num
+            } for keyword in keywords
+        ]
     }
     
     params = {
@@ -65,7 +76,6 @@ def list_result_sets(batch_id, max_attempts=5, delay=30):
         else:
             st.error(f"Erreur lors de la récupération des résultats pour le batch {batch_id}. Code d'état : {api_result.status_code}")
         
-        # Temporisation avant la prochaine tentative
         time.sleep(delay)
     
     st.error(f"Échec de la récupération des résultats pour le batch {batch_id} après {max_attempts} tentatives.")
@@ -101,7 +111,7 @@ def main():
     num = st.selectbox("Sélectionnez le nombre de résultats:", ["10", "20", "30", "40", "50", "100"])
     gl = st.selectbox("Sélectionnez le pays:", ["fr", "es", "de", "en"])
     hl = st.selectbox("Sélectionnez la langue:", ["fr", "es", "de", "en"])
-    location = st.selectbox("Sélectionnez la langue:", ["France", "United Kingdom", "United States", "Spain", "Germany"])
+    location = st.selectbox("Sélectionnez la location:", ["France", "United Kingdom", "United States", "Spain", "Germany"])
     batch_prefix = st.text_input("Entrez un préfixe pour les Batchs:", "batch_prefix")
     notification_email = st.text_input("Entrez une adresse email pour les notifications:", "email@example.com")
 
@@ -114,7 +124,7 @@ def main():
 
             for keyword_batch in keyword_batches:
                 batch_name = f"{batch_prefix}_{uuid.uuid4()}"
-                batch_id = create_batch_with_keywords(batch_name, keyword_batch)
+                batch_id = create_batch_with_keywords(batch_name, keyword_batch, google_domain, device, num, gl, hl, location, notification_email)
 
                 if batch_id:
                     start_batch(batch_id)
