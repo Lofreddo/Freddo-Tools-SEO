@@ -118,11 +118,18 @@ def main():
         api_result = requests.get(result_set_url, params=params)
         
         if api_result.status_code == 200:
-            result_df = pd.read_csv(io.StringIO(api_result.text), encoding='utf-8')
-            return result_df
+            # Vous avez la possibilité de recevoir des fichiers CSV directement
+            download_links = api_result.json().get("download_links", {}).get("pages", [])
+            if download_links:
+                csv_url = download_links[0]  # Prendre le premier lien de téléchargement de CSV
+                csv_result = requests.get(csv_url)
+                result_df = pd.read_csv(io.StringIO(csv_result.text), encoding='utf-8')
+                return result_df
+            else:
+                st.error(f"Aucun lien de téléchargement CSV trouvé pour le jeu de résultats '{result_set_id}'.")
         else:
             st.error(f"Erreur lors de la récupération des données du jeu de résultats '{result_set_id}'. Code d'état : {api_result.status_code}")
-            return pd.DataFrame()
+        return pd.DataFrame()
 
     def download_and_merge_results(result_sets):
         all_results = pd.DataFrame()
@@ -148,7 +155,7 @@ def main():
                     start_batch(batch_id)
 
                     # Ajouter un délai pour attendre que les résultats soient prêts
-                    time.sleep(90)
+                    time.sleep(60)
 
                     result_sets = list_result_sets(batch_id)
 
