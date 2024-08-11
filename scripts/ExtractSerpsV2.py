@@ -104,36 +104,36 @@ def main():
         else:
             st.error(f"Échec du démarrage du batch {batch_id}. Code d'état : {api_result.status_code}")
 
-    def list_batch_results(batch_id):
-        # Lister les jeux de résultats pour un batch
+    def get_csv_download_links(batch_id):
+        # Récupérer les liens de téléchargement des fichiers CSV pour un Batch
         params = {
             'api_key': '81293DFA2CEF4FE49DB08E002D947143'
         }
-        results_url = f'https://api.valueserp.com/batches/{batch_id}/results'
-        for attempt in range(10):  # Essayer jusqu'à 10 fois
-            api_result = requests.get(results_url, params=params)
-            if api_result.status_code == 200:
-                results = api_result.json().get("results", [])
-                if results:
-                    st.write(f"Résultats trouvés pour le batch {batch_id} à la tentative {attempt + 1}")
-                    return results
-                else:
-                    st.write(f"Aucun résultat disponible pour le batch {batch_id}, tentative {attempt + 1}")
+        csv_links_url = f'https://api.valueserp.com/batches/{batch_id}/searches/csv'
+        api_result = requests.get(csv_links_url, params=params)
+        
+        if api_result.status_code == 200:
+            download_links = api_result.json().get("download_links", {}).get("pages", [])
+            if download_links:
+                st.write(f"Liens de téléchargement CSV trouvés pour le batch {batch_id}")
+                return download_links
             else:
-                st.error(f"Erreur lors de la récupération des résultats pour le batch {batch_id}. Code d'état : {api_result.status_code}")
-            time.sleep(60)  # Attendre une minute avant de réessayer
+                st.write(f"Aucun lien de téléchargement CSV disponible pour le batch {batch_id}")
+        else:
+            st.error(f"Erreur lors de la récupération des liens CSV pour le batch {batch_id}. Code d'état : {api_result.status_code}")
         return []
 
-    def fetch_result_set(result_set_id):
-        # Récupérer les données pour un jeu de résultats spécifique
-        result_url = f'https://api.valueserp.com/result_sets/{result_set_id}?api_key=81293DFA2CEF4FE49DB08E002D947143&output=csv'
-        api_result = requests.get(result_url)
-        if api_result.status_code == 200 and api_result.text.strip():
-            result_df = pd.read_csv(io.StringIO(api_result.text), encoding='utf-8')
-            return result_df
-        else:
-            st.error(f"Échec de la récupération du jeu de résultats '{result_set_id}'.")
-            return None
+    def download_and_merge_csv(download_links):
+        # Télécharger et fusionner les fichiers CSV
+        all_results = pd.DataFrame()
+        for link in download_links:
+            response = requests.get(link)
+            if response.status_code == 200:
+                result_df = pd.read_csv(io.StringIO(response.text), encoding='utf-8')
+                all_results = pd.concat([all_results, result_df], ignore_index=True)
+            else:
+                st.error(f"Erreur lors du téléchargement du fichier CSV depuis {link}. Code d'état : {response.status_code}")
+        return all_results
 
     def split_keywords(keywords, batch_size=100):
         # Découpe la liste de mots-clés en sous-listes de taille batch_size
@@ -153,15 +153,13 @@ def main():
                 # Démarrage du batch
                 start_batch(batch_id)
 
-                # Lister les résultats disponibles pour ce batch
-                result_sets = list_batch_results(batch_id)
+                # Récupérer les liens de téléchargement CSV
+                download_links = get_csv_download_links(batch_id)
 
-                for result_set in result_sets:
-                    result_set_id = result_set.get("id")
-                    if result_set_id:
-                        result_df = fetch_result_set(result_set_id)
-                        if result_df is not None and not result_df.empty:
-                            all_results = pd.concat([all_results, result_df], ignore_index=True)
+                # Télécharger et fusionner les fichiers CSV
+                if download_links:
+                    batch_results = download_and_merge_csv(download_links)
+                    all_results = pd.concat([all_results, batch_results], ignore_index=True)
 
             if not all_results.empty:
                 # Nettoyer et réencoder les données
