@@ -110,12 +110,19 @@ def main():
             'api_key': '81293DFA2CEF4FE49DB08E002D947143'
         }
         results_url = f'https://api.valueserp.com/batches/{batch_id}/results'
-        api_result = requests.get(results_url, params=params)
-        if api_result.status_code == 200:
-            return api_result.json().get("results", [])
-        else:
-            st.error(f"Échec de la récupération de la liste des résultats pour le batch '{batch_id}'. Code d'état : {api_result.status_code}")
-            return []
+        for attempt in range(10):  # Essayer jusqu'à 10 fois
+            api_result = requests.get(results_url, params=params)
+            if api_result.status_code == 200:
+                results = api_result.json().get("results", [])
+                if results:
+                    st.write(f"Résultats trouvés pour le batch {batch_id} à la tentative {attempt + 1}")
+                    return results
+                else:
+                    st.write(f"Aucun résultat disponible pour le batch {batch_id}, tentative {attempt + 1}")
+            else:
+                st.error(f"Erreur lors de la récupération des résultats pour le batch {batch_id}. Code d'état : {api_result.status_code}")
+            time.sleep(60)  # Attendre une minute avant de réessayer
+        return []
 
     def fetch_result_set(result_set_id):
         # Récupérer les données pour un jeu de résultats spécifique
