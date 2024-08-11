@@ -63,24 +63,20 @@ def main():
             "schedule_type": "manual",
             "priority": "normal",
             "notification_as_csv": True,
-            "searches_type": "web",  # Type de recherche spécifié explicitement
+            "searches_type": "web",
             "searches": searches,
-            "notification_email": notification_email  # Ajout de l'email pour les notifications
+            "notification_email": notification_email
         }
         
         api_result = requests.post(f'https://api.valueserp.com/batches?api_key=81293DFA2CEF4FE49DB08E002D947143', json=body)
         
-        # Vérification de l'état de la réponse et gestion des erreurs possibles
         if api_result.status_code == 200:
             api_response = api_result.json()
             st.write(f"Batch {batch_name} créé avec succès avec les mots-clés.")
             return api_response['batch']['id']
         else:
             st.error(f"Erreur lors de la création du batch '{batch_name}'. Code d'état : {api_result.status_code}")
-            try:
-                st.write(api_result.json())
-            except Exception as e:
-                st.write(api_result.text)
+            st.write(api_result.json())  # Affiche la réponse de l'API pour diagnostic
             return None
 
     def start_batch(batch_id):
@@ -95,33 +91,44 @@ def main():
         else:
             st.error(f"Échec du démarrage du batch {batch_id}. Code d'état : {api_result.status_code}")
 
-    def get_csv_download_links(batch_id):
+    def list_result_sets(batch_id):
         params = {
             'api_key': '81293DFA2CEF4FE49DB08E002D947143'
         }
-        csv_links_url = f'https://api.valueserp.com/batches/{batch_id}/searches/csv'
-        api_result = requests.get(csv_links_url, params=params)
+        results_url = f'https://api.valueserp.com/batches/{batch_id}/results'
+        api_result = requests.get(results_url, params=params)
         
         if api_result.status_code == 200:
-            download_links = api_result.json().get("download_links", {}).get("pages", [])
-            if download_links:
-                st.write(f"Liens de téléchargement CSV trouvés pour le batch {batch_id}")
-                return download_links
+            results = api_result.json().get("results", [])
+            if results:
+                st.write(f"Résultats trouvés pour le batch {batch_id}")
+                return results
             else:
-                st.write(f"Aucun lien de téléchargement CSV disponible pour le batch {batch_id}")
+                st.write(f"Aucun résultat disponible pour le batch {batch_id}")
         else:
-            st.error(f"Erreur lors de la récupération des liens CSV pour le batch {batch_id}. Code d'état : {api_result.status_code}")
+            st.error(f"Erreur lors de la récupération des résultats pour le batch {batch_id}. Code d'état : {api_result.status_code}")
         return []
 
-    def download_and_merge_csv(download_links):
+    def get_result_set_data(result_set_id):
+        params = {
+            'api_key': '81293DFA2CEF4FE49DB08E002D947143'
+        }
+        result_set_url = f'https://api.valueserp.com/result_sets/{result_set_id}'
+        api_result = requests.get(result_set_url, params=params)
+        
+        if api_result.status_code == 200:
+            result_df = pd.read_csv(io.StringIO(api_result.text), encoding='utf-8')
+            return result_df
+        else:
+            st.error(f"Erreur lors de la récupération des données du jeu de résultats '{result_set_id}'. Code d'état : {api_result.status_code}")
+            return pd.DataFrame()
+
+    def download_and_merge_results(result_sets):
         all_results = pd.DataFrame()
-        for link in download_links:
-            response = requests.get(link)
-            if response.status_code == 200:
-                result_df = pd.read_csv(io.StringIO(response.text), encoding='utf-8')
-                all_results = pd.concat([all_results, result_df], ignore_index=True)
-            else:
-                st.error(f"Erreur lors du téléchargement du fichier CSV depuis {link}. Code d'état : {response.status_code}")
+        for result_set in result_sets:
+            result_set_id = result_set['id']
+            result_df = get_result_set_data(result_set_id)
+            all_results = pd.concat([all_results, result_df], ignore_index=True)
         return all_results
 
     def split_keywords(keywords, batch_size=100):
@@ -139,13 +146,13 @@ def main():
                 if batch_id:
                     start_batch(batch_id)
 
-                    download_links = get_csv_download_links(batch_id)
+                    result_sets = list_result_sets(batch_id)
 
-                    if download_links:
-                        batch_results = download_and_merge_csv(download_links)
+                    if result_sets:
+                        batch_results = download_and_merge_results(result_sets)
                         all_results = pd.concat([all_results, batch_results], ignore_index=True)
 
-            if not all_results.empty:
+            if not all_results.empty():
                 st.dataframe(all_results)
 
                 @st.cache_data
