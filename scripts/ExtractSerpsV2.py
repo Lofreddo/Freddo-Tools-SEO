@@ -110,24 +110,31 @@ def main():
             st.error(f"Erreur lors de la récupération des résultats pour le batch {batch_id}. Code d'état : {api_result.status_code}")
         return []
 
-    def get_result_set_data(batch_id, result_set):
-        result_set_url = f'https://api.valueserp.com/batches/{batch_id}/results'
-        csv_result = requests.get(result_set_url)
+    def get_result_set_data(result_set_id):
+        params = {
+            'api_key': '81293DFA2CEF4FE49DB08E002D947143'
+        }
+        result_set_url = f'https://api.valueserp.com/result_sets/{result_set_id}'
+        api_result = requests.get(result_set_url, params=params)
         
-        if csv_result.status_code == 200:
-            try:
+        if api_result.status_code == 200:
+            download_links = api_result.json().get("download_links", {}).get("pages", [])
+            if download_links:
+                csv_url = download_links[0]
+                csv_result = requests.get(csv_url)
                 result_df = pd.read_csv(io.StringIO(csv_result.text), encoding='utf-8')
                 return result_df
-            except Exception as e:
-                st.error(f"Erreur lors de la lecture du CSV pour le batch {batch_id}: {e}")
+            else:
+                st.error(f"Aucun lien de téléchargement CSV trouvé pour le jeu de résultats '{result_set_id}'.")
         else:
-            st.error(f"Erreur lors de la récupération des données du jeu de résultats '{result_set['id']}'. Code d'état : {csv_result.status_code}")
+            st.error(f"Erreur lors de la récupération des données du jeu de résultats '{result_set_id}'. Code d'état : {api_result.status_code}")
         return pd.DataFrame()
 
     def download_and_merge_results(batch_id, result_sets):
         all_results = pd.DataFrame()
         for result_set in result_sets:
-            result_df = get_result_set_data(batch_id, result_set)
+            result_set_id = result_set['id']
+            result_df = get_result_set_data(result_set_id)
             all_results = pd.concat([all_results, result_df], ignore_index=True)
         return all_results
 
