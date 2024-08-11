@@ -118,10 +118,9 @@ def main():
         api_result = requests.get(result_set_url, params=params)
         
         if api_result.status_code == 200:
-            # Vous avez la possibilité de recevoir des fichiers CSV directement
             download_links = api_result.json().get("download_links", {}).get("pages", [])
             if download_links:
-                csv_url = download_links[0]  # Prendre le premier lien de téléchargement de CSV
+                csv_url = download_links[0]
                 csv_result = requests.get(csv_url)
                 result_df = pd.read_csv(io.StringIO(csv_result.text), encoding='utf-8')
                 return result_df
@@ -154,8 +153,8 @@ def main():
                 if batch_id:
                     start_batch(batch_id)
 
-                    # Ajouter un délai pour attendre que les résultats soient prêts
-                    time.sleep(60)
+                    # Attendre un peu plus longtemps avant de vérifier les résultats
+                    time.sleep(120)
 
                     result_sets = list_result_sets(batch_id)
 
