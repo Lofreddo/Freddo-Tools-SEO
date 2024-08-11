@@ -110,11 +110,11 @@ def main():
         results_url = f'https://api.valueserp.com/batches/{batch_id}/results?api_key=81293DFA2CEF4FE49DB08E002D947143&output=csv'
         api_result = requests.get(results_url)
         
-        if api_result.status_code == 200:
+        if api_result.status_code == 200 and api_result.text.strip():
             result_df = pd.read_csv(io.StringIO(api_result.text), encoding='utf-8')
             return result_df
         else:
-            st.error(f"La récupération des résultats pour le batch '{batch_id}' a échoué avec le code d'état {api_result.status_code}.")
+            st.error(f"La récupération des résultats pour le batch '{batch_id}' a échoué ou est vide.")
             return None
 
     def split_keywords(keywords, batch_size=100):
@@ -137,14 +137,17 @@ def main():
 
                 # Récupération des résultats du batch
                 result_df = fetch_batch_results(batch_id)
-                if result_df is not None:
+                if result_df is not None and not result_df.empty:
                     all_results = pd.concat([all_results, result_df], ignore_index=True)
 
-            # Affiche les résultats dans Streamlit
-            st.dataframe(all_results)
-
-            # Ajoutez un bouton pour télécharger le fichier Excel fusionné
             if not all_results.empty:
+                # Nettoyer et réencoder les données
+                all_results = all_results.applymap(lambda x: x.encode('latin1').decode('utf-8') if isinstance(x, str) else x)
+
+                # Affiche les résultats dans Streamlit
+                st.dataframe(all_results)
+
+                # Ajoutez un bouton pour télécharger le fichier Excel fusionné
                 @st.cache_data
                 def convert_df(df):
                     try:
@@ -165,6 +168,8 @@ def main():
                         file_name='results_fusionnes.xlsx',
                         mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
                     )
+            else:
+                st.error("Aucun résultat à fusionner. Vérifiez les Batchs ou réessayez plus tard.")
         else:
             st.error("Veuillez entrer au moins un mot-clé.")
 
