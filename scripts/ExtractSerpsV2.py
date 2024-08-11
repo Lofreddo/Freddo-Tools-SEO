@@ -104,28 +104,29 @@ def main():
         else:
             st.error(f"Échec du démarrage du batch {batch_id}. Code d'état : {api_result.status_code}")
 
-    def fetch_batch_results(batch_id):
-        # Récupération des résultats avec une boucle de vérification
-        max_attempts = 10  # Nombre maximum de tentatives
-        attempt = 0
-        result_df = None
+    def list_batch_results(batch_id):
+        # Lister les jeux de résultats pour un batch
+        params = {
+            'api_key': '81293DFA2CEF4FE49DB08E002D947143'
+        }
+        results_url = f'https://api.valueserp.com/batches/{batch_id}/results'
+        api_result = requests.get(results_url, params=params)
+        if api_result.status_code == 200:
+            return api_result.json().get("results", [])
+        else:
+            st.error(f"Échec de la récupération de la liste des résultats pour le batch '{batch_id}'. Code d'état : {api_result.status_code}")
+            return []
 
-        while attempt < max_attempts:
-            time.sleep(120)  # Attendre 2 minutes entre les tentatives
-            results_url = f'https://api.valueserp.com/batches/{batch_id}/results?api_key=81293DFA2CEF4FE49DB08E002D947143&output=csv'
-            api_result = requests.get(results_url)
-            
-            if api_result.status_code == 200 and api_result.text.strip():
-                result_df = pd.read_csv(io.StringIO(api_result.text), encoding='utf-8')
-                break
-            else:
-                st.write(f"Tentative {attempt + 1} pour récupérer les résultats du batch {batch_id}...")
-
-            attempt += 1
-
-        if result_df is None:
-            st.error(f"Échec de la récupération des résultats pour le batch '{batch_id}' après {max_attempts} tentatives.")
-        return result_df
+    def fetch_result_set(result_set_id):
+        # Récupérer les données pour un jeu de résultats spécifique
+        result_url = f'https://api.valueserp.com/result_sets/{result_set_id}?api_key=81293DFA2CEF4FE49DB08E002D947143&output=csv'
+        api_result = requests.get(result_url)
+        if api_result.status_code == 200 and api_result.text.strip():
+            result_df = pd.read_csv(io.StringIO(api_result.text), encoding='utf-8')
+            return result_df
+        else:
+            st.error(f"Échec de la récupération du jeu de résultats '{result_set_id}'.")
+            return None
 
     def split_keywords(keywords, batch_size=100):
         # Découpe la liste de mots-clés en sous-listes de taille batch_size
@@ -145,10 +146,15 @@ def main():
                 # Démarrage du batch
                 start_batch(batch_id)
 
-                # Récupération des résultats du batch
-                result_df = fetch_batch_results(batch_id)
-                if result_df is not None and not result_df.empty:
-                    all_results = pd.concat([all_results, result_df], ignore_index=True)
+                # Lister les résultats disponibles pour ce batch
+                result_sets = list_batch_results(batch_id)
+
+                for result_set in result_sets:
+                    result_set_id = result_set.get("id")
+                    if result_set_id:
+                        result_df = fetch_result_set(result_set_id)
+                        if result_df is not None and not result_df.empty:
+                            all_results = pd.concat([all_results, result_df], ignore_index=True)
 
             if not all_results.empty:
                 # Nettoyer et réencoder les données
