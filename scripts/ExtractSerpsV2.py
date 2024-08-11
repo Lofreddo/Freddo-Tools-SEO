@@ -54,24 +54,9 @@ def main():
     # Préfixe pour les Batchs
     batch_prefix = st.text_input("Entrez un préfixe pour les Batchs:")
 
-    def create_batch(batch_name):
-        # Création du batch avec le type "web" pour Google Web Search
-        body = {
-            "name": batch_name,
-            "enabled": True,
-            "schedule_type": "manual",
-            "priority": "normal",
-            "notification_as_csv": True,
-            "searches_type": "web"
-        }
-        
-        api_result = requests.post(f'https://api.valueserp.com/batches?api_key=81293DFA2CEF4FE49DB08E002D947143', json=body)
-        api_response = api_result.json()
-        batch_id = api_response['batch']['id']
-        return batch_id
-
-    def add_keywords_to_batch(batch_id, keyword_batch):
-        # Ajout des mots-clés dans le batch
+    def create_batch_with_keywords(batch_name, keyword_batch):
+        # Création du batch avec les mots-clés ajoutés directement
+        searches = []
         for keyword in keyword_batch:
             search_params = {
                 'q': keyword,
@@ -82,9 +67,25 @@ def main():
                 'device': device,
                 'num': num,
             }
-            api_result = requests.post(f'https://api.valueserp.com/batches/{batch_id}/searches?api_key=81293DFA2CEF4FE49DB08E002D947143', json=search_params)
-            if api_result.status_code != 200:
-                st.error(f"Erreur lors de l'ajout du mot-clé '{keyword}' au batch '{batch_id}'. Code d'état : {api_result.status_code}")
+            searches.append(search_params)
+
+        body = {
+            "name": batch_name,
+            "enabled": True,
+            "schedule_type": "manual",
+            "priority": "normal",
+            "notification_as_csv": True,
+            "searches_type": "web",  # Définit explicitement le type de recherche
+            "searches": searches  # Ajoute les recherches directement dans la création du batch
+        }
+        
+        api_result = requests.post(f'https://api.valueserp.com/batches?api_key=81293DFA2CEF4FE49DB08E002D947143', json=body)
+        api_response = api_result.json()
+        if api_result.status_code == 200:
+            st.write(f"Batch {batch_name} créé avec succès avec les mots-clés.")
+        else:
+            st.error(f"Erreur lors de la création du batch '{batch_name}'. Code d'état : {api_result.status_code}")
+        return api_response['batch']['id']
 
     def start_batch(batch_id):
         # Démarrage du batch
@@ -123,12 +124,9 @@ def main():
             all_results = pd.DataFrame()
 
             for keyword_batch in split_keywords(keywords):
-                # Création d'un batch avec un nom unique
+                # Création d'un batch avec un nom unique et ajout des mots-clés directement
                 batch_name = f"{batch_prefix}_{uuid.uuid4()}"
-                batch_id = create_batch(batch_name)
-
-                # Ajout des mots-clés au batch
-                add_keywords_to_batch(batch_id, keyword_batch)
+                batch_id = create_batch_with_keywords(batch_name, keyword_batch)
 
                 # Démarrage du batch
                 start_batch(batch_id)
