@@ -5,7 +5,7 @@ import time
 import uuid
 import streamlit as st
 
-# Fonction pour créer un batch avec des mots-clés
+# Étape 1 : Création d'un batch avec les mots-clés
 def create_batch_with_keywords(name, keywords, google_domain, device, num, gl, hl, location, notification_email):
     body = {
         "name": name,
@@ -42,7 +42,7 @@ def create_batch_with_keywords(name, keywords, google_domain, device, num, gl, h
         st.error(f"Erreur lors de la création du batch '{name}'. Code d'état : {api_result.status_code}")
         return None
 
-# Fonction pour démarrer un batch
+# Étape 2 : Démarrage du batch
 def start_batch(batch_id):
     params = {
         'api_key': '81293DFA2CEF4FE49DB08E002D947143'
@@ -55,8 +55,8 @@ def start_batch(batch_id):
     else:
         st.error(f"Erreur lors du démarrage du batch {batch_id}. Code d'état : {api_result.status_code}")
 
-# Fonction pour récupérer la liste des sets de résultats d'un batch
-def list_result_sets(batch_id, max_attempts=5, delay=30):
+# Étape 3 : Récupération de la liste des sets de résultats
+def list_result_sets(batch_id, max_attempts=10, delay=60):
     params = {
         'api_key': '81293DFA2CEF4FE49DB08E002D947143'
     }
@@ -81,7 +81,7 @@ def list_result_sets(batch_id, max_attempts=5, delay=30):
     st.error(f"Échec de la récupération des résultats pour le batch {batch_id} après {max_attempts} tentatives.")
     return []
 
-# Fonction pour récupérer les résultats d'un set
+# Étape 4 : Récupération des données d'un set de résultats
 def get_result_set_data(batch_id, result_set_id):
     params = {
         'api_key': '81293DFA2CEF4FE49DB08E002D947143'
@@ -95,7 +95,7 @@ def get_result_set_data(batch_id, result_set_id):
         st.error(f"Erreur lors de la récupération des données du jeu de résultats '{result_set_id}'. Code d'état : {api_result.status_code}")
         return None
 
-# Fonction principale
+# Étape 5 : Fonction principale pour exécuter le processus
 def main():
     st.title("Recherche de mots-clés avec ValueSERP en Batches")
 
