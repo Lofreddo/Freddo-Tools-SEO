@@ -74,7 +74,9 @@ def main():
         if api_result.status_code == 200:
             api_response = api_result.json()
             st.write(f"Batch {batch_name} créé avec succès avec les mots-clés.")
-            return api_response['batch']['id']
+            batch_id = api_response.get('batch', {}).get('id')
+            st.write(f"Batch ID récupéré : {batch_id}")
+            return batch_id
         else:
             st.error(f"Erreur lors de la création du batch '{batch_name}'. Code d'état : {api_result.status_code}")
             st.write(api_result.json())  # Affiche la réponse de l'API pour diagnostic
@@ -97,10 +99,13 @@ def main():
             'api_key': '81293DFA2CEF4FE49DB08E002D947143'
         }
         results_url = f'https://api.valueserp.com/batches/{batch_id}/results'
+        st.write(f"Tentative de récupération des résultats pour le batch ID : {batch_id}")
+        st.write(f"URL appelée : {results_url}")
         api_result = requests.get(results_url, params=params)
         
         if api_result.status_code == 200:
             results = api_result.json().get("results", [])
+            st.write(f"Contenu de la réponse : {api_result.json()}")
             if results:
                 st.write(f"Résultats trouvés pour le batch {batch_id}")
                 return results
@@ -111,26 +116,28 @@ def main():
         return []
 
     def get_result_set_data(batch_id, result_set):
+        # Vérification du contenu du result_set
+        st.write(f"Contenu de result_set : {result_set}")
+        
+        # Recherche de l'URL de téléchargement direct du CSV
+        search_file_prefix = result_set.get("searchFilePrefix")
+        if search_file_prefix:
+            result_set_url = f'https://api.valueserp.com{search_file_prefix}.csv'
+        else:
+            st.error(f"'searchFilePrefix' introuvable dans result_set. Voici ce que nous avons reçu : {result_set}")
+            return pd.DataFrame()
+
         params = {
             'api_key': '81293DFA2CEF4FE49DB08E002D947143'
         }
 
-        # Afficher le contenu du result_set pour diagnostiquer
-        st.write("Contenu de result_set:", result_set)
-
-        # Vérifier si 'searchFilePrefix' existe dans result_set
-        if "searchFilePrefix" in result_set:
-            result_set_url = f'https://api.valueserp.com{result_set["searchFilePrefix"]}.csv'
-            api_result = requests.get(result_set_url, params=params)
-            
-            if api_result.status_code == 200:
-                result_df = pd.read_csv(io.StringIO(api_result.text), encoding='utf-8')
-                return result_df
-            else:
-                st.error(f"Erreur lors de la récupération des données du jeu de résultats '{result_set['id']}'. Code d'état : {api_result.status_code}")
+        csv_result = requests.get(result_set_url, params=params)
+        
+        if csv_result.status_code == 200:
+            result_df = pd.read_csv(io.StringIO(csv_result.text), encoding='utf-8')
+            return result_df
         else:
-            st.error(f"'searchFilePrefix' introuvable dans result_set. Voici ce que nous avons reçu : {result_set}")
-
+            st.error(f"Erreur lors de la récupération des données du jeu de résultats '{result_set['id']}'. Code d'état : {csv_result.status_code}")
         return pd.DataFrame()
 
     def download_and_merge_results(batch_id, result_sets):
