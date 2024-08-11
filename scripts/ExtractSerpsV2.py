@@ -54,6 +54,9 @@ def main():
     # Préfixe pour les Batchs
     batch_prefix = st.text_input("Entrez un préfixe pour les Batchs:")
 
+    # Adresse email pour l'envoi des notifications
+    notification_email = st.text_input("Entrez une adresse email pour les notifications:")
+
     def create_batch_with_keywords(batch_name, keyword_batch):
         # Création du batch avec les mots-clés ajoutés directement
         searches = []
@@ -76,7 +79,8 @@ def main():
             "priority": "normal",
             "notification_as_csv": True,
             "searches_type": "web",  # Définit explicitement le type de recherche
-            "searches": searches  # Ajoute les recherches directement dans la création du batch
+            "searches": searches,  # Ajoute les recherches directement dans la création du batch
+            "notification_email": notification_email  # Ajoute l'email pour les notifications
         }
         
         api_result = requests.post(f'https://api.valueserp.com/batches?api_key=81293DFA2CEF4FE49DB08E002D947143', json=body)
@@ -136,13 +140,10 @@ def main():
                 if result_df is not None:
                     all_results = pd.concat([all_results, result_df], ignore_index=True)
 
-            # Nettoyer et réencoder les données
-            all_results = all_results.applymap(lambda x: x.encode('latin1').decode('utf-8') if isinstance(x, str) else x)
-
             # Affiche les résultats dans Streamlit
             st.dataframe(all_results)
 
-            # Ajoutez un bouton pour télécharger le fichier Excel
+            # Ajoutez un bouton pour télécharger le fichier Excel fusionné
             if not all_results.empty:
                 @st.cache_data
                 def convert_df(df):
@@ -159,9 +160,9 @@ def main():
                 excel_data = convert_df(all_results)
                 if excel_data:
                     st.download_button(
-                        label="Télécharger les résultats",
+                        label="Télécharger les résultats fusionnés",
                         data=excel_data,
-                        file_name='results.xlsx',
+                        file_name='results_fusionnes.xlsx',
                         mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
                     )
         else:
