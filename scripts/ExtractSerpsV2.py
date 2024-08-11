@@ -114,7 +114,7 @@ def main():
         params = {
             'api_key': '81293DFA2CEF4FE49DB08E002D947143'
         }
-        result_set_url = 'https://api.valueserp.com/result_sets/{result_set_id}'
+        result_set_url = f'https://api.valueserp.com/batches/{result_set_id}/results'
         api_result = requests.get(result_set_url, params=params)
         
         if api_result.status_code == 200:
