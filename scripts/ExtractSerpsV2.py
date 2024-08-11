@@ -116,31 +116,26 @@ def main():
             st.error(f"Erreur lors de la récupération des résultats pour le batch {batch_id}. Code d'état : {api_result.status_code}")
         return []
 
-    def get_result_set_data(result_set_id):
+    def get_result_set_data(batch_id, result_set):
         params = {
             'api_key': '81293DFA2CEF4FE49DB08E002D947143'
         }
-        result_set_url = f'https://api.valueserp.com/result_sets/{result_set_id}'
+        # Utilisation du searchFilePrefix pour récupérer le fichier CSV des résultats
+        result_set_url = f'https://api.valueserp.com{result_set["searchFilePrefix"]}.csv'
+        st.write(f"Téléchargement des résultats depuis : {result_set_url}")
         api_result = requests.get(result_set_url, params=params)
         
         if api_result.status_code == 200:
-            download_links = api_result.json().get("download_links", {}).get("pages", [])
-            if download_links:
-                csv_url = download_links[0]
-                csv_result = requests.get(csv_url)
-                result_df = pd.read_csv(io.StringIO(csv_result.text), encoding='utf-8')
-                return result_df
-            else:
-                st.error(f"Aucun lien de téléchargement CSV trouvé pour le jeu de résultats '{result_set_id}'.")
+            result_df = pd.read_csv(io.StringIO(api_result.text), encoding='utf-8')
+            return result_df
         else:
-            st.error(f"Erreur lors de la récupération des données du jeu de résultats '{result_set_id}'. Code d'état : {api_result.status_code}")
+            st.error(f"Erreur lors de la récupération des données du jeu de résultats pour le batch '{batch_id}'. Code d'état : {api_result.status_code}")
         return pd.DataFrame()
 
-    def download_and_merge_results(result_sets):
+    def download_and_merge_results(batch_id, result_sets):
         all_results = pd.DataFrame()
         for result_set in result_sets:
-            result_set_id = result_set['id']
-            result_df = get_result_set_data(result_set_id)
+            result_df = get_result_set_data(batch_id, result_set)
             all_results = pd.concat([all_results, result_df], ignore_index=True)
         return all_results
 
@@ -165,7 +160,7 @@ def main():
                     result_sets = list_result_sets(batch_id)
 
                     if result_sets:
-                        batch_results = download_and_merge_results(result_sets)
+                        batch_results = download_and_merge_results(batch_id, result_sets)
                         all_results = pd.concat([all_results, batch_results], ignore_index=True)
 
             if not all_results.empty:
