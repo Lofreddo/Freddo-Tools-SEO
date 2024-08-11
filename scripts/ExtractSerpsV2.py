@@ -1,12 +1,14 @@
 import requests
 import pandas as pd
 import io
+import concurrent.futures
 import streamlit as st
+import uuid
 import time
 
 def main():
     # Titre de l'application
-    st.title("Recherche de mots-clés avec ValueSERP")
+    st.title("Recherche de mots-clés avec ValueSERP en Batches")
 
     # Zone de texte pour entrer les mots-clés
     keywords_input = st.text_area("Entrez vos mots-clés, un par ligne:")
@@ -46,18 +48,29 @@ def main():
 
     # Menu déroulant pour sélectionner la location
     location = st.selectbox(
-        "Sélectionnez la location:",
+        "Sélectionnez la langue:",
         ["France", "United Kingdom", "United States", "Spain", "Germany"]
     )
 
-    # Fonction pour créer une demande batch
-    def create_batch_request(keywords):
-        batch_payload = {
-            'api_key': '81293DFA2CEF4FE49DB08E002D947143',
-            'searches': []
-        }
+    # Préfixe pour les Batchs
+    batch_prefix = st.text_input("Entrez un préfixe pour les Batchs:")
 
-        for keyword in keywords:
+    def create_batch(keyword_batch, batch_name):
+        # Création du batch
+        body = {
+            "name": batch_name,
+            "enabled": True,
+            "schedule_type": "manual",
+            "priority": "normal",
+            "notification_as_csv": True
+        }
+        
+        api_result = requests.post(f'https://api.valueserp.com/batches?api_key=81293DFA2CEF4FE49DB08E002D947143', json=body)
+        api_response = api_result.json()
+        batch_id = api_response['batch']['id']
+
+        # Ajout des recherches dans le batch
+        for keyword in keyword_batch:
             search_params = {
                 'q': keyword,
                 'location': location,
@@ -66,96 +79,78 @@ def main():
                 'hl': hl,
                 'device': device,
                 'num': num,
-                'page': '1',
-                'output': 'csv',
-                'csv_fields': 'search.q,organic_results.position,organic_results.title,organic_results.link,organic_results.domain,organic_results.page'
             }
-            batch_payload['searches'].append(search_params)
+            requests.post(f'https://api.valueserp.com/batches/{batch_id}/searches?api_key=81293DFA2CEF4FE49DB08E002D947143', json=search_params)
 
-        response = requests.post('https://api.valueserp.com/batches', json=batch_payload)
-        
-        if response.status_code == 200:
-            return response.json()['batch_id']
-        else:
-            st.error(f"Erreur lors de la création du batch: {response.status_code} - {response.text}")
-            return None
+        return batch_id
 
-    # Fonction pour vérifier le statut du batch
-    def check_batch_status(batch_id):
-        status_url = f"https://api.valueserp.com/batches/{batch_id}/status?api_key=81293DFA2CEF4FE49DB08E002D947143"
-        response = requests.get(status_url)
-        if response.status_code == 200:
-            return response.json()
-        else:
-            st.error(f"Erreur lors de la vérification du statut du batch: {response.status_code} - {response.text}")
-            return None
+    def start_batch(batch_id):
+        # Démarrage du batch
+        start_url = f'https://api.valueserp.com/batches/{batch_id}/start?api_key=81293DFA2CEF4FE49DB08E002D947143'
+        requests.get(start_url)
 
-    # Fonction pour récupérer les résultats du batch
     def fetch_batch_results(batch_id):
-        results_url = f"https://api.valueserp.com/batches/{batch_id}/results?api_key=81293DFA2CEF4FE49DB08E002D947143"
-        response = requests.get(results_url)
-        if response.status_code == 200:
-            result_df = pd.read_csv(io.StringIO(response.text), encoding='utf-8')
+        # Récupération des résultats une fois le batch terminé
+        time.sleep(60)  # Temps d'attente pour que le batch se termine
+        results_url = f'https://api.valueserp.com/batches/{batch_id}/results?api_key=81293DFA2CEF4FE49DB08E002D947143&output=csv'
+        api_result = requests.get(results_url)
+        
+        if api_result.status_code == 200:
+            result_df = pd.read_csv(io.StringIO(api_result.text), encoding='utf-8')
             return result_df
         else:
-            st.error(f"Erreur lors de la récupération des résultats du batch: {response.status_code} - {response.text}")
+            st.error(f"La récupération des résultats pour le batch '{batch_id}' a échoué avec le code d'état {api_result.status_code}.")
             return None
 
-    # Fonction pour nettoyer et réencoder les données en UTF-8
-    def clean_dataframe(df):
-        for column in df.columns:
-            df[column] = df[column].apply(lambda x: x.encode('latin1').decode('utf-8') if isinstance(x, str) else x)
-        return df
+    def split_keywords(keywords, batch_size=100):
+        # Découpe la liste de mots-clés en sous-listes de taille batch_size
+        for i in range(0, len(keywords), batch_size):
+            yield keywords[i:i + batch_size]
 
     # Bouton pour lancer la recherche
     if st.button("Lancer la recherche"):
         if keywords:
-            # Créez un batch et récupérez l'ID
-            batch_id = create_batch_request(keywords)
+            all_results = pd.DataFrame()
 
-            if batch_id:
-                st.info("Batch créé avec succès. En attente des résultats...")
+            for keyword_batch in split_keywords(keywords):
+                # Création d'un batch avec un nom unique
+                batch_name = f"{batch_prefix}_{uuid.uuid4()}"
+                batch_id = create_batch(keyword_batch, batch_name)
+                start_batch(batch_id)
 
-                # Attente des résultats du batch
-                batch_status = check_batch_status(batch_id)
-                while batch_status and batch_status['status'] != 'completed':
-                    time.sleep(5)  # Attendre 5 secondes avant de vérifier à nouveau
-                    batch_status = check_batch_status(batch_id)
+                # Récupération des résultats du batch
+                result_df = fetch_batch_results(batch_id)
+                if result_df is not None:
+                    all_results = pd.concat([all_results, result_df], ignore_index=True)
 
-                # Récupérer les résultats une fois le batch terminé
-                if batch_status['status'] == 'completed':
-                    all_results = fetch_batch_results(batch_id)
+            # Nettoyer et réencoder les données
+            all_results = all_results.applymap(lambda x: x.encode('latin1').decode('utf-8') if isinstance(x, str) else x)
 
-                    # Nettoyer et réencoder les données
-                    all_results = clean_dataframe(all_results)
+            # Affiche les résultats dans Streamlit
+            st.dataframe(all_results)
 
-                    # Affiche les résultats dans Streamlit
-                    st.dataframe(all_results)
+            # Ajoutez un bouton pour télécharger le fichier Excel
+            if not all_results.empty:
+                @st.cache_data
+                def convert_df(df):
+                    try:
+                        output = io.BytesIO()
+                        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                            df.to_excel(writer, index=False)
+                        processed_data = output.getvalue()
+                        return processed_data
+                    except Exception as e:
+                        st.error(f"Erreur lors de la conversion du DataFrame en Excel: {e}")
+                        return None
 
-                    # Ajoutez un bouton pour télécharger le fichier Excel
-                    if not all_results.empty:
-                        @st.cache_data
-                        def convert_df(df):
-                            try:
-                                output = io.BytesIO()
-                                with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                                    df.to_excel(writer, index=False)
-                                processed_data = output.getvalue()
-                                return processed_data
-                            except Exception as e:
-                                st.error(f"Erreur lors de la conversion du DataFrame en Excel: {e}")
-                                return None
-
-                        excel_data = convert_df(all_results)
-                        if excel_data:
-                            st.download_button(
-                                label="Télécharger les résultats",
-                                data=excel_data,
-                                file_name='results.xlsx',
-                                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                            )
-                else:
-                    st.error("Le batch n'a pas pu être complété avec succès.")
+                excel_data = convert_df(all_results)
+                if excel_data:
+                    st.download_button(
+                        label="Télécharger les résultats",
+                        data=excel_data,
+                        file_name='results.xlsx',
+                        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                    )
         else:
             st.error("Veuillez entrer au moins un mot-clé.")
 
