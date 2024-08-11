@@ -48,7 +48,7 @@ def main():
 
     # Menu déroulant pour sélectionner la location
     location = st.selectbox(
-        "Sélectionnez la langue:",
+        "Sélectionnez la location:",
         ["France", "United Kingdom", "United States", "Spain", "Germany"]
     )
 
@@ -82,12 +82,23 @@ def main():
             }
             requests.post(f'https://api.valueserp.com/batches/{batch_id}/searches?api_key=81293DFA2CEF4FE49DB08E002D947143', json=search_params)
 
+        # Démarrage du batch après l'avoir créé et rempli
+        start_batch(batch_id)
+
         return batch_id
 
     def start_batch(batch_id):
         # Démarrage du batch
-        start_url = f'https://api.valueserp.com/batches/{batch_id}/start?api_key=81293DFA2CEF4FE49DB08E002D947143'
-        requests.get(start_url)
+        params = {
+            'api_key': '81293DFA2CEF4FE49DB08E002D947143'
+        }
+        start_url = f'https://api.valueserp.com/batches/{batch_id}/start'
+        api_result = requests.get(start_url, params=params)
+        
+        if api_result.status_code == 200:
+            st.write(f"Batch {batch_id} démarré avec succès.")
+        else:
+            st.error(f"Échec du démarrage du batch {batch_id}. Code d'état : {api_result.status_code}")
 
     def fetch_batch_results(batch_id):
         # Récupération des résultats une fois le batch terminé
@@ -116,7 +127,6 @@ def main():
                 # Création d'un batch avec un nom unique
                 batch_name = f"{batch_prefix}_{uuid.uuid4()}"
                 batch_id = create_batch(keyword_batch, batch_name)
-                start_batch(batch_id)
 
                 # Récupération des résultats du batch
                 result_df = fetch_batch_results(batch_id)
