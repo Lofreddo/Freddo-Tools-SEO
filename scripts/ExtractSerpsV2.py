@@ -74,6 +74,7 @@ def main():
         if api_result.status_code == 200:
             api_response = api_result.json()
             st.write(f"Batch {batch_name} créé avec succès avec les mots-clés.")
+            st.write("Réponse complète de l'API pour la création du batch : ", api_response)
             return api_response['batch']['id']
         else:
             st.error(f"Erreur lors de la création du batch '{batch_name}'. Code d'état : {api_result.status_code}")
@@ -97,7 +98,12 @@ def main():
             'api_key': '81293DFA2CEF4FE49DB08E002D947143'
         }
         results_url = f'https://api.valueserp.com/batches/{batch_id}/results'
-        api_result = requests.get(results_url, params)
+        api_result = requests.get(results_url, params=params)
+
+        st.write(f"Tentative de récupération des résultats pour le batch ID : {batch_id}")
+        st.write(f"URL appelée : {results_url}")
+        st.write(f"Statut de la réponse : {api_result.status_code}")
+        st.write(f"Contenu de la réponse : {api_result.json()}")
 
         if api_result.status_code == 200:
             results = api_result.json().get("results", [])
