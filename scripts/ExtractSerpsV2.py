@@ -152,7 +152,7 @@ def main():
                         batch_results = download_and_merge_results(result_sets)
                         all_results = pd.concat([all_results, batch_results], ignore_index=True)
 
-            if not all_results.empty():
+            if not all_results.empty:
                 st.dataframe(all_results)
 
                 @st.cache_data
