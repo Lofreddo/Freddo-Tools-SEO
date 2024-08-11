@@ -54,8 +54,6 @@ def main():
                 'hl': hl,
                 'device': device,
                 'num': num,
-                'output': 'csv',
-                'csv_fields': 'search.q,organic_results.position,organic_results.title,organic_results.link,organic_results.domain'
             }
             searches.append(search_params)
 
@@ -65,18 +63,25 @@ def main():
             "schedule_type": "manual",
             "priority": "normal",
             "notification_as_csv": True,
-            "searches_type": "web",
+            "searches_type": "web",  # Type de recherche spécifié explicitement
             "searches": searches,
-            "notification_email": notification_email
+            "notification_email": notification_email  # Ajout de l'email pour les notifications
         }
-
+        
         api_result = requests.post(f'https://api.valueserp.com/batches?api_key=81293DFA2CEF4FE49DB08E002D947143', json=body)
-        api_response = api_result.json()
+        
+        # Vérification de l'état de la réponse et gestion des erreurs possibles
         if api_result.status_code == 200:
+            api_response = api_result.json()
             st.write(f"Batch {batch_name} créé avec succès avec les mots-clés.")
+            return api_response['batch']['id']
         else:
             st.error(f"Erreur lors de la création du batch '{batch_name}'. Code d'état : {api_result.status_code}")
-        return api_response['batch']['id']
+            try:
+                st.write(api_result.json())
+            except Exception as e:
+                st.write(api_result.text)
+            return None
 
     def start_batch(batch_id):
         params = {
@@ -131,15 +136,16 @@ def main():
                 batch_name = f"{batch_prefix}_{uuid.uuid4()}"
                 batch_id = create_batch_with_keywords(batch_name, keyword_batch)
 
-                start_batch(batch_id)
+                if batch_id:
+                    start_batch(batch_id)
 
-                download_links = get_csv_download_links(batch_id)
+                    download_links = get_csv_download_links(batch_id)
 
-                if download_links:
-                    batch_results = download_and_merge_csv(download_links)
-                    all_results = pd.concat([all_results, batch_results], ignore_index=True)
+                    if download_links:
+                        batch_results = download_and_merge_csv(download_links)
+                        all_results = pd.concat([all_results, batch_results], ignore_index=True)
 
-            if not all_results.empty():
+            if not all_results.empty:
                 st.dataframe(all_results)
 
                 @st.cache_data
