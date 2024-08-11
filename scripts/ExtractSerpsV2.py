@@ -1,10 +1,3 @@
-import requests
-import pandas as pd
-import io
-import streamlit as st
-import uuid
-import time
-
 def main():
     # Titre de l'application
     st.title("Recherche de mots-clés avec ValueSERP en Batches")
@@ -162,9 +155,6 @@ def main():
                     all_results = pd.concat([all_results, batch_results], ignore_index=True)
 
             if not all_results.empty:
-                # Nettoyer et réencoder les données
-                all_results = all_results.applymap(lambda x: x.encode('latin1').decode('utf-8') if isinstance(x, str) else x)
-
                 # Affiche les résultats dans Streamlit
                 st.dataframe(all_results)
 
