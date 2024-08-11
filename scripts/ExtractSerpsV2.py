@@ -54,6 +54,8 @@ def main():
                 'hl': hl,
                 'device': device,
                 'num': num,
+                'output': 'csv',
+                'csv_fields': 'search.q,organic_results.position,organic_results.title,organic_results.link,organic_results.domain'
             }
             searches.append(search_params)
 
@@ -67,7 +69,7 @@ def main():
             "searches": searches,
             "notification_email": notification_email
         }
-        
+
         api_result = requests.post(f'https://api.valueserp.com/batches?api_key=81293DFA2CEF4FE49DB08E002D947143', json=body)
         api_response = api_result.json()
         if api_result.status_code == 200:
@@ -137,7 +139,7 @@ def main():
                     batch_results = download_and_merge_csv(download_links)
                     all_results = pd.concat([all_results, batch_results], ignore_index=True)
 
-            if not all_results.empty:
+            if not all_results.empty():
                 st.dataframe(all_results)
 
                 @st.cache_data
