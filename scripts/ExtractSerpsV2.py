@@ -105,17 +105,27 @@ def main():
             st.error(f"Échec du démarrage du batch {batch_id}. Code d'état : {api_result.status_code}")
 
     def fetch_batch_results(batch_id):
-        # Récupération des résultats une fois le batch terminé
-        time.sleep(60)  # Temps d'attente pour que le batch se termine
-        results_url = f'https://api.valueserp.com/batches/{batch_id}/results?api_key=81293DFA2CEF4FE49DB08E002D947143&output=csv'
-        api_result = requests.get(results_url)
-        
-        if api_result.status_code == 200 and api_result.text.strip():
-            result_df = pd.read_csv(io.StringIO(api_result.text), encoding='utf-8')
-            return result_df
-        else:
-            st.error(f"La récupération des résultats pour le batch '{batch_id}' a échoué ou est vide.")
-            return None
+        # Récupération des résultats avec une boucle de vérification
+        max_attempts = 10  # Nombre maximum de tentatives
+        attempt = 0
+        result_df = None
+
+        while attempt < max_attempts:
+            time.sleep(120)  # Attendre 2 minutes entre les tentatives
+            results_url = f'https://api.valueserp.com/batches/{batch_id}/results?api_key=81293DFA2CEF4FE49DB08E002D947143&output=csv'
+            api_result = requests.get(results_url)
+            
+            if api_result.status_code == 200 and api_result.text.strip():
+                result_df = pd.read_csv(io.StringIO(api_result.text), encoding='utf-8')
+                break
+            else:
+                st.write(f"Tentative {attempt + 1} pour récupérer les résultats du batch {batch_id}...")
+
+            attempt += 1
+
+        if result_df is None:
+            st.error(f"Échec de la récupération des résultats pour le batch '{batch_id}' après {max_attempts} tentatives.")
+        return result_df
 
     def split_keywords(keywords, batch_size=100):
         # Découpe la liste de mots-clés en sous-listes de taille batch_size
