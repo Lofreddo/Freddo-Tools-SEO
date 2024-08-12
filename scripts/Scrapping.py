@@ -75,8 +75,8 @@ def generate_output(urls):
         contents = loop.run_until_complete(process_urls(urls))
         df = pd.DataFrame({
             'url': urls,
-            'content': [content for content, _ in contents],
-            'structure_hn': [structure for _, structure in contents]
+            'content': [content if content is not None else '' for content, _ in contents],
+            'structure_hn': [structure if structure is not None else '' for _, structure in contents]
         })
         return df
     except Exception as e:
@@ -125,9 +125,12 @@ def main():
                     mime="application/vnd.ms-excel"
                 )
             elif option == 'Importer un fichier Excel' and uploaded_file is not None:
-                with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                    df_input_with_output = pd.concat([df_input, df_output[['content', 'structure_hn']]], axis=1)
-                    df_input_with_output.to_excel(writer, index=False)
+                # S'assurer que les colonnes 'content' et 'structure_hn' existent dans df_output
+                for col in ['content', 'structure_hn']:
+                    if col not in df_output.columns:
+                        df_output[col] = ''
+                df_input_with_output = pd.concat([df_input, df_output[['content', 'structure_hn']]], axis=1)
+                df_input_with_output.to_excel(writer, index=False)
                 st.download_button(
                     label="Télécharger le fichier Excel avec les résultats",
                     data=buffer.getvalue(),
