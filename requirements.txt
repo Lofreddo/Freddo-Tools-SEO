@@ -7,3 +7,4 @@ openpyxl
 unidecode
 xlsxwriter
 lxml
+aiohttp
