@@ -8,6 +8,7 @@ import time
 def main():
     st.title("Recherche de mots-clés avec ValueSERP en Batches")
 
+    # Entrée de l'utilisateur
     keywords_input = st.text_area("Entrez vos mots-clés, un par ligne:")
     keywords = keywords_input.strip().split('\n')
 
@@ -119,8 +120,9 @@ def main():
         
         if api_result.status_code == 200:
             result_set_info = api_result.json()
+            st.write(f"Contenu complet de result_set : {result_set_info}")
             
-            # Essayer de récupérer un lien direct de téléchargement
+            # Vérifiez si un lien de téléchargement est disponible
             download_link = result_set_info.get('download_link', None)
             if download_link:
                 csv_result = requests.get(download_link)
@@ -137,7 +139,7 @@ def main():
             st.error(f"Erreur lors de la récupération des détails du jeu de résultats '{result_set_id}'. Code d'état : {api_result.status_code}")
             return pd.DataFrame()
 
-    def download_and_merge_results(result_sets):
+    def download_and_merge_results(batch_id, result_sets):
         all_results = pd.DataFrame()
         for result_set in result_sets:
             result_set_id = result_set['id']
@@ -166,7 +168,7 @@ def main():
                     result_sets = list_result_sets(batch_id)
 
                     if result_sets:
-                        batch_results = download_and_merge_results(result_sets)
+                        batch_results = download_and_merge_results(batch_id, result_sets)
                         all_results = pd.concat([all_results, batch_results], ignore_index=True)
 
             if not all_results.empty:
