@@ -59,6 +59,11 @@ def main():
     # Dropdown to select 1 to 5 keys for URL
     if uploaded_excel_file is not None:
         df = pd.read_excel(uploaded_excel_file)
+        
+        # User selects the column to be used as the first column in the output
+        selected_first_column = st.selectbox("Sélectionner la colonne à utiliser comme première colonne du fichier de sortie", df.columns)
+
+        # User selects the keys to construct the URL
         selected_keys = st.multiselect("Sélectionner 1 à 5 clés à utiliser pour l'URL", df.columns, max_selections=5)
 
         if st.button("Générer le fichier de sortie"):
@@ -88,12 +93,12 @@ def main():
                     text = master_spin(master_spin_text, replacements)
                     url_component = "-".join(url_components)
                     h1_content = extract_h1_content(text)
-                    results.append([url_component, text, f"{url_prefix}-{url_component}", h1_content])
+                    results.append([row[selected_first_column], text, f"{url_prefix}-{url_component}", h1_content])
 
                     # Update progress bar
                     progress_bar.progress((index + 1) / total_rows)
 
-                output_df = pd.DataFrame(results, columns=["URL_Components", "Texte", "URL", "H1_Content"])
+                output_df = pd.DataFrame(results, columns=[selected_first_column, "Texte", "URL", "H1_Content"])
 
                 # Convert DataFrame to Excel and save to BytesIO
                 buffer = BytesIO()
