@@ -1,6 +1,7 @@
 import streamlit as st
 import aiohttp
 import asyncio
+from aiohttp import ClientSession, ClientTimeout, TCPConnector
 from bs4 import BeautifulSoup
 import pandas as pd
 from io import BytesIO
@@ -23,47 +24,53 @@ def clean_html_content(soup):
     return soup
 
 # Fonction pour extraire le contenu et la structure des balises hn de manière asynchrone avec gestion des erreurs
-async def get_hn_and_content(session, url, retries=3):
-    try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
-        }
-        async with session.get(url, headers=headers) as response:
-            response.raise_for_status()
-            html = await response.text()
+async def get_hn_and_content(session, url):
+    retries = 3
+    for attempt in range(retries):
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
+            }
+            async with session.get(url, headers=headers) as response:
+                response.raise_for_status()
+                html = await response.text()
 
-        soup = BeautifulSoup(html, 'html.parser')
-        for tag in soup.find_all(['header', 'footer']):
-            tag.decompose()
+            soup = BeautifulSoup(html, 'html.parser')
+            for tag in soup.find_all(['header', 'footer']):
+                tag.decompose()
 
-        clean_soup = clean_html_content(soup)
-        html_content = ""
-        structure_hn = []
+            clean_soup = clean_html_content(soup)
+            html_content = ""
+            structure_hn = []
+
+            for tag in clean_soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'li', 'ol']):
+                if tag.get_text(strip=True):
+                    html_content += str(tag) + '\n'
+                if tag.name.startswith('h'):
+                    structure_hn.append(f"<{tag.name}>{tag.get_text(strip=True)}</{tag.name}>")
+
+            structure_hn_str = "\n".join(structure_hn)
+            html_content = re.sub(r'\t+', ' ', html_content)
+            html_content = re.sub(' +', ' ', html_content)
+            html_content = "\n".join([line for line in html_content.splitlines() if line.strip()])
+
+            return html_content.strip(), structure_hn_str
         
-        for tag in clean_soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'li', 'ol']):
-            if tag.get_text(strip=True):
-                html_content += str(tag) + '\n'
-            if tag.name.startswith('h'):
-                structure_hn.append(f"<{tag.name}>{tag.get_text(strip=True)}</{tag.name}>")
-
-        structure_hn_str = "\n".join(structure_hn)
-        html_content = re.sub(r'\t+', ' ', html_content)
-        html_content = re.sub(' +', ' ', html_content)
-        html_content = "\n".join([line for line in html_content.splitlines() if line.strip()])
-
-        return html_content.strip(), structure_hn_str
-    
-    except (aiohttp.ClientError, aiohttp.ServerDisconnectedError, aiohttp.ClientResponseError, BrokenPipeError) as e:
-        if retries > 0:
-            print(f"Error fetching URL {url}: {e}. Retrying...")
-            return await get_hn_and_content(session, url, retries - 1)
-        else:
-            print(f"Failed to fetch URL {url} after retries: {e}")
+        except (aiohttp.ClientError, aiohttp.ServerDisconnectedError, aiohttp.ClientResponseError, BrokenPipeError) as e:
+            print(f"Error fetching URL {url}: {e}. Retrying... {attempt + 1}/{retries}")
+            await asyncio.sleep(2 ** attempt)  # Attente exponentielle avant chaque réessai
+        except Exception as e:
+            print(f"Failed to fetch URL {url}: {e}")
             return None, None
 
+    return None, None
+
 # Fonction pour traiter les URLs de manière asynchrone avec limitation des requêtes simultanées
-async def process_urls_async(urls, max_concurrent_requests=100):  # Limitation à 100 requêtes simultanées
-    async with aiohttp.ClientSession() as session:
+async def process_urls_async(urls, max_concurrent_requests=20):  # Limitation à 20 requêtes simultanées
+    timeout = ClientTimeout(total=60)
+    connector = TCPConnector(limit=100, limit_per_host=20)
+    
+    async with ClientSession(connector=connector, timeout=timeout) as session:
         semaphore = asyncio.Semaphore(max_concurrent_requests)
 
         async def sem_get_hn_and_content(url):
@@ -101,7 +108,7 @@ def main():
     elif option == 'Importer un fichier Excel':
         st.subheader("Téléchargez votre fichier Excel contenant les URLs")
         uploaded_file = st.file_uploader("Choisissez un fichier Excel", type=["xlsx"])
-        
+
         if uploaded_file is not None:
             df_input = pd.read_excel(uploaded_file)
             st.write("Aperçu du fichier téléchargé :", df_input.head())
@@ -111,7 +118,7 @@ def main():
     if st.button("Lancer le scraping"):
         if urls:
             df_output = generate_output(urls)
-            
+
             st.subheader("Aperçu des résultats")
             st.write(df_output)
 
