@@ -13,8 +13,9 @@ def clean_html_content(soup):
     for tag in soup.find_all(['tr', 'td', 'table', 'button']):
         tag.decompose()
     social_keywords = ['facebook', 'twitter', 'instagram', 'linkedin', 'youtube', 'social']
-    for a_tag in soup.find_all('a', href=True):
-        if any(keyword in a_tag['href'].lower() for keyword in social_keywords):
+    for a_tag in soup.find_all('a', href=True):  # Ajout de 'href=True' pour filtrer les balises <a> sans href
+        href_value = a_tag.get('href', '').lower()  # Utilisation de .get() pour éviter KeyError
+        if any(keyword in href_value for keyword in social_keywords):
             a_tag.decompose()
         else:
             a_tag.unwrap()
@@ -55,7 +56,7 @@ async def get_hn_and_content(session, url):
     return html_content.strip(), structure_hn_str
 
 # Fonction pour traiter les URLs de manière asynchrone
-async def process_urls_async(urls, max_concurrent_requests=50):
+async def process_urls_async(urls, max_concurrent_requests=100):  # Augmentation à 100 requêtes simultanées
     async with aiohttp.ClientSession() as session:
         semaphore = asyncio.Semaphore(max_concurrent_requests)
 
