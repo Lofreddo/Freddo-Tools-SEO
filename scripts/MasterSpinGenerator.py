@@ -41,22 +41,28 @@ def main():
     # Upload Excel file
     uploaded_excel_file = st.file_uploader("Importer le fichier Excel avec les variables ($key)", type=["xlsx"])
 
-    # Upload TXT file
-    uploaded_txt_file = st.file_uploader("Importer le fichier texte avec les options", type=["txt"])
+    # Option to upload a TXT file or enter text manually
+    text_input_option = st.radio("Choisir la méthode pour fournir le texte maître", ("Télécharger un fichier TXT", "Entrer le texte manuellement"))
+
+    if text_input_option == "Télécharger un fichier TXT":
+        uploaded_txt_file = st.file_uploader("Importer le fichier texte avec les options", type=["txt"])
+        if uploaded_txt_file is not None:
+            master_spin_text = uploaded_txt_file.read().decode("utf-8")
+        else:
+            master_spin_text = ""
+    else:
+        master_spin_text = st.text_area("Entrer le texte maître ici", height=300)
 
     # Text input for URL prefix
     url_prefix = st.text_input("Définir le préfixe pour l'URL", "pompes-funebres")
 
-    # Dropdown to select key for URL
+    # Dropdown to select 1 to 5 keys for URL
     if uploaded_excel_file is not None:
         df = pd.read_excel(uploaded_excel_file)
-        selected_key = st.selectbox("Sélectionner la clé à utiliser pour l'URL", df.columns)
+        selected_keys = st.multiselect("Sélectionner 1 à 5 clés à utiliser pour l'URL", df.columns, max_selections=5)
 
         if st.button("Générer le fichier de sortie"):
-            if uploaded_excel_file is not None and uploaded_txt_file is not None:
-                # Read the text template
-                master_spin_text = uploaded_txt_file.read().decode("utf-8")
-
+            if uploaded_excel_file is not None and (uploaded_txt_file is not None or master_spin_text.strip() != ""):
                 results = []
 
                 # Setup a progress bar
@@ -64,23 +70,30 @@ def main():
                 total_rows = len(df)
 
                 for index, row in df.iterrows():
-                    # Récupérer la valeur de la clé sélectionnée pour construire l'URL
-                    url_component_value = row[selected_key]
-                    if pd.isna(url_component_value) or url_component_value == "":
-                        st.warning(f"La valeur de la clé sélectionnée pour la ligne {index + 1} est vide ou non valide. Ignorée.")
-                        continue
+                    # Récupérer les valeurs des clés sélectionnées pour construire l'URL
+                    url_components = []
+                    for key in selected_keys:
+                        value = row[key]
+                        if pd.isna(value) or value == "":
+                            st.warning(f"La valeur de la clé {key} pour la ligne {index + 1} est vide ou non valide. Ignorée.")
+                            continue
+                        url_components.append(transform_text(value))
                     
+                    if len(url_components) == 0:
+                        st.warning(f"Aucune valeur valide pour les clés sélectionnées à la ligne {index + 1}. Ignorée.")
+                        continue
+
                     replacements = {key: '' if pd.isna(value) else str(value) for key, value in row.items()}
                     
                     text = master_spin(master_spin_text, replacements)
-                    url_component = transform_text(url_component_value)
+                    url_component = "-".join(url_components)
                     h1_content = extract_h1_content(text)
-                    results.append([url_component_value, text, f"{url_prefix}-{url_component}", h1_content])
+                    results.append([url_component, text, f"{url_prefix}-{url_component}", h1_content])
 
                     # Update progress bar
                     progress_bar.progress((index + 1) / total_rows)
 
-                output_df = pd.DataFrame(results, columns=[selected_key, "Texte", "URL", "H1_Content"])
+                output_df = pd.DataFrame(results, columns=["URL_Components", "Texte", "URL", "H1_Content"])
 
                 # Convert DataFrame to Excel and save to BytesIO
                 buffer = BytesIO()
@@ -97,7 +110,7 @@ def main():
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
             else:
-                st.error("Veuillez importer les fichiers requis.")
+                st.error("Veuillez importer les fichiers requis ou entrer le texte maître.")
 
 if __name__ == "__main__":
     main()
