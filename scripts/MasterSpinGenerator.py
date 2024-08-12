@@ -44,12 +44,12 @@ def main():
     # Option to upload a TXT file or enter text manually
     text_input_option = st.radio("Choisir la méthode pour fournir le texte maître", ("Télécharger un fichier TXT", "Entrer le texte manuellement"))
 
+    master_spin_text = ""
+    
     if text_input_option == "Télécharger un fichier TXT":
         uploaded_txt_file = st.file_uploader("Importer le fichier texte avec les options", type=["txt"])
         if uploaded_txt_file is not None:
             master_spin_text = uploaded_txt_file.read().decode("utf-8")
-        else:
-            master_spin_text = ""
     else:
         master_spin_text = st.text_area("Entrer le texte maître ici", height=300)
 
@@ -62,7 +62,7 @@ def main():
         selected_keys = st.multiselect("Sélectionner 1 à 5 clés à utiliser pour l'URL", df.columns, max_selections=5)
 
         if st.button("Générer le fichier de sortie"):
-            if uploaded_excel_file is not None and (uploaded_txt_file is not None or master_spin_text.strip() != ""):
+            if uploaded_excel_file is not None and (text_input_option == "Télécharger un fichier TXT" and master_spin_text.strip() != "") or (text_input_option == "Entrer le texte manuellement" and master_spin_text.strip() != ""):
                 results = []
 
                 # Setup a progress bar
