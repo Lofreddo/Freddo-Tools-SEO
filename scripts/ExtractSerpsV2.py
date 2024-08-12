@@ -111,11 +111,11 @@ def main():
             st.error(f"Erreur lors de la récupération des résultats pour le batch {batch_id}. Code d'état : {api_result.status_code}")
         return []
 
-    def get_result_set_data(result_set_id):
+    def get_result_set_data(batch_id, result_set_id):
         params = {
             'api_key': '81293DFA2CEF4FE49DB08E002D947143'
         }
-        result_set_url = f'https://api.valueserp.com/result_sets/{result_set_id}'
+        result_set_url = f'https://api.valueserp.com/batches/{batch_id}/results/{result_set_id}'
         api_result = requests.get(result_set_url, params=params)
         
         if api_result.status_code == 200:
@@ -123,7 +123,7 @@ def main():
             st.write(f"Contenu complet de result_set : {result_set_info}")
             
             # Vérifiez si un lien de téléchargement est disponible
-            download_link = result_set_info.get('download_link', None)
+            download_link = result_set_info.get('result', {}).get('download_links', {}).get('all_pages', None)
             if download_link:
                 csv_result = requests.get(download_link)
                 if csv_result.status_code == 200:
@@ -143,8 +143,9 @@ def main():
         all_results = pd.DataFrame()
         for result_set in result_sets:
             result_set_id = result_set['id']
-            result_df = get_result_set_data(result_set_id)
-            all_results = pd.concat([all_results, result_df], ignore_index=True)
+            result_df = get_result_set_data(batch_id, result_set_id)
+            if not result_df.empty:
+                all_results = pd.concat([all_results, result_df], ignore_index=True)
         return all_results
 
     def split_keywords(keywords, batch_size=100):
