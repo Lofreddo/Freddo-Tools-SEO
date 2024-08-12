@@ -6,21 +6,16 @@ import pandas as pd
 from io import BytesIO
 import re
 
-# Fonction pour nettoyer le contenu HTML en fonction des exigences
+# Fonction pour nettoyer le contenu HTML en conservant les balises <a href>
 def clean_html_content(soup):
     for tag in soup.find_all(['span', 'div', 'label', 'img', 'path', 'svg', 'em', 'th', 'strong']):
         tag.unwrap()
     for tag in soup.find_all(['tr', 'td', 'table', 'button']):
         tag.decompose()
 
-    social_keywords = ['facebook', 'twitter', 'instagram', 'linkedin', 'youtube', 'social']
-    for a_tag in soup.find_all('a', href=True):
-        href_value = a_tag.get('href', '')
-        if isinstance(href_value, str) and any(keyword in href_value.lower() for keyword in social_keywords):
-            a_tag.decompose()
-        else:
-            a_tag.unwrap()
-
+    # On ne touche pas aux balises <a href> pour éviter les problèmes
+    # Pas de suppression des balises <a> ni de décomposition
+    
     for tag in soup.find_all(True):
         tag.attrs = {}
 
@@ -40,28 +35,34 @@ async def get_hn_and_content(session, url):
             response.raise_for_status()
             html = await response.text()
     except Exception as e:
+        print(f"Error fetching URL {url}: {e}")
         return None, None
     
-    soup = BeautifulSoup(html, 'html.parser')
-    for tag in soup.find_all(['header', 'footer']):
-        tag.decompose()
+    try:
+        soup = BeautifulSoup(html, 'html.parser')
+        for tag in soup.find_all(['header', 'footer']):
+            tag.decompose()
 
-    clean_soup = clean_html_content(soup)
-    html_content = ""
-    structure_hn = []
+        clean_soup = clean_html_content(soup)
+        html_content = ""
+        structure_hn = []
+        
+        for tag in clean_soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'li', 'ol']):
+            if tag.get_text(strip=True):
+                html_content += str(tag) + '\n'
+            if tag.name.startswith('h'):
+                structure_hn.append(f"<{tag.name}>{tag.get_text(strip=True)}</{tag.name}>")
+
+        structure_hn_str = "\n".join(structure_hn)
+        html_content = re.sub(r'\t+', ' ', html_content)
+        html_content = re.sub(' +', ' ', html_content)
+        html_content = "\n".join([line for line in html_content.splitlines() if line.strip()])
+
+        return html_content.strip(), structure_hn_str
     
-    for tag in clean_soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'li', 'ol']):
-        if tag.get_text(strip=True):
-            html_content += str(tag) + '\n'
-        if tag.name.startswith('h'):
-            structure_hn.append(f"<{tag.name}>{tag.get_text(strip=True)}</{tag.name}>")
-
-    structure_hn_str = "\n".join(structure_hn)
-    html_content = re.sub(r'\t+', ' ', html_content)
-    html_content = re.sub(' +', ' ', html_content)
-    html_content = "\n".join([line for line in html_content.splitlines() if line.strip()])
-
-    return html_content.strip(), structure_hn_str
+    except Exception as e:
+        print(f"Error processing content for URL {url}: {e}")
+        return None, None
 
 # Fonction pour traiter les URLs de manière asynchrone
 async def process_urls_async(urls, max_concurrent_requests=300):
