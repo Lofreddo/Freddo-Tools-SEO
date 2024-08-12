@@ -1,7 +1,6 @@
 import streamlit as st
 import aiohttp
 import asyncio
-from aiohttp import ClientSession, ClientTimeout, TCPConnector
 from bs4 import BeautifulSoup
 import pandas as pd
 from io import BytesIO
@@ -23,19 +22,17 @@ def clean_html_content(soup):
 
     return soup
 
-# Fonction pour extraire le contenu et la structure des balises hn de manière asynchrone avec gestion des erreurs
-async def get_hn_and_content(session, url):
-    retries = 3
-    for attempt in range(retries):
-        try:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
-            }
-            async with session.get(url, headers=headers) as response:
-                response.raise_for_status()
-                html = await response.text()
-
+# Fonction pour extraire le contenu et la structure des balises hn de manière asynchrone
+async def fetch_content(session, url):
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
+        }
+        async with session.get(url, headers=headers) as response:
+            response.raise_for_status()
+            html = await response.text()
             soup = BeautifulSoup(html, 'html.parser')
+
             for tag in soup.find_all(['header', 'footer']):
                 tag.decompose()
 
@@ -55,42 +52,36 @@ async def get_hn_and_content(session, url):
             html_content = "\n".join([line for line in html_content.splitlines() if line.strip()])
 
             return html_content.strip(), structure_hn_str
-        
-        except (aiohttp.ClientError, aiohttp.ServerDisconnectedError, aiohttp.ClientResponseError, BrokenPipeError) as e:
-            print(f"Error fetching URL {url}: {e}. Retrying... {attempt + 1}/{retries}")
-            await asyncio.sleep(2 ** attempt)  # Attente exponentielle avant chaque réessai
-        except Exception as e:
-            print(f"Failed to fetch URL {url}: {e}")
-            return None, None
 
-    return None, None
+    except Exception as e:
+        print(f"Error fetching URL {url}: {e}")
+        return None, None
 
 # Fonction pour traiter les URLs de manière asynchrone avec limitation des requêtes simultanées
-async def process_urls_async(urls, max_concurrent_requests=20):  # Limitation à 20 requêtes simultanées
-    timeout = ClientTimeout(total=60)
-    connector = TCPConnector(limit=100, limit_per_host=20)
-    
-    async with ClientSession(connector=connector, timeout=timeout) as session:
-        semaphore = asyncio.Semaphore(max_concurrent_requests)
+async def process_urls(urls, max_concurrent_requests=10):
+    connector = aiohttp.TCPConnector(limit_per_host=10)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        tasks = []
+        for url in urls:
+            tasks.append(fetch_content(session, url))
 
-        async def sem_get_hn_and_content(url):
-            async with semaphore:
-                return await get_hn_and_content(session, url)
-
-        tasks = [sem_get_hn_and_content(url) for url in urls]
         return await asyncio.gather(*tasks)
 
 # Fonction pour générer la sortie en DataFrame
 def generate_output(urls):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    contents = loop.run_until_complete(process_urls_async(urls))
-    df = pd.DataFrame({
-        'url': urls,
-        'content': [content for content, _ in contents],
-        'structure_hn': [structure for _, structure in contents]
-    })
-    return df
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        contents = loop.run_until_complete(process_urls(urls))
+        df = pd.DataFrame({
+            'url': urls,
+            'content': [content for content, _ in contents],
+            'structure_hn': [structure for _, structure in contents]
+        })
+        return df
+    except Exception as e:
+        print(f"Failed to process URLs: {e}")
+        return pd.DataFrame()
 
 # Fonction principale pour l'interface Streamlit
 def main():
