@@ -13,9 +13,6 @@ def clean_html_content(soup):
     for tag in soup.find_all(['tr', 'td', 'table', 'button']):
         tag.decompose()
 
-    # On ne touche pas aux balises <a href> pour éviter les problèmes
-    # Pas de suppression des balises <a> ni de décomposition
-    
     for tag in soup.find_all(True):
         tag.attrs = {}
 
@@ -25,8 +22,8 @@ def clean_html_content(soup):
 
     return soup
 
-# Fonction pour extraire le contenu et la structure des balises hn de manière asynchrone
-async def get_hn_and_content(session, url):
+# Fonction pour extraire le contenu et la structure des balises hn de manière asynchrone avec gestion des erreurs
+async def get_hn_and_content(session, url, retries=3):
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
@@ -34,11 +31,7 @@ async def get_hn_and_content(session, url):
         async with session.get(url, headers=headers) as response:
             response.raise_for_status()
             html = await response.text()
-    except Exception as e:
-        print(f"Error fetching URL {url}: {e}")
-        return None, None
-    
-    try:
+
         soup = BeautifulSoup(html, 'html.parser')
         for tag in soup.find_all(['header', 'footer']):
             tag.decompose()
@@ -60,12 +53,16 @@ async def get_hn_and_content(session, url):
 
         return html_content.strip(), structure_hn_str
     
-    except Exception as e:
-        print(f"Error processing content for URL {url}: {e}")
-        return None, None
+    except (aiohttp.ClientError, aiohttp.ServerDisconnectedError, aiohttp.ClientResponseError, BrokenPipeError) as e:
+        if retries > 0:
+            print(f"Error fetching URL {url}: {e}. Retrying...")
+            return await get_hn_and_content(session, url, retries - 1)
+        else:
+            print(f"Failed to fetch URL {url} after retries: {e}")
+            return None, None
 
-# Fonction pour traiter les URLs de manière asynchrone
-async def process_urls_async(urls, max_concurrent_requests=300):
+# Fonction pour traiter les URLs de manière asynchrone avec limitation des requêtes simultanées
+async def process_urls_async(urls, max_concurrent_requests=100):  # Limitation à 100 requêtes simultanées
     async with aiohttp.ClientSession() as session:
         semaphore = asyncio.Semaphore(max_concurrent_requests)
 
