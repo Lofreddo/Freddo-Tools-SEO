@@ -15,7 +15,8 @@ def clean_html_content(soup):
 
     social_keywords = ['facebook', 'twitter', 'instagram', 'linkedin', 'youtube', 'social']
     for a_tag in soup.find_all('a', href=True):
-        if any(keyword in a_tag['href'].lower() for keyword in social_keywords):
+        href_value = a_tag.get('href', '')
+        if isinstance(href_value, str) and any(keyword in href_value.lower() for keyword in social_keywords):
             a_tag.decompose()
         else:
             a_tag.unwrap()
