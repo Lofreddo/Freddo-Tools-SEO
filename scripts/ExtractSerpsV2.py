@@ -73,8 +73,8 @@ def main():
         
         if api_result.status_code == 200:
             api_response = api_result.json()
+            batch_id = api_response['batch']['id']
             st.write(f"Batch {batch_name} créé avec succès avec les mots-clés.")
-            batch_id = api_response.get('batch', {}).get('id')
             st.write(f"Batch ID récupéré : {batch_id}")
             return batch_id
         else:
@@ -94,18 +94,30 @@ def main():
         else:
             st.error(f"Échec du démarrage du batch {batch_id}. Code d'état : {api_result.status_code}")
 
+    def get_batch_info(batch_id):
+        params = {
+            'api_key': '81293DFA2CEF4FE49DB08E002D947143'
+        }
+        batch_url = f'https://api.valueserp.com/batches/{batch_id}'
+        api_result = requests.get(batch_url, params=params)
+
+        if api_result.status_code == 200:
+            batch_info = api_result.json().get("batch", {})
+            st.write(f"Batch Name: {batch_info.get('name')}")
+            return batch_info
+        else:
+            st.error(f"Erreur lors de la récupération des informations du batch {batch_id}. Code d'état : {api_result.status_code}")
+            return None
+
     def list_result_sets(batch_id):
         params = {
             'api_key': '81293DFA2CEF4FE49DB08E002D947143'
         }
         results_url = f'https://api.valueserp.com/batches/{batch_id}/results'
-        st.write(f"Tentative de récupération des résultats pour le batch ID : {batch_id}")
-        st.write(f"URL appelée : {results_url}")
         api_result = requests.get(results_url, params=params)
         
         if api_result.status_code == 200:
             results = api_result.json().get("results", [])
-            st.write(f"Contenu de la réponse : {api_result.json()}")
             if results:
                 st.write(f"Résultats trouvés pour le batch {batch_id}")
                 return results
@@ -115,35 +127,27 @@ def main():
             st.error(f"Erreur lors de la récupération des résultats pour le batch {batch_id}. Code d'état : {api_result.status_code}")
         return []
 
-    def get_result_set_data(batch_id, result_set):
-        # Vérification du contenu du result_set
-        st.write(f"Contenu de result_set : {result_set}")
-        
-        # Recherche de l'URL de téléchargement direct du CSV
-        search_file_prefix = result_set.get("searchFilePrefix")
-        if search_file_prefix:
-            result_set_url = f'https://api.valueserp.com{search_file_prefix}.csv'
-        else:
+    def get_result_set_data(result_set):
+        # Cette fonction utilise les données récupérées pour obtenir le fichier CSV
+        search_file_prefix = result_set.get('searchFilePrefix', None)
+        if not search_file_prefix:
             st.error(f"'searchFilePrefix' introuvable dans result_set. Voici ce que nous avons reçu : {result_set}")
             return pd.DataFrame()
 
-        params = {
-            'api_key': '81293DFA2CEF4FE49DB08E002D947143'
-        }
-
-        csv_result = requests.get(result_set_url, params=params)
+        result_set_url = f'https://api.valueserp.com{search_file_prefix}.csv'
+        csv_result = requests.get(result_set_url)
         
         if csv_result.status_code == 200:
             result_df = pd.read_csv(io.StringIO(csv_result.text), encoding='utf-8')
             return result_df
         else:
-            st.error(f"Erreur lors de la récupération des données du jeu de résultats '{result_set['id']}'. Code d'état : {csv_result.status_code}")
-        return pd.DataFrame()
+            st.error(f"Erreur lors de la récupération du jeu de résultats '{result_set['id']}'. Code d'état : {csv_result.status_code}")
+            return pd.DataFrame()
 
     def download_and_merge_results(batch_id, result_sets):
         all_results = pd.DataFrame()
         for result_set in result_sets:
-            result_df = get_result_set_data(batch_id, result_set)
+            result_df = get_result_set_data(result_set)
             all_results = pd.concat([all_results, result_df], ignore_index=True)
         return all_results
 
@@ -165,11 +169,14 @@ def main():
                     # Attendre un peu plus longtemps avant de vérifier les résultats
                     time.sleep(120)
 
-                    result_sets = list_result_sets(batch_id)
-
-                    if result_sets:
-                        batch_results = download_and_merge_results(batch_id, result_sets)
-                        all_results = pd.concat([all_results, batch_results], ignore_index=True)
+                    batch_info = get_batch_info(batch_id)
+                    if batch_info and batch_info.get('results_count', 0) > 0:
+                        result_sets = list_result_sets(batch_id)
+                        if result_sets:
+                            batch_results = download_and_merge_results(batch_id, result_sets)
+                            all_results = pd.concat([all_results, batch_results], ignore_index=True)
+                    else:
+                        st.write(f"Le batch {batch_id} n'a pas encore de résultats disponibles.")
 
             if not all_results.empty:
                 st.dataframe(all_results)
