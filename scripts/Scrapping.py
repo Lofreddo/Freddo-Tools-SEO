@@ -1,9 +1,9 @@
 import streamlit as st
-import requests
+import aiohttp
+import asyncio
 from bs4 import BeautifulSoup
 import pandas as pd
 from io import BytesIO
-from concurrent.futures import ThreadPoolExecutor
 import re
 
 # Fonction pour nettoyer le contenu HTML en fonction des exigences
@@ -25,14 +25,19 @@ def clean_html_content(soup):
             tag.decompose()
     return soup
 
-# Fonction pour extraire le contenu et la structure des balises hn
-def get_hn_and_content(url):
+# Fonction pour extraire le contenu et la structure des balises hn de manière asynchrone
+async def get_hn_and_content(session, url):
     try:
-        response = requests.get(url)
-        response.raise_for_status()
-    except requests.RequestException as e:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
+        }
+        async with session.get(url, headers=headers) as response:
+            response.raise_for_status()
+            html = await response.text()
+    except Exception as e:
         return None, None
-    soup = BeautifulSoup(response.content, 'html.parser')
+    
+    soup = BeautifulSoup(html, 'html.parser')
     for tag in soup.find_all(['header', 'footer']):
         tag.decompose()
     clean_soup = clean_html_content(soup)
@@ -49,15 +54,23 @@ def get_hn_and_content(url):
     html_content = "\n".join([line for line in html_content.splitlines() if line.strip()])
     return html_content.strip(), structure_hn_str
 
-# Fonction pour traiter les URLs en parallèle
-def process_urls_in_parallel(urls, max_workers=10):
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        results = list(executor.map(get_hn_and_content, urls))
-    return results
+# Fonction pour traiter les URLs de manière asynchrone
+async def process_urls_async(urls, max_concurrent_requests=50):
+    async with aiohttp.ClientSession() as session:
+        semaphore = asyncio.Semaphore(max_concurrent_requests)
+
+        async def sem_get_hn_and_content(url):
+            async with semaphore:
+                return await get_hn_and_content(session, url)
+
+        tasks = [sem_get_hn_and_content(url) for url in urls]
+        return await asyncio.gather(*tasks)
 
 # Fonction pour générer la sortie en DataFrame
 def generate_output(urls):
-    contents = process_urls_in_parallel(urls)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    contents = loop.run_until_complete(process_urls_async(urls))
     df = pd.DataFrame({
         'url': urls,
         'content': [content for content, _ in contents],
