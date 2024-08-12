@@ -93,11 +93,13 @@ def main():
                     text = master_spin(master_spin_text, replacements)
                     url_component = "-".join(url_components)
                     h1_content = extract_h1_content(text)
+                    # Append the selected first column and other results to the list
                     results.append([row[selected_first_column], text, f"{url_prefix}-{url_component}", h1_content])
 
                     # Update progress bar
                     progress_bar.progress((index + 1) / total_rows)
 
+                # Create a DataFrame with the selected first column as the first column in the output
                 output_df = pd.DataFrame(results, columns=[selected_first_column, "Texte", "URL", "H1_Content"])
 
                 # Convert DataFrame to Excel and save to BytesIO
