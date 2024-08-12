@@ -93,32 +93,50 @@ def main():
         else:
             st.error(f"Échec du démarrage du batch {batch_id}. Code d'état : {api_result.status_code}")
 
-    def get_batch_csv_links(batch_id):
+    def get_result_sets(batch_id):
         params = {
             'api_key': '81293DFA2CEF4FE49DB08E002D947143'
         }
-        csv_url = f'https://api.valueserp.com/batches/{batch_id}/results/{batch_id}/csv'
+        result_sets_url = f'https://api.valueserp.com/batches/{batch_id}/results'
+        api_result = requests.get(result_sets_url, params=params)
+        
+        if api_result.status_code == 200:
+            result_sets = api_result.json().get("results", [])
+            return result_sets
+        else:
+            st.error(f"Erreur lors de la récupération des jeux de résultats pour le batch {batch_id}. Code d'état : {api_result.status_code}")
+            return []
+
+    def get_csv_download_links(batch_id, result_set_id):
+        params = {
+            'api_key': '81293DFA2CEF4FE49DB08E002D947143'
+        }
+        csv_url = f'https://api.valueserp.com/batches/{batch_id}/results/{result_set_id}/csv'
         api_result = requests.get(csv_url, params=params)
         
         if api_result.status_code == 200:
             csv_info = api_result.json()
-            download_links = csv_info.get('result', {}).get('download_links', {}).get('all_pages', [])
+            download_links = csv_info.get('download_links', {}).get('pages', [])
             return download_links
         else:
-            st.error(f"Erreur lors de la récupération des liens de téléchargement CSV pour le batch {batch_id}. Code d'état : {api_result.status_code}")
+            st.error(f"Erreur lors de la récupération des liens de téléchargement CSV pour le set de résultats {result_set_id}. Code d'état : {api_result.status_code}")
             return []
 
     def download_and_merge_results(batch_id):
         all_results = pd.DataFrame()
-        csv_links = get_batch_csv_links(batch_id)
+        result_sets = get_result_sets(batch_id)
+        
+        for result_set in result_sets:
+            result_set_id = result_set['id']
+            csv_links = get_csv_download_links(batch_id, result_set_id)
 
-        for link in csv_links:
-            csv_result = requests.get(link)
-            if csv_result.status_code == 200:
-                result_df = pd.read_csv(io.StringIO(csv_result.text), encoding='utf-8')
-                all_results = pd.concat([all_results, result_df], ignore_index=True)
-            else:
-                st.error(f"Erreur lors de la récupération du fichier CSV depuis '{link}'. Code d'état : {csv_result.status_code}")
+            for link in csv_links:
+                csv_result = requests.get(link)
+                if csv_result.status_code == 200:
+                    result_df = pd.read_csv(io.StringIO(csv_result.text), encoding='utf-8')
+                    all_results = pd.concat([all_results, result_df], ignore_index=True)
+                else:
+                    st.error(f"Erreur lors de la récupération du fichier CSV depuis '{link}'. Code d'état : {csv_result.status_code}")
         
         return all_results
 
