@@ -6,6 +6,7 @@ from collections import Counter
 import string
 import streamlit as st
 from concurrent.futures import ThreadPoolExecutor
+from io import BytesIO  # Import nécessaire pour gérer le buffer en mémoire
 
 # Téléchargement de la liste de stop words et de 'punkt'
 nltk.download('stopwords', quiet=True)
@@ -38,7 +39,7 @@ def extract_words_ngrams(text, n):
     else:
         return filtered_tokens
 
-def process_text(texts, num_words, num_bigrams, num_trigrams):
+def process_text(texts):
     cleaned_texts = [clean_html(text) for text in texts]
     all_words = []
     all_bigrams = []
@@ -80,52 +81,70 @@ def main():
             num_bigrams = st.number_input("Nombre de bigrammes à garder", min_value=1, value=30)
             num_trigrams = st.number_input("Nombre de trigrammes à garder", min_value=1, value=30)
 
-            # Grouper les données par ID
-            grouped = df.groupby(id_column)
-            output_data = []
+            # Bouton pour lancer le traitement
+            if st.button("Lancer l'analyse"):
+                # Afficher une barre de progression
+                progress_bar = st.progress(0)
+                grouped = df.groupby(id_column)
+                output_data = []
 
-            for group_id, group_data in grouped:
-                # Limiter le nombre de lignes par lot
-                group_data = group_data.head(lines_per_batch)
-                html_content = group_data[content_column].tolist()
-                
-                # Utiliser ThreadPoolExecutor pour paralléliser le traitement
-                with ThreadPoolExecutor(max_workers=4) as executor:
-                    results = list(executor.map(lambda text: process_text([text], num_words, num_bigrams, num_trigrams), html_content))
-                
-                # Extraire les résultats
-                words = [word for result in results for word in result[0]]
-                bigrams = [bigram for result in results for bigram in result[1]]
-                trigrams = [trigram for result in results for trigram in result[2]]
-                
-                # Compter les occurrences
-                words_counter = Counter(words)
-                bigrams_counter = Counter(bigrams)
-                trigrams_counter = Counter(trigrams)
-                
-                # Prendre les mots/n-grams les plus courants
-                most_common_words = ', '.join([word for word, count in words_counter.most_common(num_words)])
-                most_common_bigrams = ', '.join([bigram for bigram, count in bigrams_counter.most_common(num_bigrams)])
-                most_common_trigrams = ', '.join([trigram for trigram, count in trigrams_counter.most_common(num_trigrams)])
-                
-                # Ajouter les résultats au tableau de sortie
-                output_data.append({
-                    'ID': group_id,
-                    'Mots Uniques': most_common_words,
-                    'Duos de Mots': most_common_bigrams,
-                    'Trios de Mots': most_common_trigrams
-                })
+                total_groups = len(grouped)
+                for idx, (group_id, group_data) in enumerate(grouped, start=1):
+                    # Limiter le nombre de lignes par lot
+                    group_data = group_data.head(lines_per_batch)
+                    html_content = group_data[content_column].dropna().tolist()
+                    
+                    if not html_content:
+                        # Si le contenu HTML est vide, passer au groupe suivant
+                        output_data.append({
+                            'ID': group_id,
+                            'Mots Uniques': '',
+                            'Duos de Mots': '',
+                            'Trios de Mots': ''
+                        })
+                        progress_bar.progress(idx / total_groups)
+                        continue
+                    
+                    # Traiter le texte
+                    words, bigrams, trigrams = process_text(html_content)
+                    
+                    # Compter les occurrences
+                    words_counter = Counter(words)
+                    bigrams_counter = Counter(bigrams)
+                    trigrams_counter = Counter(trigrams)
+                    
+                    # Prendre les mots/n-grams les plus courants
+                    most_common_words = ', '.join([word for word, count in words_counter.most_common(num_words)])
+                    most_common_bigrams = ', '.join([bigram for bigram, count in bigrams_counter.most_common(num_bigrams)])
+                    most_common_trigrams = ', '.join([trigram for trigram, count in trigrams_counter.most_common(num_trigrams)])
+                    
+                    # Ajouter les résultats au tableau de sortie
+                    output_data.append({
+                        'ID': group_id,
+                        'Mots Uniques': most_common_words,
+                        'Duos de Mots': most_common_bigrams,
+                        'Trios de Mots': most_common_trigrams
+                    })
+                    
+                    # Mettre à jour la barre de progression
+                    progress_bar.progress(idx / total_groups)
 
-            # Créer un DataFrame pour le fichier de sortie
-            output_df = pd.DataFrame(output_data)
+                # Créer un DataFrame pour le fichier de sortie
+                output_df = pd.DataFrame(output_data)
 
-            # Étape 6: Enregistrer le fichier de sortie
-            st.download_button(
-                label="Télécharger les résultats",
-                data=output_df.to_excel(index=False, engine='openpyxl'),
-                file_name="resultats.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+                # Écrire le DataFrame dans un buffer en mémoire
+                towrite = BytesIO()
+                with pd.ExcelWriter(towrite, engine='openpyxl') as writer:
+                    output_df.to_excel(writer, index=False)
+                towrite.seek(0)  # Remettre le curseur au début du buffer
+
+                # Étape 6: Enregistrer le fichier de sortie
+                st.download_button(
+                    label="Télécharger les résultats",
+                    data=towrite,
+                    file_name="resultats.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 
 if __name__ == "__main__":
     main()
