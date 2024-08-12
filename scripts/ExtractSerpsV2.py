@@ -119,10 +119,11 @@ def main():
         
         if api_result.status_code == 200:
             result_set_info = api_result.json()
-            search_file_prefix = result_set_info.get('searchFilePrefix', None)
-            if search_file_prefix:
-                result_set_csv_url = f'https://api.valueserp.com{search_file_prefix}.csv'
-                csv_result = requests.get(result_set_csv_url)
+            
+            # Essayer de récupérer un lien direct de téléchargement
+            download_link = result_set_info.get('download_link', None)
+            if download_link:
+                csv_result = requests.get(download_link)
                 if csv_result.status_code == 200:
                     result_df = pd.read_csv(io.StringIO(csv_result.text), encoding='utf-8')
                     return result_df
@@ -130,13 +131,13 @@ def main():
                     st.error(f"Erreur lors de la récupération du fichier CSV pour le jeu de résultats '{result_set_id}'. Code d'état : {csv_result.status_code}")
                     return pd.DataFrame()
             else:
-                st.error(f"'searchFilePrefix' introuvable dans les détails du jeu de résultats. Voici ce que nous avons reçu : {result_set_info}")
+                st.error(f"'download_link' introuvable dans les détails du jeu de résultats. Voici ce que nous avons reçu : {result_set_info}")
                 return pd.DataFrame()
         else:
             st.error(f"Erreur lors de la récupération des détails du jeu de résultats '{result_set_id}'. Code d'état : {api_result.status_code}")
             return pd.DataFrame()
 
-    def download_and_merge_results(batch_id, result_sets):
+    def download_and_merge_results(result_sets):
         all_results = pd.DataFrame()
         for result_set in result_sets:
             result_set_id = result_set['id']
@@ -165,7 +166,7 @@ def main():
                     result_sets = list_result_sets(batch_id)
 
                     if result_sets:
-                        batch_results = download_and_merge_results(batch_id, result_sets)
+                        batch_results = download_and_merge_results(result_sets)
                         all_results = pd.concat([all_results, batch_results], ignore_index=True)
 
             if not all_results.empty:
