@@ -209,7 +209,7 @@ def main():
                 if batch_id:
                     start_batch(batch_id)
 
-                                        # Attendre un peu plus longtemps pour permettre la synchronisation
+                    # Attendre un peu plus longtemps pour permettre la synchronisation
                     time.sleep(60)
 
             # Récupérer les résultats des batches existants
