@@ -3,6 +3,19 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import re
+from nltk.corpus import wordnet
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
+
+# Initialisation du lemmatizer
+lemmatizer = WordNetLemmatizer()
+
+# Fonction pour obtenir le lemme d'un mot
+def get_lemma(word):
+    lemma = lemmatizer.lemmatize(word, pos='v')  # Lemmatisation en tant que verbe
+    if lemma == word:  # Si le lemme en tant que verbe ne change rien, essayer en tant que nom
+        lemma = lemmatizer.lemmatize(word, pos='n')
+    return lemma
 
 # Fonction pour vérifier la présence du mot-clé dans une balise spécifique
 def check_keyword_in_tag(soup, tag, keyword):
@@ -14,11 +27,18 @@ def check_keyword_in_tag(soup, tag, keyword):
 
 # Fonction pour vérifier le mot-clé avec tolérance pour les variations
 def keyword_in_text(text, keyword):
-    # Échappement des caractères spéciaux pour éviter les problèmes de regex
-    keyword = re.escape(keyword)
-    # Création du motif de recherche avec tolérance
-    pattern = r'\b' + r'\s*'.join(list(keyword)) + r'\b'
-    return re.search(pattern, text, re.IGNORECASE) is not None
+    # Tokenisation et lemmatisation des mots du mot-clé
+    keyword_parts = [get_lemma(part) for part in word_tokenize(keyword)]
+    
+    # Création du motif de recherche avec tolérance de 0 à 5 caractères entre les mots
+    # Respect de l'ordre des mots
+    pattern = r'\b' + r'.{0,5}'.join(map(re.escape, keyword_parts)) + r'\b'
+    
+    # Lemmatisation du texte de la balise avant la recherche
+    lemmatized_text = " ".join([get_lemma(word) for word in word_tokenize(text)])
+    
+    # Recherche du motif dans le texte
+    return re.search(pattern, lemmatized_text, re.IGNORECASE) is not None
 
 # Fonction principale pour l'application Streamlit
 def main():
