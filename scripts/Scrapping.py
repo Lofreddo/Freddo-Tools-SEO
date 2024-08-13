@@ -1,97 +1,65 @@
 import streamlit as st
-import requests
-from bs4 import BeautifulSoup
 import pandas as pd
 from io import BytesIO
-from concurrent.futures import ThreadPoolExecutor
+from playwright.sync_api import sync_playwright
 import re
 
-# Fonction pour nettoyer le contenu HTML en fonction des exigences
+# Fonction pour nettoyer le contenu HTML
 def clean_html_content(soup):
-    # Supprimer les balises <span>, <div>, <label>, <img>, <path>, <svg>, <em>, <th>
-    # en conservant leur contenu
     for tag in soup.find_all(['span', 'div', 'label', 'img', 'path', 'svg', 'em', 'th', 'strong']):
         tag.unwrap()
-
-    # Supprimer les balises <tr>, <td>, <table>, <button> et leur contenu
     for tag in soup.find_all(['tr', 'td', 'table', 'button']):
         tag.decompose()
-
-    # Supprimer les balises <a> en conservant le contenu, sauf si elles contiennent des liens vers les réseaux sociaux
-    social_keywords = ['facebook', 'twitter', 'instagram', 'linkedin', 'youtube', 'social']
-    for a_tag in soup.find_all('a', href=True):
-        if any(keyword in a_tag['href'].lower() for keyword in social_keywords):
-            a_tag.decompose()  # Supprime la balise entière si elle contient un lien vers les réseaux sociaux
-        else:
-            a_tag.unwrap()  # Supprime la balise <a> mais conserve son contenu
-
-    # Supprimer les classes CSS et autres attributs des balises restantes
+    for tag in soup.find_all('a', href=True):
+        tag.unwrap()
     for tag in soup.find_all(True):
         tag.attrs = {}
-
-    # Supprimer les balises vides
     for tag in soup.find_all():
-        if not tag.get_text(strip=True):  # Si la balise est vide après avoir supprimé les espaces
+        if not tag.get_text(strip=True):
             tag.decompose()
-
     return soup
 
-# Fonction pour extraire le contenu et la structure des balises hn
+# Fonction pour extraire le contenu avec Playwright
 def get_hn_and_content(url):
     try:
-        response = requests.get(url)
-        response.raise_for_status()
-        print(f"Successfully fetched content for {url}")
-    except requests.RequestException as e:
-        print(f"Failed to fetch content for {url}: {e}")
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.goto(url)
+            html = page.content()
+            browser.close()
+
+        soup = BeautifulSoup(html, 'html.parser')
+
+        for tag in soup.find_all(['header', 'footer']):
+            tag.decompose()
+
+        clean_soup = clean_html_content(soup)
+
+        html_content = ""
+        structure_hn = []
+
+        for tag in clean_soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'li', 'ol']):
+            if tag.get_text(strip=True):
+                html_content += str(tag) + '\n'
+            if tag.name.startswith('h'):
+                structure_hn.append(f"<{tag.name}>{tag.get_text(strip=True)}</{tag.name}>")
+
+        structure_hn_str = "\n".join(structure_hn)
+
+        html_content = re.sub(r'\t+', ' ', html_content)
+        html_content = re.sub(' +', ' ', html_content)
+        html_content = "\n".join([line for line in html_content.splitlines() if line.strip()])
+
+        return html_content.strip(), structure_hn_str
+
+    except Exception as e:
+        print(f"Error fetching content for {url}: {e}")
         return None, None
-
-    soup = BeautifulSoup(response.content, 'html.parser')
-
-    # Supprimer les balises header et footer
-    for tag in soup.find_all(['header', 'footer']):
-        tag.decompose()
-
-    # Nettoyer le contenu HTML selon les critères définis
-    clean_soup = clean_html_content(soup)
-
-    html_content = ""
-    structure_hn = []
-    
-    for tag in clean_soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'li', 'ol']):
-        # Conserver la balise HTML dans le contenu nettoyé
-        if tag.get_text(strip=True):  # Vérifie si le texte n'est pas vide
-            html_content += str(tag) + '\n'
-        # Ajouter la balise dans la structure hn, avec son contenu
-        if tag.name.startswith('h'):
-            structure_hn.append(f"<{tag.name}>{tag.get_text(strip=True)}</{tag.name}>")
-
-    structure_hn_str = "\n".join(structure_hn)
-
-    # Log pour vérifier ce qui est récupéré
-    print(f"HTML content for {url}: {html_content[:200]}...")  # Affiche les 200 premiers caractères
-    print(f"Structure Hn for {url}: {structure_hn_str}")
-
-    # Supprimer les tabulations et remplacer par un espace unique
-    html_content = re.sub(r'\t+', ' ', html_content)
-
-    # Supprimer les doubles espaces dans le contenu
-    html_content = re.sub(' +', ' ', html_content)
-
-    # Supprimer les lignes vides
-    html_content = "\n".join([line for line in html_content.splitlines() if line.strip()])
-
-    return html_content.strip(), structure_hn_str
-
-# Fonction pour traiter les URLs en parallèle
-def process_urls_in_parallel(urls, max_workers=10):
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        results = list(executor.map(get_hn_and_content, urls))
-    return results
 
 # Fonction pour générer la sortie en DataFrame
 def generate_output(urls):
-    contents = process_urls_in_parallel(urls)
+    contents = [get_hn_and_content(url) for url in urls]
 
     df = pd.DataFrame({
         'url': urls,
@@ -129,6 +97,5 @@ def main():
         else:
             st.warning("Veuillez entrer au moins une URL.")
 
-# Exécution directe du script
 if __name__ == "__main__":
     main()
