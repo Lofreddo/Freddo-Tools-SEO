@@ -209,7 +209,7 @@ def main():
                 if batch_id:
                     start_batch(batch_id)
 
-                    # Attendre un peu plus longtemps pour permettre la synchronisation
+                                        # Attendre un peu plus longtemps pour permettre la synchronisation
                     time.sleep(60)
 
             # Récupérer les résultats des batches existants
@@ -235,8 +235,6 @@ def main():
                         else:
                             st.write(f"Aucun résultat disponible pour le Result Set {result_set_id} du batch {batch_id}")
                     else:
-                        st.write(f"Pas de Result Set disponible pour le batch
-                                            else:
                         st.write(f"Pas de Result Set disponible pour le batch {batch_id}")
 
                 if not all_results.empty:
