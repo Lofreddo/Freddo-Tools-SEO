@@ -51,6 +51,9 @@ async def fetch_content(session, url):
             html_content = re.sub(' +', ' ', html_content)
             html_content = "\n".join([line for line in html_content.splitlines() if line.strip()])
 
+            print(f"Fetched content for {url}: {len(html_content)} characters")
+            print(f"Structure Hn for {url}: {structure_hn_str}")
+
             return html_content.strip(), structure_hn_str
 
     except Exception as e:
@@ -125,7 +128,6 @@ def main():
                     mime="application/vnd.ms-excel"
                 )
             elif option == 'Importer un fichier Excel' and uploaded_file is not None:
-                # Initialiser 'writer' avant de l'utiliser
                 with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
                     # S'assurer que les colonnes 'content' et 'structure_hn' existent dans df_output
                     for col in ['content', 'structure_hn']:
