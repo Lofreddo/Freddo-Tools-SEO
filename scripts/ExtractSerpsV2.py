@@ -241,8 +241,7 @@ def main():
                         if not result_data.empty:
                             if all_results.empty:
                                 all_results = result_data
-                            else
-                                all_results, result_data = normalize_columns(all_results, result_data)
+                            else all_results, result_data = normalize_columns(all_results, result_data)
                                 all_results = pd.concat([all_results, result_data], ignore_index=True)
 
                             # Convertir les types de données pour compatibilité avec Arrow
