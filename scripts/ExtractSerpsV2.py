@@ -103,7 +103,9 @@ def main():
         
         if response.status_code == 200:
             all_batches = response.json().get('batches', [])
+            st.write(f"Nombre total de batches récupérés : {len(all_batches)}")
             filtered_batches = [batch for batch in all_batches if batch['name'].startswith(prefix)]
+            st.write(f"Batches filtrés avec le préfixe '{prefix}' : {[batch['name'] for batch in filtered_batches]}")
             return filtered_batches
         else:
             st.error(f"Erreur lors de la récupération des batches: {response.status_code}")
@@ -156,7 +158,7 @@ def main():
                 if batch_id:
                     start_batch(batch_id)
 
-                    # Réduction du temps d'attente ici si nécessaire
+                    # Attendre un peu plus longtemps pour permettre la synchronisation
                     time.sleep(60)
 
             # Récupérer les résultats des batches existants
