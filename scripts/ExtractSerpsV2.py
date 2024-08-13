@@ -78,7 +78,6 @@ def main():
         
         if api_result.status_code == 200:
             api_response = api_result.json()
-            st.write(f"Batch {batch_name} créé avec succès avec les mots-clés.")
             return api_response['batch']['id']
         else:
             st.error(f"Erreur lors de la création du batch '{batch_name}'. Code d'état : {api_result.status_code}")
@@ -92,9 +91,7 @@ def main():
         start_url = f'https://api.valueserp.com/batches/{batch_id}/start'
         api_result = requests.get(start_url, params=params)
         
-        if api_result.status_code == 200:
-            st.write(f"Batch {batch_id} démarré avec succès.")
-        else:
+        if api_result.status_code != 200:
             st.error(f"Échec du démarrage du batch {batch_id}. Code d'état : {api_result.status_code}")
 
     def list_batches(prefix):
@@ -116,9 +113,7 @@ def main():
                 st.error(f"Erreur lors de la récupération des batches: {response.status_code}")
                 break
         
-        st.write(f"Nombre total de batches récupérés : {len(all_batches)}")
         filtered_batches = [batch for batch in all_batches if prefix.lower() in batch['name'].lower()]
-        st.write(f"Batches filtrés avec le préfixe '{prefix}' : {[batch['name'] for batch in filtered_batches]}")
         return filtered_batches
 
     def get_latest_result_set_id(batch_id):
@@ -129,7 +124,6 @@ def main():
         
         if response.status_code == 200:
             results = response.json().get('results', [])
-            st.write(f"Result Sets pour le batch {batch_id} : {results}")
             if results:
                 latest_result_set = results[0]  # Le plus récent est en premier
                 return latest_result_set['id']
@@ -145,24 +139,18 @@ def main():
         
         if response.status_code == 200:
             result_set = response.json().get('result', {})
-            st.write(f"Détails du Result Set {result_set_id} : {result_set}")
             if 'download_links' in result_set:
                 csv_link = result_set['download_links']['all_pages']
                 csv_response = requests.get(csv_link)
                 
                 if csv_link.endswith('.json'):
-                    st.write("Le fichier téléchargé est au format JSON.")
                     return extract_serp_data(io.StringIO(csv_response.text))
                 elif csv_link.endswith('.zip'):
-                    st.write("Le fichier téléchargé est un fichier ZIP.")
                     with zipfile.ZipFile(io.BytesIO(csv_response.content)) as z:
                         file_names = z.namelist()
-                        st.write(f"Fichiers dans l'archive ZIP : {file_names}")
                         with z.open(file_names[0]) as f:
-                            st.write("Décompression et lecture du fichier JSON...")
                             json_data = json.load(f)
-                            df = extract_serp_data(json_data)  # Extraire et normaliser les données SERP
-                            st.write(f"DataFrame chargé avec succès : {df.shape[0]} lignes, {df.shape[1]} colonnes")
+                            df = extract_serp_data(json_data)
                             return df
                 else:
                     st.write("Format de fichier inattendu.")
@@ -185,7 +173,9 @@ def main():
                     'result.organic_results.link': org_result.get('link', ''),
                     'result.organic_results.domain': org_result.get('domain', '')
                 })
-        return pd.DataFrame(extracted_data)
+        df = pd.DataFrame(extracted_data)
+        # Reorder columns
+        return df[['search.q', 'result.organic_results.position', 'result.organic_results.link', 'result.organic_results.title', 'result.organic_results.domain']]
 
     def split_keywords(keywords, batch_size=100):
         for i in range(0, len(keywords), batch_size):
@@ -218,7 +208,6 @@ def main():
             if batches:
                 for batch in batches:
                     batch_id = batch['id']
-                    st.write(f"Traitement du batch {batch['name']} avec ID: {batch_id}")
                     result_set_id = get_latest_result_set_id(batch_id)
                     
                     if result_set_id:
@@ -232,14 +221,8 @@ def main():
 
                             # Convertir les types de données pour compatibilité avec Arrow
                             all_results = all_results.convert_dtypes()
-                        else:
-                            st.write(f"Aucun résultat disponible pour le Result Set {result_set_id} du batch {batch_id}")
-                    else:
-                        st.write(f"Pas de Result Set disponible pour le batch {batch_id}")
 
                 if not all_results.empty:
-                    st.dataframe(all_results)
-
                     @st.cache_data
                     def convert_df(df):
                         output = io.BytesIO()
