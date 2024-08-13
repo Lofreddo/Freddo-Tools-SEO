@@ -20,51 +20,56 @@ def keyword_in_text(text, keyword):
     pattern = r'\b' + r'\s*'.join(list(keyword)) + r'\b'
     return re.search(pattern, text, re.IGNORECASE) is not None
 
-# Streamlit UI
-st.title("Vérification de mot-clé dans des pages web")
+# Fonction principale pour l'application Streamlit
+def main():
+    st.title("Vérification de mot-clé dans des pages web")
 
-# Chargement du fichier xlsx
-uploaded_file = st.file_uploader("Choisissez un fichier Excel", type="xlsx")
+    # Chargement du fichier xlsx
+    uploaded_file = st.file_uploader("Choisissez un fichier Excel", type="xlsx")
 
-if uploaded_file is not None:
-    df = pd.read_excel(uploaded_file)
-    st.write("Aperçu du fichier :")
-    st.dataframe(df)
-
-    # Sélection des colonnes
-    keyword_column = st.selectbox("Sélectionnez la colonne contenant les mots-clés", df.columns)
-    url_column = st.selectbox("Sélectionnez la colonne contenant les URLs", df.columns)
-
-    if st.button("Lancer le crawl"):
-        # Initialisation des nouvelles colonnes
-        df['Balise Title'] = ''
-        df['H1'] = ''
-        df['Hn'] = ''
-
-        for index, row in df.iterrows():
-            keyword = row[keyword_column]
-            url = row[url_column]
-
-            try:
-                response = requests.get(url, timeout=10)
-                response.raise_for_status()
-                soup = BeautifulSoup(response.content, 'html.parser')
-
-                # Vérification du mot-clé dans les différentes balises
-                df.at[index, 'Balise Title'] = check_keyword_in_tag(soup, 'title', keyword)
-                df.at[index, 'H1'] = check_keyword_in_tag(soup, 'h1', keyword)
-                df.at[index, 'Hn'] = "Oui" if any(check_keyword_in_tag(soup, tag, keyword) == "Oui" for tag in ['h2', 'h3', 'h4']) else "Non"
-
-            except requests.exceptions.RequestException as e:
-                st.error(f"Erreur pour l'URL {url}: {e}")
-                df.at[index, 'Balise Title'] = 'Erreur'
-                df.at[index, 'H1'] = 'Erreur'
-                df.at[index, 'Hn'] = 'Erreur'
-
-        # Affichage du résultat
-        st.write("Résultat du crawl :")
+    if uploaded_file is not None:
+        df = pd.read_excel(uploaded_file)
+        st.write("Aperçu du fichier :")
         st.dataframe(df)
 
-        # Téléchargement du fichier résultant
-        df.to_excel("résultat.xlsx", index=False)
-        st.download_button(label="Télécharger le fichier avec les résultats", data=open("résultat.xlsx", "rb"), file_name="résultat.xlsx")
+        # Sélection des colonnes
+        keyword_column = st.selectbox("Sélectionnez la colonne contenant les mots-clés", df.columns)
+        url_column = st.selectbox("Sélectionnez la colonne contenant les URLs", df.columns)
+
+        if st.button("Lancer le crawl"):
+            # Initialisation des nouvelles colonnes
+            df['Balise Title'] = ''
+            df['H1'] = ''
+            df['Hn'] = ''
+
+            for index, row in df.iterrows():
+                keyword = row[keyword_column]
+                url = row[url_column]
+
+                try:
+                    response = requests.get(url, timeout=10)
+                    response.raise_for_status()
+                    soup = BeautifulSoup(response.content, 'html.parser')
+
+                    # Vérification du mot-clé dans les différentes balises
+                    df.at[index, 'Balise Title'] = check_keyword_in_tag(soup, 'title', keyword)
+                    df.at[index, 'H1'] = check_keyword_in_tag(soup, 'h1', keyword)
+                    df.at[index, 'Hn'] = "Oui" if any(check_keyword_in_tag(soup, tag, keyword) == "Oui" for tag in ['h2', 'h3', 'h4']) else "Non"
+
+                except requests.exceptions.RequestException as e:
+                    st.error(f"Erreur pour l'URL {url}: {e}")
+                    df.at[index, 'Balise Title'] = 'Erreur'
+                    df.at[index, 'H1'] = 'Erreur'
+                    df.at[index, 'Hn'] = 'Erreur'
+
+            # Affichage du résultat
+            st.write("Résultat du crawl :")
+            st.dataframe(df)
+
+            # Téléchargement du fichier résultant
+            df.to_excel("résultat.xlsx", index=False)
+            st.download_button(label="Télécharger le fichier avec les résultats", data=open("résultat.xlsx", "rb"), file_name="résultat.xlsx")
+
+# Ajouter cette ligne pour que le script soit exécuté avec la fonction main()
+if __name__ == "__main__":
+    main()
