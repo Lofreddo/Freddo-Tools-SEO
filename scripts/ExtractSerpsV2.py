@@ -5,6 +5,7 @@ import streamlit as st
 import uuid
 import time
 import zipfile
+import json
 
 API_KEY = '81293DFA2CEF4FE49DB08E002D947143'
 
@@ -158,7 +159,12 @@ def main():
                         file_names = z.namelist()
                         st.write(f"Fichiers dans l'archive ZIP : {file_names}")
                         with z.open(file_names[0]) as f:
-                            return pd.read_csv(f)
+                            # Lire le contenu JSON du fichier et le charger en DataFrame
+                            st.write("Décompression et lecture du fichier JSON...")
+                            json_data = json.load(f)
+                            df = pd.json_normalize(json_data)  # Convertir JSON en DataFrame
+                            st.write(f"DataFrame chargé avec succès : {df.shape[0]} lignes, {df.shape[1]} colonnes")
+                            return df
                 else:
                     st.write("Format de fichier inattendu.")
                     st.write(csv_response.text)
