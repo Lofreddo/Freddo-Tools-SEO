@@ -182,6 +182,15 @@ def main():
         df2 = df2.reindex(columns=combined_columns)
         return df1, df2
 
+    def convert_dtypes(df):
+        """Convertit les colonnes du DataFrame à des types de données compatibles avec Arrow."""
+        for col in df.columns:
+            if df[col].dtype == 'object':
+                df[col] = df[col].astype('string')
+            elif df[col].dtype == 'int64':
+                df[col] = df[col].astype('float64')
+        return df
+
     if st.button("Lancer la recherche"):
         if keywords:
             all_results = pd.DataFrame()
@@ -213,6 +222,9 @@ def main():
                             else:
                                 all_results, result_data = normalize_columns(all_results, result_data)
                                 all_results = pd.concat([all_results, result_data], ignore_index=True)
+
+                            # Convertir les types de données pour compatibilité avec Arrow
+                            all_results = convert_dtypes(all_results)
                         else:
                             st.write(f"Aucun résultat disponible pour le Result Set {result_set_id} du batch {batch_id}")
                     else:
