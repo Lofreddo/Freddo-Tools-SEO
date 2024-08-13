@@ -10,6 +10,10 @@ def scrape_text_from_url(url):
         response = requests.get(url, timeout=10)
         soup = BeautifulSoup(response.text, 'lxml')
         
+        # Remove unwanted sections
+        for unwanted in soup(['nav', 'footer']):
+            unwanted.decompose()
+        
         scraped_data = []
         tags_to_extract = ['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'li', 'ul', 'ol']
         
