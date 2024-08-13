@@ -1,9 +1,8 @@
 import streamlit as st
-from scripts import AspirateurScriptsPython, MyTextGuru, MyTextGuruBulk, ExtractSerps, MasterSpinGenerator, Scrapping, ExtractSerpsV2
+from scripts import MyTextGuru, MyTextGuruBulk, ExtractSerps, MasterSpinGenerator, Scrapping, ExtractSerpsV2
 
 # Configuration des pages
 PAGES = {
-    "AspirateurScriptsPython": AspirateurScriptsPython,
     "MyTextGuru": MyTextGuru,
     "MyTextGuruBulk": MyTextGuruBulk,
     "ExtractSerps": ExtractSerps,
