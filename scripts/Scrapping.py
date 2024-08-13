@@ -3,21 +3,16 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 from io import BytesIO
-from concurrent.futures import ThreadPoolExecutor
 import re
 
-# Fonction pour nettoyer le contenu HTML en fonction des exigences
+# Fonction pour nettoyer le contenu HTML de manière simple
 def clean_html_content(soup):
     for tag in soup.find_all(['span', 'div', 'label', 'img', 'path', 'svg', 'em', 'th', 'strong']):
         tag.unwrap()
     for tag in soup.find_all(['tr', 'td', 'table', 'button']):
         tag.decompose()
-    social_keywords = ['facebook', 'twitter', 'instagram', 'linkedin', 'youtube', 'social']
     for a_tag in soup.find_all('a', href=True):
-        if any(keyword in a_tag['href'].lower() for keyword in social_keywords):
-            a_tag.decompose()
-        else:
-            a_tag.unwrap()
+        a_tag.unwrap()
     for tag in soup.find_all(True):
         tag.attrs = {}
     for tag in soup.find_all():
@@ -30,7 +25,7 @@ def get_hn_and_content(url):
     try:
         response = requests.get(url)
         response.raise_for_status()
-        print(f"Successfully fetched content for {url}")  # Log pour vérifier le succès de la requête
+        print(f"Successfully fetched content for {url}")
     except requests.RequestException as e:
         print(f"Failed to fetch content for {url}: {e}")
         return None, None
@@ -55,7 +50,6 @@ def get_hn_and_content(url):
 
     structure_hn_str = "\n".join(structure_hn)
 
-    # Logs pour vérifier le contenu récupéré
     print(f"Content length for {url}: {len(html_content)} characters")
     print(f"Structure Hn for {url}:\n{structure_hn_str}")
 
@@ -65,15 +59,9 @@ def get_hn_and_content(url):
 
     return html_content.strip(), structure_hn_str
 
-# Fonction pour traiter les URLs en parallèle
-def process_urls_in_parallel(urls, max_workers=10):
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        results = list(executor.map(get_hn_and_content, urls))
-    return results
-
 # Fonction pour générer la sortie en DataFrame
 def generate_output(urls):
-    contents = process_urls_in_parallel(urls)
+    contents = [get_hn_and_content(url) for url in urls]
 
     df = pd.DataFrame({
         'url': urls,
@@ -111,6 +99,5 @@ def main():
         else:
             st.warning("Veuillez entrer au moins une URL.")
 
-# Exécution directe du script
 if __name__ == "__main__":
     main()
