@@ -2,23 +2,167 @@ import requests
 import pandas as pd
 import io
 import streamlit as st
+import uuid
+import time
 
 API_KEY = '81293DFA2CEF4FE49DB08E002D947143'
 
 def main():
     st.title("Recherche de mots-clés avec ValueSERP en Batches")
 
-    batch_prefix = st.text_input("Entrez un préfixe pour les Batchs:")
+    # Entrée de l'utilisateur
+    keywords_input = st.text_area("Entrez vos mots-clés, un par ligne:")
+    keywords = keywords_input.strip().split('\n')
 
-    if st.button("Récupérer et fusionner les résultats"):
-        if batch_prefix:
-            # Étape 1: Lister les Batches
+    google_domain = st.selectbox(
+        "Sélectionnez le domaine Google:",
+        ["google.fr", "google.com", "google.co.uk", "google.de", "google.es"]
+    )
+
+    device = st.selectbox(
+        "Sélectionnez le dispositif:",
+        ["desktop", "mobile"]
+    )
+
+    num = st.selectbox(
+        "Sélectionnez le nombre de résultats:",
+        ["10", "20", "30", "40", "50", "100"]
+    )
+
+    gl = st.selectbox(
+        "Sélectionnez le pays:",
+        ["fr", "es", "de", "en"]
+    )
+
+    hl = st.selectbox(
+        "Sélectionnez la langue:",
+        ["fr", "es", "de", "en"]
+    )
+
+    location = st.selectbox(
+        "Sélectionnez la location:",
+        ["France", "United Kingdom", "United States", "Spain", "Germany"]
+    )
+
+    batch_prefix = st.text_input("Entrez un préfixe pour les Batchs:")
+    notification_email = st.text_input("Entrez une adresse email pour les notifications:")
+
+    def create_batch_with_keywords(batch_name, keyword_batch):
+        searches = []
+        for keyword in keyword_batch:
+            search_params = {
+                'q': keyword,
+                'location': location,
+                'google_domain': google_domain,
+                'gl': gl,
+                'hl': hl,
+                'device': device,
+                'num': num,
+            }
+            searches.append(search_params)
+
+        body = {
+            "name": batch_name,
+            "enabled": True,
+            "schedule_type": "manual",
+            "priority": "normal",
+            "notification_as_csv": True,
+            "searches_type": "web",
+            "searches": searches,
+            "notification_email": notification_email
+        }
+        
+        api_result = requests.post(f'https://api.valueserp.com/batches?api_key={API_KEY}', json=body)
+        
+        if api_result.status_code == 200:
+            api_response = api_result.json()
+            st.write(f"Batch {batch_name} créé avec succès avec les mots-clés.")
+            return api_response['batch']['id']
+        else:
+            st.error(f"Erreur lors de la création du batch '{batch_name}'. Code d'état : {api_result.status_code}")
+            st.write(api_result.json())  # Affiche la réponse de l'API pour diagnostic
+            return None
+
+    def start_batch(batch_id):
+        params = {
+            'api_key': API_KEY
+        }
+        start_url = f'https://api.valueserp.com/batches/{batch_id}/start'
+        api_result = requests.get(start_url, params=params)
+        
+        if api_result.status_code == 200:
+            st.write(f"Batch {batch_id} démarré avec succès.")
+        else:
+            st.error(f"Échec du démarrage du batch {batch_id}. Code d'état : {api_result.status_code}")
+
+    def list_batches(prefix):
+        params = {
+            'api_key': API_KEY
+        }
+        response = requests.get(f'https://api.valueserp.com/batches', params=params)
+        
+        if response.status_code == 200:
+            all_batches = response.json().get('batches', [])
+            filtered_batches = [batch for batch in all_batches if batch['name'].startswith(prefix)]
+            return filtered_batches
+        else:
+            st.error(f"Erreur lors de la récupération des batches: {response.status_code}")
+            return []
+
+    def get_latest_result_set_id(batch_id):
+        params = {
+            'api_key': API_KEY
+        }
+        response = requests.get(f'https://api.valueserp.com/batches/{batch_id}/results', params=params)
+        
+        if response.status_code == 200:
+            results = response.json().get('results', [])
+            if results:
+                latest_result_set = results[0]  # Le plus récent est en premier
+                return latest_result_set['id']
+        else:
+            st.error(f"Erreur lors de la récupération des Result Sets pour le batch {batch_id}: {response.status_code}")
+        return None
+
+    def get_result_set_data(batch_id, result_set_id):
+        params = {
+            'api_key': API_KEY
+        }
+        response = requests.get(f'https://api.valueserp.com/batches/{batch_id}/results/{result_set_id}', params=params)
+        
+        if response.status_code == 200:
+            result_set = response.json().get('result', {})
+            if 'download_links' in result_set:
+                csv_link = result_set['download_links']['all_pages']
+                csv_response = requests.get(csv_link)
+                if csv_response.status_code == 200:
+                    return pd.read_csv(io.StringIO(csv_response.text), encoding='utf-8')
+        else:
+            st.error(f"Erreur lors de la récupération des données du Result Set {result_set_id}: {response.status_code}")
+        return pd.DataFrame()
+
+    def split_keywords(keywords, batch_size=100):
+        for i in range(0, len(keywords), batch_size):
+            yield keywords[i:i + batch_size]
+
+    if st.button("Lancer la recherche"):
+        if keywords:
+            all_results = pd.DataFrame()
+
+            for keyword_batch in split_keywords(keywords):
+                batch_name = f"{batch_prefix}_{uuid.uuid4()}"
+                batch_id = create_batch_with_keywords(batch_name, keyword_batch)
+
+                if batch_id:
+                    start_batch(batch_id)
+
+                    # Réduction du temps d'attente ici si nécessaire
+                    time.sleep(60)
+
+            # Récupérer les résultats des batches existants
             batches = list_batches(batch_prefix)
 
             if batches:
-                all_results = pd.DataFrame()
-
-                # Étape 2 à 4: Récupérer les informations et données de chaque batch
                 for batch in batches:
                     batch_id = batch['id']
                     st.write(f"Traitement du batch {batch['name']} avec ID: {batch_id}")
@@ -33,7 +177,6 @@ def main():
                     else:
                         st.write(f"Pas de Result Set disponible pour le batch {batch_id}")
 
-                # Étape 5: Fusionner et télécharger
                 if not all_results.empty:
                     st.dataframe(all_results)
 
@@ -57,52 +200,6 @@ def main():
                 st.write(f"Aucun batch trouvé avec le préfixe '{batch_prefix}'.")
         else:
             st.write("Veuillez entrer un préfixe de batch.")
-
-def list_batches(prefix):
-    params = {
-        'api_key': API_KEY
-    }
-    response = requests.get(f'https://api.valueserp.com/batches', params=params)
-    
-    if response.status_code == 200:
-        all_batches = response.json().get('batches', [])
-        filtered_batches = [batch for batch in all_batches if batch['name'].startswith(prefix)]
-        return filtered_batches
-    else:
-        st.error(f"Erreur lors de la récupération des batches: {response.status_code}")
-        return []
-
-def get_latest_result_set_id(batch_id):
-    params = {
-        'api_key': API_KEY
-    }
-    response = requests.get(f'https://api.valueserp.com/batches/{batch_id}/results', params=params)
-    
-    if response.status_code == 200:
-        results = response.json().get('results', [])
-        if results:
-            latest_result_set = results[0]  # Le plus récent est en premier
-            return latest_result_set['id']
-    else:
-        st.error(f"Erreur lors de la récupération des Result Sets pour le batch {batch_id}: {response.status_code}")
-    return None
-
-def get_result_set_data(batch_id, result_set_id):
-    params = {
-        'api_key': API_KEY
-    }
-    response = requests.get(f'https://api.valueserp.com/batches/{batch_id}/results/{result_set_id}', params=params)
-    
-    if response.status_code == 200:
-        result_set = response.json().get('result', {})
-        if 'download_links' in result_set:
-            csv_link = result_set['download_links']['all_pages']
-            csv_response = requests.get(csv_link)
-            if csv_response.status_code == 200:
-                return pd.read_csv(io.StringIO(csv_response.text), encoding='utf-8')
-    else:
-        st.error(f"Erreur lors de la récupération des données du Result Set {result_set_id}: {response.status_code}")
-    return pd.DataFrame()
 
 if __name__ == '__main__':
     main()
