@@ -6,6 +6,11 @@ import uuid
 import time
 import zipfile
 import json
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
+from email.mime.text import MIMEText
 
 API_KEY = '81293DFA2CEF4FE49DB08E002D947143'
 
@@ -188,6 +193,27 @@ def main():
         df2 = df2.reindex(columns=combined_columns)
         return df1, df2
 
+    def send_email_with_attachment(email_recipient, excel_data):
+        msg = MIMEMultipart()
+        msg['From'] = 'your_email@example.com'
+        msg['To'] = email_recipient
+        msg['Subject'] = 'Résultats Fusionnés'
+
+        body = 'Veuillez trouver ci-joint les résultats fusionnés de votre recherche.'
+        msg.attach(MIMEText(body, 'plain'))
+
+        attachment = MIMEBase('application', 'octet-stream')
+        attachment.set_payload(excel_data)
+        encoders.encode_base64(attachment)
+        attachment.add_header('Content-Disposition', f"attachment; filename=results_fusionnes.xlsx")
+
+        msg.attach(attachment)
+
+        with smtplib.SMTP('smtp.example.com', 587) as server:
+            server.starttls()
+            server.login('your_email@example.com', 'your_password')
+            server.send_message(msg)
+
     if st.button("Lancer la recherche"):
         if keywords:
             all_results = pd.DataFrame()
@@ -215,14 +241,14 @@ def main():
                         if not result_data.empty:
                             if all_results.empty:
                                 all_results = result_data
-                            else:
+                            else
                                 all_results, result_data = normalize_columns(all_results, result_data)
                                 all_results = pd.concat([all_results, result_data], ignore_index=True)
 
                             # Convertir les types de données pour compatibilité avec Arrow
                             all_results = all_results.convert_dtypes()
 
-                if not all_results.empty():
+                if not all_results.empty:
                     @st.cache_data
                     def convert_df(df):
                         output = io.BytesIO()
@@ -238,6 +264,10 @@ def main():
                         file_name='results_fusionnes.xlsx',
                         mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
                     )
+
+                    if notification_email:
+                        send_email_with_attachment(notification_email, excel_data)
+                        st.success(f"Les résultats fusionnés ont été envoyés à {notification_email}")
 
                 else:
                     st.write("Aucun résultat à fusionner.")
