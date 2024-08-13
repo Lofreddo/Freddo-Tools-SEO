@@ -209,7 +209,7 @@ def main():
                 if batch_id:
                     start_batch(batch_id)
 
-                    # Attendre un peu plus longtemps pour permettre la synchronisation
+                                        # Attendre un peu plus longtemps pour permettre la synchronisation
                     time.sleep(60)
 
             # Récupérer les résultats des batches existants
@@ -228,7 +228,7 @@ def main():
                                 all_results = result_data
                             else:
                                 all_results, result_data = normalize_columns(all_results, result_data)
-                                                                all_results = pd.concat([all_results, result_data], ignore_index=True)
+                                all_results = pd.concat([all_results, result_data], ignore_index=True)
 
                             # Convertir les types de données pour compatibilité avec Arrow
                             all_results = all_results.convert_dtypes()
