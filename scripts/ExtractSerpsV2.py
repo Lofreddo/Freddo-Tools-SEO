@@ -104,7 +104,7 @@ def main():
         if response.status_code == 200:
             all_batches = response.json().get('batches', [])
             st.write(f"Nombre total de batches récupérés : {len(all_batches)}")
-            filtered_batches = [batch for batch in all_batches if batch['name'].startswith(prefix)]
+            filtered_batches = [batch for batch in all_batches if prefix.lower() in batch['name'].lower()]
             st.write(f"Batches filtrés avec le préfixe '{prefix}' : {[batch['name'] for batch in filtered_batches]}")
             return filtered_batches
         else:
@@ -119,6 +119,7 @@ def main():
         
         if response.status_code == 200:
             results = response.json().get('results', [])
+            st.write(f"Result Sets pour le batch {batch_id} : {results}")
             if results:
                 latest_result_set = results[0]  # Le plus récent est en premier
                 return latest_result_set['id']
@@ -134,6 +135,7 @@ def main():
         
         if response.status_code == 200:
             result_set = response.json().get('result', {})
+            st.write(f"Détails du Result Set {result_set_id} : {result_set}")
             if 'download_links' in result_set:
                 csv_link = result_set['download_links']['all_pages']
                 csv_response = requests.get(csv_link)
