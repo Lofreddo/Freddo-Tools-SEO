@@ -1,103 +1,98 @@
 import streamlit as st
+import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-import pandas as pd
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
-import re
 
-# Fonction pour nettoyer le contenu HTML de manière simple
-def clean_html_content(soup):
-    for tag in soup.find_all(['span', 'div', 'label', 'img', 'path', 'svg', 'em', 'th', 'strong']):
-        tag.unwrap()
-    for tag in soup.find_all(['tr', 'td', 'table', 'button']):
-        tag.decompose()
-    for a_tag in soup.find_all('a', href=True):
-        a_tag.unwrap()
-    for tag in soup.find_all(True):
-        tag.attrs = {}
-    for tag in soup.find_all():
-        if not tag.get_text(strip=True):
-            tag.decompose()
-    return soup
-
-# Fonction pour extraire le contenu et la structure des balises hn
-def get_hn_and_content(url):
+def scrape_text_from_url(url):
     try:
-        response = requests.get(url)
-        response.raise_for_status()
-        print(f"Successfully fetched content for {url}")
-    except requests.RequestException as e:
-        print(f"Failed to fetch content for {url}: {e}")
-        return None, None
+        response = requests.get(url, timeout=10)
+        soup = BeautifulSoup(response.text, 'lxml')
+        
+        scraped_data = []
+        tags_to_extract = ['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'li', 'ul', 'ol']
+        
+        for tag in tags_to_extract:
+            elements = soup.find_all(tag)
+            for element in elements:
+                scraped_data.append({
+                    'structure': f"<{tag}>",
+                    'content': element.get_text(strip=True)
+                })
+        
+        return url, scraped_data
+    except Exception as e:
+        return url, [{"structure": "Error", "content": str(e)}]
 
-    soup = BeautifulSoup(response.content, 'html.parser')
+def scrape_all_urls(urls):
+    scraped_results = []
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        future_to_url = {executor.submit(scrape_text_from_url, url): url for url in urls}
+        for future in as_completed(future_to_url):
+            url, data = future.result()
+            scraped_results.append((url, data))
+    return scraped_results
 
-    # Supprimer les balises header et footer
-    for tag in soup.find_all(['header', 'footer']):
-        tag.decompose()
+def create_output_df(urls, scraped_data_list):
+    output_data = []
+    for url, scraped_data in scraped_data_list:
+        for data in scraped_data:
+            output_data.append({
+                'URL': url,
+                'Structure': data['structure'],
+                'Contenu Scrapé': data['content']
+            })
+    return pd.DataFrame(output_data)
 
-    # Nettoyer le contenu HTML selon les critères définis
-    clean_soup = clean_html_content(soup)
+def create_excel_file(df):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Scraped Data')
+        writer.save()
+    return output.getvalue()
 
-    html_content = ""
-    structure_hn = []
-    
-    for tag in clean_soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'li', 'ol']):
-        if tag.get_text(strip=True):
-            html_content += str(tag) + '\n'
-        if tag.name.startswith('h'):
-            structure_hn.append(f"<{tag.name}>{tag.get_text(strip=True)}</{tag.name}>")
+st.title("Scraper de contenu HTML")
 
-    structure_hn_str = "\n".join(structure_hn)
+option = st.selectbox(
+    "Comment souhaitez-vous fournir les URLs ?",
+    ("Zone de texte", "Fichier Excel")
+)
 
-    print(f"Content length for {url}: {len(html_content)} characters")
-    print(f"Structure Hn for {url}:\n{structure_hn_str}")
+urls = []
 
-    html_content = re.sub(r'\t+', ' ', html_content)
-    html_content = re.sub(' +', ' ', html_content)
-    html_content = "\n".join([line for line in html_content.splitlines() if line.strip()])
+if option == "Zone de texte":
+    url_input = st.text_area("Entrez les URLs à scraper (une par ligne)")
+    if url_input:
+        urls = url_input.splitlines()
 
-    return html_content.strip(), structure_hn_str
+elif option == "Fichier Excel":
+    uploaded_file = st.file_uploader("Choisissez un fichier Excel", type=["xlsx", "xls"])
+    if uploaded_file:
+        df = pd.read_excel(uploaded_file)
+        column_name = st.selectbox("Sélectionnez la colonne contenant les URLs", df.columns)
+        urls = df[column_name].dropna().tolist()
 
-# Fonction pour générer la sortie en DataFrame
-def generate_output(urls):
-    contents = [get_hn_and_content(url) for url in urls]
-
-    df = pd.DataFrame({
-        'url': urls,
-        'content': [content for content, _ in contents],
-        'structure_hn': [structure for _, structure in contents]
-    })
-
-    return df
-
-# Fonction principale pour l'interface Streamlit
-def main():
-    st.title("Scraping Tool")
-
-    st.subheader("Entrez les URLs à scraper (une URL par ligne):")
-    urls_input = st.text_area("Entrez vos URLs ici", height=200)
-
-    urls = [url.strip() for url in urls_input.splitlines() if url.strip()]
-
-    if st.button("Lancer le scraping"):
-        if urls:
-            df = generate_output(urls)
-
-            st.subheader("Aperçu des résultats")
-            st.write(df)
-
-            buffer = BytesIO()
-            with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                df.to_excel(writer, index=False)
-            st.download_button(
-                label="Télécharger le fichier Excel",
-                data=buffer.getvalue(),
-                file_name="output.xlsx",
-                mime="application/vnd.ms-excel"
-            )
+if st.button("Scraper"):
+    if urls:
+        scraped_data_list = scrape_all_urls(urls)
+        
+        if option == "Fichier Excel":
+            # Ajouter les colonnes au fichier importé
+            df['Structure'] = df[column_name].apply(lambda url: [data['structure'] for data in dict(scraped_data_list).get(url, [])])
+            df['Contenu Scrapé'] = df[column_name].apply(lambda url: "\n".join([data['content'] for data in dict(scraped_data_list).get(url, [])]))
         else:
-            st.warning("Veuillez entrer au moins une URL.")
-
-if __name__ == "__main__":
-    main()
+            # Créer un nouveau dataframe pour les résultats
+            df = create_output_df(urls, scraped_data_list)
+        
+        excel_data = create_excel_file(df)
+        
+        st.success("Scraping terminé avec succès ! Téléchargez le fichier ci-dessous.")
+        st.download_button(
+            label="Télécharger le fichier Excel",
+            data=excel_data,
+            file_name="scraped_data.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.error("Aucune URL fournie.")
