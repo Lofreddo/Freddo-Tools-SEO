@@ -3,42 +3,53 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import re
-from nltk.corpus import wordnet
 from nltk.tokenize import word_tokenize
-from nltk.stem import WordNetLemmatizer
+from nltk.stem import PorterStemmer
 
-# Initialisation du lemmatizer
-lemmatizer = WordNetLemmatizer()
+# Initialisation du stemmer
+stemmer = PorterStemmer()
 
-# Fonction pour obtenir le lemme d'un mot
-def get_lemma(word):
-    lemma = lemmatizer.lemmatize(word, pos='v')  # Lemmatisation en tant que verbe
-    if lemma == word:  # Si le lemme en tant que verbe ne change rien, essayer en tant que nom
-        lemma = lemmatizer.lemmatize(word, pos='n')
-    return lemma
+# Fonction pour obtenir la racine d'un mot
+def get_stem(word):
+    return stemmer.stem(word)
 
 # Fonction pour vérifier la présence du mot-clé dans une balise spécifique
-def check_keyword_in_tag(soup, tag, keyword):
-    tags = soup.find_all(tag)
-    for t in tags:
-        if keyword_in_text(t.get_text(), keyword):
-            return "Oui"
-    return "Non"
-
-# Fonction pour vérifier le mot-clé avec tolérance pour les variations
-def keyword_in_text(text, keyword):
-    # Tokenisation et lemmatisation des mots du mot-clé
-    keyword_parts = [get_lemma(part) for part in word_tokenize(keyword)]
+def check_keyword_in_text(text, keyword):
+    # Tokenisation et stemming des mots du mot-clé
+    keyword_parts = [get_stem(part) for part in word_tokenize(keyword)]
     
     # Création du motif de recherche avec tolérance de 0 à 5 caractères entre les mots
-    # Respect de l'ordre des mots
     pattern = r'\b' + r'.{0,5}'.join(map(re.escape, keyword_parts)) + r'\b'
     
-    # Lemmatisation du texte de la balise avant la recherche
-    lemmatized_text = " ".join([get_lemma(word) for word in word_tokenize(text)])
+    # Stemming du texte avant la recherche
+    stemmed_text = " ".join([get_stem(word) for word in word_tokenize(text)])
     
     # Recherche du motif dans le texte
-    return re.search(pattern, lemmatized_text, re.IGNORECASE) is not None
+    return re.search(pattern, stemmed_text, re.IGNORECASE) is not None
+
+# Fonction pour extraire et vérifier les balises
+def extract_and_check(soup, keyword):
+    # Récupérer le contenu de la balise title
+    title = soup.title.string if soup.title else ""
+    title_match = check_keyword_in_text(title, keyword)
+
+    # Récupérer le contenu de la balise h1
+    h1 = soup.h1.get_text() if soup.h1 else ""
+    h1_match = check_keyword_in_text(h1, keyword)
+    
+    # Récupérer les contenus des balises h2, h3, h4
+    hn_texts = []
+    hn_match = False
+    for tag in ['h2', 'h3', 'h4']:
+        tags = soup.find_all(tag)
+        for t in tags:
+            hn_texts.append(t.get_text())
+            if check_keyword_in_text(t.get_text(), keyword):
+                hn_match = True
+    
+    hn_text = " | ".join(hn_texts)  # Pour avoir une structure lisible des Hn
+    
+    return title, title_match, h1, h1_match, hn_text, hn_match
 
 # Fonction principale pour l'application Streamlit
 def main():
@@ -59,8 +70,11 @@ def main():
         if st.button("Lancer le crawl"):
             # Initialisation des nouvelles colonnes
             df['Balise Title'] = ''
+            df['Title Match'] = ''
             df['H1'] = ''
-            df['Hn'] = ''
+            df['H1 Match'] = ''
+            df['Hn Structure'] = ''
+            df['Hn Match'] = ''
 
             for index, row in df.iterrows():
                 keyword = row[keyword_column]
@@ -71,16 +85,25 @@ def main():
                     response.raise_for_status()
                     soup = BeautifulSoup(response.content, 'html.parser')
 
-                    # Vérification du mot-clé dans les différentes balises
-                    df.at[index, 'Balise Title'] = check_keyword_in_tag(soup, 'title', keyword)
-                    df.at[index, 'H1'] = check_keyword_in_tag(soup, 'h1', keyword)
-                    df.at[index, 'Hn'] = "Oui" if any(check_keyword_in_tag(soup, tag, keyword) == "Oui" for tag in ['h2', 'h3', 'h4']) else "Non"
+                    # Extraire et vérifier les balises
+                    title, title_match, h1, h1_match, hn_text, hn_match = extract_and_check(soup, keyword)
+                    
+                    # Ajouter les résultats dans le dataframe
+                    df.at[index, 'Balise Title'] = title
+                    df.at[index, 'Title Match'] = "Oui" if title_match else "Non"
+                    df.at[index, 'H1'] = h1
+                    df.at[index, 'H1 Match'] = "Oui" if h1_match else "Non"
+                    df.at[index, 'Hn Structure'] = hn_text
+                    df.at[index, 'Hn Match'] = "Oui" if hn_match else "Non"
 
                 except requests.exceptions.RequestException as e:
                     st.error(f"Erreur pour l'URL {url}: {e}")
                     df.at[index, 'Balise Title'] = 'Erreur'
+                    df.at[index, 'Title Match'] = 'Erreur'
                     df.at[index, 'H1'] = 'Erreur'
-                    df.at[index, 'Hn'] = 'Erreur'
+                    df.at[index, 'H1 Match'] = 'Erreur'
+                    df.at[index, 'Hn Structure'] = 'Erreur'
+                    df.at[index, 'Hn Match'] = 'Erreur'
 
             # Affichage du résultat
             st.write("Résultat du crawl :")
