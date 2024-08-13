@@ -222,7 +222,7 @@ def main():
                             # Convertir les types de données pour compatibilité avec Arrow
                             all_results = all_results.convert_dtypes()
 
-                if not all_results.empty:
+                if not all_results.empty():
                     @st.cache_data
                     def convert_df(df):
                         output = io.BytesIO()
@@ -231,12 +231,14 @@ def main():
                         return output.getvalue()
 
                     excel_data = convert_df(all_results)
+
                     st.download_button(
                         label="Télécharger les résultats fusionnés",
                         data=excel_data,
                         file_name='results_fusionnes.xlsx',
                         mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
                     )
+
                 else:
                     st.write("Aucun résultat à fusionner.")
             else:
