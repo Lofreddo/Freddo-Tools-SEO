@@ -159,7 +159,6 @@ def main():
                         file_names = z.namelist()
                         st.write(f"Fichiers dans l'archive ZIP : {file_names}")
                         with z.open(file_names[0]) as f:
-                            # Lire le contenu JSON du fichier et le charger en DataFrame
                             st.write("Décompression et lecture du fichier JSON...")
                             json_data = json.load(f)
                             df = pd.json_normalize(json_data)  # Convertir JSON en DataFrame
@@ -175,6 +174,13 @@ def main():
     def split_keywords(keywords, batch_size=100):
         for i in range(0, len(keywords), batch_size):
             yield keywords[i:i + batch_size]
+
+    def normalize_columns(df1, df2):
+        """Aligne les colonnes de deux DataFrames et remplit les colonnes manquantes par NaN."""
+        combined_columns = list(set(df1.columns).union(set(df2.columns)))
+        df1 = df1.reindex(columns=combined_columns)
+        df2 = df2.reindex(columns=combined_columns)
+        return df1, df2
 
     if st.button("Lancer la recherche"):
         if keywords:
@@ -202,7 +208,11 @@ def main():
                     if result_set_id:
                         result_data = get_result_set_data(batch_id, result_set_id)
                         if not result_data.empty:
-                            all_results = pd.concat([all_results, result_data], ignore_index=True)
+                            if all_results.empty:
+                                all_results = result_data
+                            else:
+                                all_results, result_data = normalize_columns(all_results, result_data)
+                                all_results = pd.concat([all_results, result_data], ignore_index=True)
                         else:
                             st.write(f"Aucun résultat disponible pour le Result Set {result_set_id} du batch {batch_id}")
                     else:
