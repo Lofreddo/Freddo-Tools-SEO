@@ -11,7 +11,7 @@ stemmer = PorterStemmer()
 
 # Fonction pour obtenir la racine d'un mot
 def get_stem(word):
-    return stemmer.stem(word)
+    return stemmer.stem(word.lower())
 
 # Fonction pour vérifier la présence du mot-clé dans une balise spécifique
 def check_keyword_in_text(text, keyword):
@@ -25,7 +25,12 @@ def check_keyword_in_text(text, keyword):
     stemmed_text = " ".join([get_stem(word) for word in word_tokenize(text)])
     
     # Recherche du motif dans le texte
-    return re.search(pattern, stemmed_text, re.IGNORECASE) is not None
+    match = re.search(pattern, stemmed_text, re.IGNORECASE)
+    
+    # Pour débogage, afficher ce qui est comparé
+    st.write(f"Comparing: {keyword} with text: {text} (pattern: {pattern}) -> Match: {bool(match)}")
+    
+    return match is not None
 
 # Fonction pour extraire et vérifier les balises
 def extract_and_check(soup, keyword):
