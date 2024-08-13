@@ -11,7 +11,7 @@ def scrape_text_from_url(url):
         soup = BeautifulSoup(response.text, 'lxml')
         
         # Remove unwanted sections
-        for unwanted in soup(['nav', 'footer']):
+        for unwanted in soup(['header', 'nav', 'footer']):
             unwanted.decompose()
         
         scraped_data = []
