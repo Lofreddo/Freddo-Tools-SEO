@@ -152,7 +152,7 @@ def main():
                 
                 if csv_link.endswith('.json'):
                     st.write("Le fichier téléchargé est au format JSON.")
-                    return pd.read_json(io.StringIO(csv_response.text))
+                    return extract_serp_data(io.StringIO(csv_response.text))
                 elif csv_link.endswith('.zip'):
                     st.write("Le fichier téléchargé est un fichier ZIP.")
                     with zipfile.ZipFile(io.BytesIO(csv_response.content)) as z:
@@ -161,7 +161,7 @@ def main():
                         with z.open(file_names[0]) as f:
                             st.write("Décompression et lecture du fichier JSON...")
                             json_data = json.load(f)
-                            df = pd.json_normalize(json_data)  # Convertir JSON en DataFrame
+                            df = extract_serp_data(json_data)  # Extraire et normaliser les données SERP
                             st.write(f"DataFrame chargé avec succès : {df.shape[0]} lignes, {df.shape[1]} colonnes")
                             return df
                 else:
@@ -170,6 +170,22 @@ def main():
         else:
             st.error(f"Erreur lors de la récupération des données du Result Set {result_set_id}: {response.status_code}")
         return pd.DataFrame()
+
+    def extract_serp_data(json_data):
+        """Extraire les données SERP organiques du JSON et les structurer en DataFrame."""
+        extracted_data = []
+        for result in json_data:
+            keyword = result.get('search', {}).get('q', '')
+            organic_results = result.get('result', {}).get('organic_results', [])
+            for org_result in organic_results:
+                extracted_data.append({
+                    'search.q': keyword,
+                    'result.organic_results.position': org_result.get('position', ''),
+                    'result.organic_results.title': org_result.get('title', ''),
+                    'result.organic_results.link': org_result.get('link', ''),
+                    'result.organic_results.domain': org_result.get('domain', '')
+                })
+        return pd.DataFrame(extracted_data)
 
     def split_keywords(keywords, batch_size=100):
         for i in range(0, len(keywords), batch_size):
@@ -181,15 +197,6 @@ def main():
         df1 = df1.reindex(columns=combined_columns)
         df2 = df2.reindex(columns=combined_columns)
         return df1, df2
-
-    def convert_dtypes(df):
-        """Convertit les colonnes du DataFrame à des types de données compatibles avec Arrow."""
-        for col in df.columns:
-            if df[col].dtype == 'object':
-                df[col] = df[col].astype('string')
-            elif df[col].dtype == 'int64':
-                df[col] = df[col].astype('float64')
-        return df
 
     if st.button("Lancer la recherche"):
         if keywords:
@@ -224,10 +231,12 @@ def main():
                                 all_results = pd.concat([all_results, result_data], ignore_index=True)
 
                             # Convertir les types de données pour compatibilité avec Arrow
-                            all_results = convert_dtypes(all_results)
+                            all_results = all_results.convert_dtypes()
                         else:
                             st.write(f"Aucun résultat disponible pour le Result Set {result_set_id} du batch {batch_id}")
                     else:
+                        st.write(f"Pas de Result Set disponible pour le batch
+                                            else:
                         st.write(f"Pas de Result Set disponible pour le batch {batch_id}")
 
                 if not all_results.empty:
