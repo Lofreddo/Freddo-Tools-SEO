@@ -125,12 +125,14 @@ def main():
                     mime="application/vnd.ms-excel"
                 )
             elif option == 'Importer un fichier Excel' and uploaded_file is not None:
-                # S'assurer que les colonnes 'content' et 'structure_hn' existent dans df_output
-                for col in ['content', 'structure_hn']:
-                    if col not in df_output.columns:
-                        df_output[col] = ''
-                df_input_with_output = pd.concat([df_input, df_output[['content', 'structure_hn']]], axis=1)
-                df_input_with_output.to_excel(writer, index=False)
+                # Initialiser 'writer' avant de l'utiliser
+                with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                    # S'assurer que les colonnes 'content' et 'structure_hn' existent dans df_output
+                    for col in ['content', 'structure_hn']:
+                        if col not in df_output.columns:
+                            df_output[col] = ''
+                    df_input_with_output = pd.concat([df_input, df_output[['content', 'structure_hn']]], axis=1)
+                    df_input_with_output.to_excel(writer, index=False)
                 st.download_button(
                     label="Télécharger le fichier Excel avec les résultats",
                     data=buffer.getvalue(),
