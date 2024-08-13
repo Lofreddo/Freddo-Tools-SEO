@@ -99,17 +99,25 @@ def main():
         params = {
             'api_key': API_KEY
         }
-        response = requests.get(f'https://api.valueserp.com/batches', params=params)
+        all_batches = []
+        page = 1
         
-        if response.status_code == 200:
-            all_batches = response.json().get('batches', [])
-            st.write(f"Nombre total de batches récupérés : {len(all_batches)}")
-            filtered_batches = [batch for batch in all_batches if prefix.lower() in batch['name'].lower()]
-            st.write(f"Batches filtrés avec le préfixe '{prefix}' : {[batch['name'] for batch in filtered_batches]}")
-            return filtered_batches
-        else:
-            st.error(f"Erreur lors de la récupération des batches: {response.status_code}")
-            return []
+        while True:
+            response = requests.get(f'https://api.valueserp.com/batches?page={page}', params=params)
+            if response.status_code == 200:
+                batch_page = response.json().get('batches', [])
+                if not batch_page:  # Si la page est vide, sortir de la boucle
+                    break
+                all_batches.extend(batch_page)
+                page += 1
+            else:
+                st.error(f"Erreur lors de la récupération des batches: {response.status_code}")
+                break
+        
+        st.write(f"Nombre total de batches récupérés : {len(all_batches)}")
+        filtered_batches = [batch for batch in all_batches if prefix.lower() in batch['name'].lower()]
+        st.write(f"Batches filtrés avec le préfixe '{prefix}' : {[batch['name'] for batch in filtered_batches]}")
+        return filtered_batches
 
     def get_latest_result_set_id(batch_id):
         params = {
