@@ -4,6 +4,7 @@ import io
 import streamlit as st
 import uuid
 import time
+import zipfile
 
 API_KEY = '81293DFA2CEF4FE49DB08E002D947143'
 
@@ -147,8 +148,20 @@ def main():
             if 'download_links' in result_set:
                 csv_link = result_set['download_links']['all_pages']
                 csv_response = requests.get(csv_link)
-                if csv_response.status_code == 200:
-                    return pd.read_csv(io.StringIO(csv_response.text), encoding='utf-8')
+                
+                if csv_link.endswith('.json'):
+                    st.write("Le fichier téléchargé est au format JSON.")
+                    return pd.read_json(io.StringIO(csv_response.text))
+                elif csv_link.endswith('.zip'):
+                    st.write("Le fichier téléchargé est un fichier ZIP.")
+                    with zipfile.ZipFile(io.BytesIO(csv_response.content)) as z:
+                        file_names = z.namelist()
+                        st.write(f"Fichiers dans l'archive ZIP : {file_names}")
+                        with z.open(file_names[0]) as f:
+                            return pd.read_csv(f)
+                else:
+                    st.write("Format de fichier inattendu.")
+                    st.write(csv_response.text)
         else:
             st.error(f"Erreur lors de la récupération des données du Result Set {result_set_id}: {response.status_code}")
         return pd.DataFrame()
