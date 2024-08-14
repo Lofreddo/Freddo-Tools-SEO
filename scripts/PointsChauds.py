@@ -3,12 +3,7 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import re
-from nltk.tokenize import word_tokenize
 from nltk.stem import PorterStemmer
-import nltk
-
-# Téléchargement du modèle punkt pour word_tokenize
-nltk.download('punkt')
 
 # Initialisation du stemmer
 stemmer = PorterStemmer()
@@ -19,14 +14,14 @@ def get_stem(word):
 
 # Fonction pour vérifier la présence du mot-clé dans une balise spécifique
 def check_keyword_in_text(text, keyword):
-    # Tokenisation et stemming des mots du mot-clé
-    keyword_parts = [get_stem(part) for part in word_tokenize(keyword)]
+    # Tokenisation simple et stemming des mots du mot-clé
+    keyword_parts = [get_stem(part) for part in keyword.split()]
     
     # Création du motif de recherche avec tolérance de 0 à 5 caractères entre les mots
     pattern = r'\b' + r'.{0,5}'.join(map(re.escape, keyword_parts)) + r'\b'
     
     # Stemming du texte avant la recherche
-    stemmed_text = " ".join([get_stem(word) for word in word_tokenize(text)])
+    stemmed_text = " ".join([get_stem(word) for word in text.split()])
     
     # Recherche du motif dans le texte
     return re.search(pattern, stemmed_text, re.IGNORECASE) is not None
