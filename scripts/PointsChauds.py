@@ -40,10 +40,13 @@ def check_keyword_in_text(text, keyword):
     stemmed_text = " ".join([get_stem(word) for word in text.split()])
     stemmed_keyword = " ".join([get_stem(part) for part in keyword.split()])
     
-    # Calculer la similarité entre les deux phrases
-    similarity = similar_phrases(stemmed_text, stemmed_keyword)
+    # Vérification stricte de la correspondance
+    if stemmed_keyword in stemmed_text:
+        return True
     
-    return similarity > 0.8  # Seuil de 80% pour la correspondance des phrases
+    # Si pas de correspondance stricte, vérifier la similarité des phrases (seuil de 80%)
+    similarity = similar_phrases(stemmed_text, stemmed_keyword)
+    return similarity > 0.8
 
 # Fonction pour extraire et vérifier les balises
 def extract_and_check(soup, keyword):
