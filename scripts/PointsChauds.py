@@ -11,7 +11,7 @@ stemmer = PorterStemmer()
 
 # Fonction pour obtenir la racine d'un mot
 def get_stem(word):
-    return stemmer.stem(word)
+    return stemmer.stem(word.lower())
 
 # Fonction pour vérifier la présence du mot-clé dans une balise spécifique avec des règles avancées
 def check_keyword_in_text(text, keyword):
@@ -22,11 +22,11 @@ def check_keyword_in_text(text, keyword):
     pattern_1 = r'\b' + r'.{0,5}'.join(map(re.escape, keyword_parts)) + r'\b'
     
     # Création du motif de recherche avec tolérance de 3 caractères différents pour des mots-clés ayant un espace entre eux
-    # Ce pattern permet de capturer des variations comme "tailler un pommier" vs "tailler son pommier"
     pattern_2 = r'\b' + r'\b(\w{1,3})\b'.join(map(re.escape, keyword_parts)) + r'\b'
     
     # Stemming du texte avant la recherche
-    stemmed_text = " ".join([get_stem(word) for word in text.split()])
+    text_words = [get_stem(word) for word in text.split()]
+    stemmed_text = " ".join(text_words)
     
     # Recherche des motifs dans le texte
     match_1 = re.search(pattern_1, stemmed_text, re.IGNORECASE)
