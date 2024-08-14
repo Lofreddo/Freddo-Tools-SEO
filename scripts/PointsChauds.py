@@ -9,20 +9,33 @@ from nltk.stem import PorterStemmer
 # Initialisation du stemmer
 stemmer = PorterStemmer()
 
+# Liste des articles et pronoms à exclure
+exclusion_list = [
+    'le', 'la', 'les', 'l\'', 'un', 'une', 'des', 'du', 'de', 'de la', 'de l\'', 
+    'mon', 'ton', 'son', 'notre', 'votre', 'leur', 'nos', 'vos', 'leurs'
+]
+
+# Fonction pour supprimer les articles et pronoms exclus
+def remove_exclusions(text):
+    words = text.lower().split()
+    filtered_words = [word for word in words if word not in exclusion_list]
+    return ' '.join(filtered_words)
+
 # Fonction pour obtenir la racine d'un mot
 def get_stem(word):
     return stemmer.stem(word.lower())
 
 # Fonction pour vérifier la présence du mot-clé dans une balise spécifique avec des règles avancées
 def check_keyword_in_text(text, keyword):
+    # Supprimer les articles et pronoms exclus
+    text = remove_exclusions(text)
+    keyword = remove_exclusions(keyword)
+
     # Tokenisation simple et stemming des mots du mot-clé
     keyword_parts = [get_stem(part) for part in keyword.split()]
     
     # Création du motif de recherche avec tolérance de 0 à 5 caractères entre les mots
     pattern_1 = r'\b' + r'.{0,5}'.join(map(re.escape, keyword_parts)) + r'\b'
-    
-    # Création du motif de recherche avec tolérance de 3 caractères différents pour des mots-clés ayant un espace entre eux
-    pattern_2 = r'\b' + r'\b(\w{1,3})\b'.join(map(re.escape, keyword_parts)) + r'\b'
     
     # Stemming du texte avant la recherche
     text_words = [get_stem(word) for word in text.split()]
@@ -30,9 +43,8 @@ def check_keyword_in_text(text, keyword):
     
     # Recherche des motifs dans le texte
     match_1 = re.search(pattern_1, stemmed_text, re.IGNORECASE)
-    match_2 = re.search(pattern_2, stemmed_text, re.IGNORECASE)
     
-    return match_1 is not None or match_2 is not None
+    return match_1 is not None
 
 # Fonction pour extraire et vérifier les balises
 def extract_and_check(soup, keyword):
