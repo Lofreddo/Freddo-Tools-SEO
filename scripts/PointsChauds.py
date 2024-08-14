@@ -13,19 +13,25 @@ stemmer = PorterStemmer()
 def get_stem(word):
     return stemmer.stem(word)
 
-# Fonction pour vérifier la présence du mot-clé dans une balise spécifique
+# Fonction pour vérifier la présence du mot-clé dans une balise spécifique avec des règles avancées
 def check_keyword_in_text(text, keyword):
     # Tokenisation simple et stemming des mots du mot-clé
     keyword_parts = [get_stem(part) for part in keyword.split()]
     
     # Création du motif de recherche avec tolérance de 0 à 5 caractères entre les mots
-    pattern = r'\b' + r'.{0,5}'.join(map(re.escape, keyword_parts)) + r'\b'
+    pattern_1 = r'\b' + r'.{0,5}'.join(map(re.escape, keyword_parts)) + r'\b'
+    
+    # Création du motif de recherche avec tolérance de 3 caractères différents pour des mots-clés ayant un espace entre eux
+    pattern_2 = r'\b' + r'\W{0,3}'.join(map(re.escape, keyword_parts)) + r'\b'
     
     # Stemming du texte avant la recherche
     stemmed_text = " ".join([get_stem(word) for word in text.split()])
     
-    # Recherche du motif dans le texte
-    return re.search(pattern, stemmed_text, re.IGNORECASE) is not None
+    # Recherche des motifs dans le texte
+    match_1 = re.search(pattern_1, stemmed_text, re.IGNORECASE)
+    match_2 = re.search(pattern_2, stemmed_text, re.IGNORECASE)
+    
+    return match_1 is not None or match_2 is not None
 
 # Fonction pour extraire et vérifier les balises
 def extract_and_check(soup, keyword):
@@ -37,17 +43,18 @@ def extract_and_check(soup, keyword):
     h1 = soup.h1.get_text() if soup.h1 else ""
     h1_match = check_keyword_in_text(h1, keyword)
     
-    # Récupérer les contenus des balises h2, h3, h4
+    # Récupérer les contenus des balises h2, h3
     hn_texts = []
     hn_match = False
-    for tag in ['h2', 'h3', 'h4']:
+    for tag in ['h2', 'h3']:
         tags = soup.find_all(tag)
         for t in tags:
-            hn_texts.append(t.get_text())
+            hn_text = f"<{tag}>{t.get_text()}</{tag}>"
+            hn_texts.append(hn_text)
             if check_keyword_in_text(t.get_text(), keyword):
                 hn_match = True
     
-    hn_text = " | ".join(hn_texts)  # Pour avoir une structure lisible des Hn
+    hn_text = "\n".join(hn_texts)  # Pour avoir une structure lisible des Hn
     
     return title, title_match, h1, h1_match, hn_text, hn_match
 
