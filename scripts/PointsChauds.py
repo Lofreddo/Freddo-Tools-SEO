@@ -6,13 +6,14 @@ import re
 from io import BytesIO
 from nltk.stem import PorterStemmer
 from difflib import SequenceMatcher
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Initialisation du stemmer
 stemmer = PorterStemmer()
 
 # Liste des articles et pronoms à exclure
 exclusion_list = [
-    'le', 'la', 'les', 'l\'', 'un', 'une', 'des', 'du', 'de', 'de la', 'de l\'', 
+    'le', 'la', 'les', 'l\'', 'un', 'une', 'des', 'du', 'de la', 'de l\'', 
     'mon', 'ton', 'son', 'notre', 'votre', 'leur', 'nos', 'vos', 'leurs'
 ]
 
@@ -49,28 +50,71 @@ def check_keyword_in_text(text, keyword):
     return similarity > 0.8
 
 # Fonction pour extraire et vérifier les balises
-def extract_and_check(soup, keyword):
-    # Récupérer le contenu de la balise title
-    title = soup.title.string if soup.title else ""
-    title_match = check_keyword_in_text(title, keyword)
+def extract_and_check(url):
+    try:
+        response = requests.get(url, timeout=10)
+        
+        # Vérifier si la page retourne une erreur 404
+        if response.status_code == 404:
+            return {
+                'Balise Title': 'Erreur 404',
+                'H1': 'Erreur 404',
+                'Hn Structure': 'Erreur 404',
+                'Redirection URL': 'N/A'
+            }
+        
+        # Vérifier si une redirection a eu lieu
+        redirected_url = response.url if response.history else 'Pas de redirection'
 
-    # Récupérer le contenu de la balise h1
-    h1 = soup.h1.get_text() if soup.h1 else ""
-    h1_match = check_keyword_in_text(h1, keyword)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, 'html.parser')
+
+        # Extraire et vérifier les balises
+        title = soup.title.string if soup.title else ""
+        
+        h1 = soup.h1.get_text() if soup.h1 else ""
+        
+        hn_texts = []
+        tags = soup.find_all(['h2', 'h3'])
+        for t in tags:
+            hn_text = f"<{t.name}>{t.get_text()}</{t.name}>"
+            hn_texts.append(hn_text)
+        
+        hn_text = "\n".join(hn_texts)
+        
+        return {
+            'Balise Title': title,
+            'H1': h1,
+            'Hn Structure': hn_text,
+            'Redirection URL': redirected_url
+        }
+    except requests.exceptions.RequestException as e:
+        return {
+            'Balise Title': 'Erreur',
+            'H1': 'Erreur',
+            'Hn Structure': 'Erreur',
+            'Redirection URL': 'Erreur'
+        }
+
+# Fonction pour traiter les URLs en parallèle
+def process_urls(df, keyword_column, url_column, progress_bar):
+    url_results = {}
+    total_urls = len(df)
+
+    with ThreadPoolExecutor(max_workers=20) as executor:  # Augmentez max_workers selon vos capacités matérielles
+        futures = {}
+        for index, row in df.iterrows():
+            url = row[url_column]
+            if url not in url_results:
+                futures[url] = executor.submit(extract_and_check, url)
+        
+        completed = 0
+        for url, future in futures.items():
+            url_results[url] = future.result()
+            completed += 1
+            progress_bar.progress(completed / total_urls)
     
-    # Récupérer les contenus des balises h2, h3 dans l'ordre d'apparition
-    hn_texts = []
-    hn_match = False
-    tags = soup.find_all(['h2', 'h3'])  # Chercher h2 et h3 dans l'ordre d'apparition
-    for t in tags:
-        hn_text = f"<{t.name}>{t.get_text()}</{t.name}>"
-        hn_texts.append(hn_text)
-        if check_keyword_in_text(t.get_text(), keyword):
-            hn_match = True
-    
-    hn_text = "\n".join(hn_texts)  # Pour avoir une structure lisible des Hn
-    
-    return title, title_match, h1, h1_match, hn_text, hn_match
+    return url_results
 
 # Fonction principale pour l'application Streamlit
 def main():
@@ -93,45 +137,29 @@ def main():
         url_column = st.selectbox("Sélectionnez la colonne contenant les URLs", df.columns)
 
         if st.button("Lancer le crawl"):
-            # Initialisation des nouvelles colonnes
-            st.write("Initialisation des colonnes...")
-            df['Balise Title'] = ''
-            df['Title Match'] = ''
-            df['H1'] = ''
-            df['H1 Match'] = ''
-            df['Hn Structure'] = ''
-            df['Hn Match'] = ''
-            st.write("Colonnes initialisées avec succès.")
+            # Initialisation de la barre de progression
+            progress_bar = st.progress(0)
 
+            st.write("Initialisation des colonnes et démarrage du scraping en parallèle...")
+            url_results = process_urls(df, keyword_column, url_column, progress_bar)
+            
+            # Ajouter les résultats dans le dataframe
             for index, row in df.iterrows():
                 keyword = row[keyword_column]
                 url = row[url_column]
+                result = url_results[url]
+                
+                title_match = check_keyword_in_text(result['Balise Title'], keyword)
+                h1_match = check_keyword_in_text(result['H1'], keyword)
+                hn_match = check_keyword_in_text(result['Hn Structure'], keyword)
 
-                try:
-                    st.write(f"Scraping URL: {url}")
-                    response = requests.get(url, timeout=10)
-                    response.raise_for_status()
-                    soup = BeautifulSoup(response.content, 'html.parser')
-
-                    # Extraire et vérifier les balises
-                    title, title_match, h1, h1_match, hn_text, hn_match = extract_and_check(soup, keyword)
-                    
-                    # Ajouter les résultats dans le dataframe
-                    df.at[index, 'Balise Title'] = title
-                    df.at[index, 'Title Match'] = "Oui" if title_match else "Non"
-                    df.at[index, 'H1'] = h1
-                    df.at[index, 'H1 Match'] = "Oui" if h1_match else "Non"
-                    df.at[index, 'Hn Structure'] = hn_text
-                    df.at[index, 'Hn Match'] = "Oui" if hn_match else "Non"
-
-                except requests.exceptions.RequestException as e:
-                    st.error(f"Erreur pour l'URL {url}: {e}")
-                    df.at[index, 'Balise Title'] = 'Erreur'
-                    df.at[index, 'Title Match'] = 'Erreur'
-                    df.at[index, 'H1'] = 'Erreur'
-                    df.at[index, 'H1 Match'] = 'Erreur'
-                    df.at[index, 'Hn Structure'] = 'Erreur'
-                    df.at[index, 'Hn Match'] = 'Erreur'
+                df.at[index, 'Balise Title'] = result['Balise Title']
+                df.at[index, 'Title Match'] = "Oui" if title_match else "Non"
+                df.at[index, 'H1'] = result['H1']
+                df.at[index, 'H1 Match'] = "Oui" if h1_match else "Non"
+                df.at[index, 'Hn Structure'] = result['Hn Structure']
+                df.at[index, 'Hn Match'] = "Oui" if hn_match else "Non"
+                df.at[index, 'Redirection URL'] = result['Redirection URL']
 
             # Affichage du résultat
             st.write("Résultat du crawl :")
