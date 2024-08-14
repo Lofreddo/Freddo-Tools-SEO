@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import re
+from io import BytesIO
 from nltk.stem import PorterStemmer
 
 # Initialisation du stemmer
