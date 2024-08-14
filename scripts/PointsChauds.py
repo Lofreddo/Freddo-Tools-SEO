@@ -2,77 +2,117 @@ import streamlit as st
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-from io import BytesIO
+import re
+from nltk.tokenize import word_tokenize
+from nltk.stem import PorterStemmer
 
-# Effacer le cache au démarrage
-st.cache_data.clear()
+# Initialisation du stemmer
+stemmer = PorterStemmer()
 
-# Votre code Streamlit ici
-st.title("Mon Application Streamlit")
+# Fonction pour obtenir la racine d'un mot
+def get_stem(word):
+    return stemmer.stem(word)
 
-# Fonction pour scraper les éléments demandés
-def scrape_html(url):
-    try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.content, 'html.parser')
-            title = soup.title.string if soup.title else ''
-            h1 = soup.h1.string if soup.h1 else ''
-            hn_structure = ''
-            for hn in soup.find_all(['h2', 'h3', 'h4', 'h5', 'h6']):
-                hn_structure += f"{hn.name}: {hn.text.strip()} | "
-            return title, h1, hn_structure.strip('| ')
-        else:
-            return '', '', ''
-    except Exception as e:
-        return '', '', ''
+# Fonction pour vérifier la présence du mot-clé dans une balise spécifique
+def check_keyword_in_text(text, keyword):
+    # Tokenisation et stemming des mots du mot-clé
+    keyword_parts = [get_stem(part) for part in word_tokenize(keyword)]
+    
+    # Création du motif de recherche avec tolérance de 0 à 5 caractères entre les mots
+    pattern = r'\b' + r'.{0,5}'.join(map(re.escape, keyword_parts)) + r'\b'
+    
+    # Stemming du texte avant la recherche
+    stemmed_text = " ".join([get_stem(word) for word in word_tokenize(text)])
+    
+    # Recherche du motif dans le texte
+    return re.search(pattern, stemmed_text, re.IGNORECASE) is not None
 
-# Fonction principale à exécuter
+# Fonction pour extraire et vérifier les balises
+def extract_and_check(soup, keyword):
+    # Récupérer le contenu de la balise title
+    title = soup.title.string if soup.title else ""
+    title_match = check_keyword_in_text(title, keyword)
+
+    # Récupérer le contenu de la balise h1
+    h1 = soup.h1.get_text() if soup.h1 else ""
+    h1_match = check_keyword_in_text(h1, keyword)
+    
+    # Récupérer les contenus des balises h2, h3, h4
+    hn_texts = []
+    hn_match = False
+    for tag in ['h2', 'h3', 'h4']:
+        tags = soup.find_all(tag)
+        for t in tags:
+            hn_texts.append(t.get_text())
+            if check_keyword_in_text(t.get_text(), keyword):
+                hn_match = True
+    
+    hn_text = " | ".join(hn_texts)  # Pour avoir une structure lisible des Hn
+    
+    return title, title_match, h1, h1_match, hn_text, hn_match
+
+# Fonction principale pour l'application Streamlit
 def main():
-    st.title("Analyse SEO des Pages Web")
+    st.title("Vérification de mot-clé dans des pages web")
 
-    # Étape 1 : Upload du fichier Excel
-    uploaded_file = st.file_uploader("Upload un fichier Excel", type=["xlsx"])
+    # Chargement du fichier xlsx
+    uploaded_file = st.file_uploader("Choisissez un fichier Excel", type="xlsx")
 
     if uploaded_file is not None:
         df = pd.read_excel(uploaded_file)
+        st.write("Aperçu du fichier :")
+        st.dataframe(df)
 
-        # Étape 2 : Sélection des colonnes pour "Mot clé" et "URL"
-        col_keyword = st.selectbox("Sélectionnez la colonne 'Mot clé'", df.columns)
-        col_url = st.selectbox("Sélectionnez la colonne 'URL'", df.columns)
+        # Sélection des colonnes
+        keyword_column = st.selectbox("Sélectionnez la colonne contenant les mots-clés", df.columns)
+        url_column = st.selectbox("Sélectionnez la colonne contenant les URLs", df.columns)
 
-        if st.button("Lancer l'analyse"):
+        if st.button("Lancer le crawl"):
             # Initialisation des nouvelles colonnes
-            df['Contenu Balise Title'] = ''
-            df['Contenu Balise H1'] = ''
-            df['Contenu Structure Hn'] = ''
-            df['Présence Title'] = ''
-            df['Présence H1'] = ''
-            df['Présence Structure Hn'] = ''
+            df['Balise Title'] = ''
+            df['Title Match'] = ''
+            df['H1'] = ''
+            df['H1 Match'] = ''
+            df['Hn Structure'] = ''
+            df['Hn Match'] = ''
 
-            # Parcours des URLs et scrape des informations
             for index, row in df.iterrows():
-                keyword = str(row[col_keyword]).lower()
-                url = row[col_url]
-                title, h1, hn_structure = scrape_html(url)
+                keyword = row[keyword_column]
+                url = row[url_column]
 
-                # Mise à jour des colonnes avec le contenu scrappé
-                df.at[index, 'Contenu Balise Title'] = title
-                df.at[index, 'Contenu Balise H1'] = h1
-                df.at[index, 'Contenu Structure Hn'] = hn_structure
+                try:
+                    response = requests.get(url, timeout=10)
+                    response.raise_for_status()
+                    soup = BeautifulSoup(response.content, 'html.parser')
 
-                # Vérification de la présence des mots clés
-                df.at[index, 'Présence Title'] = 'Oui' if keyword in title.lower() else 'Non'
-                df.at[index, 'Présence H1'] = 'Oui' if keyword in h1.lower() else 'Non'
-                df.at[index, 'Présence Structure Hn'] = 'Oui' if keyword in hn_structure.lower() else 'Non'
+                    # Extraire et vérifier les balises
+                    title, title_match, h1, h1_match, hn_text, hn_match = extract_and_check(soup, keyword)
+                    
+                    # Ajouter les résultats dans le dataframe
+                    df.at[index, 'Balise Title'] = title
+                    df.at[index, 'Title Match'] = "Oui" if title_match else "Non"
+                    df.at[index, 'H1'] = h1
+                    df.at[index, 'H1 Match'] = "Oui" if h1_match else "Non"
+                    df.at[index, 'Hn Structure'] = hn_text
+                    df.at[index, 'Hn Match'] = "Oui" if hn_match else "Non"
 
-            # Étape 7 : Bouton de téléchargement du fichier Excel avec les résultats
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                df.to_excel(writer, index=False)
-            st.download_button(
-                label="Télécharger le fichier Excel avec les résultats",
-                data=output.getvalue(),
-                file_name="resultats_analyse.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+                except requests.exceptions.RequestException as e:
+                    st.error(f"Erreur pour l'URL {url}: {e}")
+                    df.at[index, 'Balise Title'] = 'Erreur'
+                    df.at[index, 'Title Match'] = 'Erreur'
+                    df.at[index, 'H1'] = 'Erreur'
+                    df.at[index, 'H1 Match'] = 'Erreur'
+                    df.at[index, 'Hn Structure'] = 'Erreur'
+                    df.at[index, 'Hn Match'] = 'Erreur'
+
+            # Affichage du résultat
+            st.write("Résultat du crawl :")
+            st.dataframe(df)
+
+            # Téléchargement du fichier résultant
+            df.to_excel("résultat.xlsx", index=False)
+            st.download_button(label="Télécharger le fichier avec les résultats", data=open("résultat.xlsx", "rb"), file_name="résultat.xlsx")
+
+# Ajouter cette ligne pour que le script soit exécuté avec la fonction main()
+if __name__ == "__main__":
+    main()
