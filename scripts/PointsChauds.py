@@ -7,6 +7,7 @@ from nltk.stem import PorterStemmer
 from difflib import SequenceMatcher
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+import lxml.html
 
 # Initialisation du stemmer
 stemmer = PorterStemmer()
@@ -40,11 +41,11 @@ def check_keyword_in_text(text, keyword):
     similarity = similar_phrases(stemmed_text, stemmed_keyword)
     return similarity > 0.8
 
-# Fonction pour extraire et vérifier les balises HTML principales, en ignorant les éléments de navigation et footer
+# Fonction pour extraire et vérifier les balises HTML principales
 def extract_and_check(url):
     try:
         headers = {'Accept': 'text/html'}
-        response = requests.get(url, headers=headers, timeout=3)
+        response = requests.get(url, headers=headers, timeout=5)
         
         if response.status_code == 404:
             return {
@@ -63,26 +64,22 @@ def extract_and_check(url):
             }
 
         response.raise_for_status()
-        soup = BeautifulSoup(response.content, 'html.parser')
+        tree = lxml.html.fromstring(response.content)
         
-        # Ignorer le footer et la navigation
-        [nav.extract() for nav in soup.find_all('nav')]
-        [footer.extract() for footer in soup.find_all('footer')]
-
-        title = soup.title.string if soup.title else ""
-        h1 = soup.h1.get_text() if soup.h1 else ""
+        title = tree.xpath('//title/text()')
+        h1 = tree.xpath('//h1/text()')
         
+        hn_elements = tree.xpath('//h2 | //h3 | //h4 | //h5')
         hn_texts = []
-        tags = soup.find_all(['h2', 'h3'])
-        for t in tags:
-            hn_text = f"<{t.name}>{t.get_text()}</{t.name}>"
+        for el in hn_elements:
+            hn_text = f"<{el.tag}>{el.text_content()}</{el.tag}>"
             hn_texts.append(hn_text)
         
         hn_text = "\n".join(hn_texts)
         
         return {
-            'Balise Title': title,
-            'H1': h1,
+            'Balise Title': title[0] if title else "",
+            'H1': h1[0] if h1 else "",
             'Hn Structure': hn_text,
             'Redirection URL': 'Pas de redirection'
         }
@@ -99,7 +96,9 @@ def process_urls(df, keyword_column, url_column, progress_bar, time_estimation):
     total_urls = len(df)
     start_time = time.time()
 
-    with ThreadPoolExecutor(max_workers=50) as executor:
+    max_workers = min(20, total_urls // 10 + 1)  # Ajuste dynamiquement le nombre de threads
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {}
         for index, row in df.iterrows():
             url = row[url_column]
