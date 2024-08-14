@@ -50,15 +50,10 @@ def check_keyword_in_text(text, keyword):
     similarity = similar_phrases(stemmed_text, stemmed_keyword)
     return similarity > 0.8
 
-# Ajout d'un User-Agent pour simuler un navigateur comme Google Chrome
-headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-}
-
 # Fonction pour extraire et vérifier les balises
 def extract_and_check(url):
     try:
-        response = requests.get(url, timeout=5, headers=headers)  # Ajout du User-Agent dans les requêtes
+        response = requests.get(url, timeout=5)  # Timeout réduit à 5 secondes
         
         # Vérifier si la page retourne une erreur 404
         if response.status_code == 404:
