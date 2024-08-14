@@ -50,10 +50,15 @@ def check_keyword_in_text(text, keyword):
     similarity = similar_phrases(stemmed_text, stemmed_keyword)
     return similarity > 0.8
 
-# Fonction pour extraire et vérifier les balises
+# Ajout d'un User-Agent pour simuler un navigateur comme Google Chrome
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+}
+
+# Fonction pour extraire et vérifier les balises, tout en excluant certaines zones comme le footer
 def extract_and_check(url):
     try:
-        response = requests.get(url, timeout=5)  # Timeout réduit à 5 secondes
+        response = requests.get(url, timeout=5, headers=headers)  # Ajout du User-Agent dans les requêtes
         
         # Vérifier si la page retourne une erreur 404
         if response.status_code == 404:
@@ -75,6 +80,12 @@ def extract_and_check(url):
 
         response.raise_for_status()
         soup = BeautifulSoup(response.content, 'html.parser')
+
+        # Exclure le footer et les éléments contenant "nav" dans leur classe CSS
+        if soup.footer:
+            soup.footer.decompose()  # Supprimer le footer
+        for element in soup.find_all(class_=re.compile("nav")):
+            element.decompose()  # Supprimer les éléments avec "nav" dans leur classe
 
         # Extraire et vérifier les balises
         title = soup.title.string if soup.title else ""
