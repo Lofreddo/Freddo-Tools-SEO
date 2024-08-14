@@ -22,7 +22,8 @@ def check_keyword_in_text(text, keyword):
     pattern_1 = r'\b' + r'.{0,5}'.join(map(re.escape, keyword_parts)) + r'\b'
     
     # Création du motif de recherche avec tolérance de 3 caractères différents pour des mots-clés ayant un espace entre eux
-    pattern_2 = r'\b' + r'\W{0,3}'.join(map(re.escape, keyword_parts)) + r'\b'
+    # Ce pattern permet de capturer des variations comme "tailler un pommier" vs "tailler son pommier"
+    pattern_2 = r'\b' + r'\b(\w{1,3})\b'.join(map(re.escape, keyword_parts)) + r'\b'
     
     # Stemming du texte avant la recherche
     stemmed_text = " ".join([get_stem(word) for word in text.split()])
@@ -43,16 +44,15 @@ def extract_and_check(soup, keyword):
     h1 = soup.h1.get_text() if soup.h1 else ""
     h1_match = check_keyword_in_text(h1, keyword)
     
-    # Récupérer les contenus des balises h2, h3
+    # Récupérer les contenus des balises h2, h3 dans l'ordre d'apparition
     hn_texts = []
     hn_match = False
-    for tag in ['h2', 'h3']:
-        tags = soup.find_all(tag)
-        for t in tags:
-            hn_text = f"<{tag}>{t.get_text()}</{tag}>"
-            hn_texts.append(hn_text)
-            if check_keyword_in_text(t.get_text(), keyword):
-                hn_match = True
+    tags = soup.find_all(['h2', 'h3'])  # Chercher h2 et h3 dans l'ordre d'apparition
+    for t in tags:
+        hn_text = f"<{t.name}>{t.get_text()}</{t.name}>"
+        hn_texts.append(hn_text)
+        if check_keyword_in_text(t.get_text(), keyword):
+            hn_match = True
     
     hn_text = "\n".join(hn_texts)  # Pour avoir une structure lisible des Hn
     
