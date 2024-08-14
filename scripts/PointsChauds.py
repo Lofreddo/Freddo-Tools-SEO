@@ -4,6 +4,12 @@ import requests
 from bs4 import BeautifulSoup
 from io import BytesIO
 
+# Effacer le cache au démarrage
+st.cache_data.clear()
+
+# Votre code Streamlit ici
+st.title("Mon Application Streamlit")
+
 # Fonction pour scraper les éléments demandés
 def scrape_html(url):
     try:
