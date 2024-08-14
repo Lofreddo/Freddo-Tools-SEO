@@ -53,7 +53,7 @@ def check_keyword_in_text(text, keyword):
 # Fonction pour extraire et vérifier les balises
 def extract_and_check(url):
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=5)  # Timeout réduit à 5 secondes
         
         # Vérifier si la page retourne une erreur 404
         if response.status_code == 404:
@@ -64,8 +64,14 @@ def extract_and_check(url):
                 'Redirection URL': 'N/A'
             }
         
-        # Vérifier si une redirection a eu lieu
-        redirected_url = response.url if response.history else 'Pas de redirection'
+        # Vérifier si une redirection 301 a eu lieu
+        if len(response.history) > 0 and response.history[0].status_code == 301:
+            return {
+                'Balise Title': 'Redirection 301',
+                'H1': 'Redirection 301',
+                'Hn Structure': 'Redirection 301',
+                'Redirection URL': 'Redirection 301'
+            }
 
         response.raise_for_status()
         soup = BeautifulSoup(response.content, 'html.parser')
@@ -87,7 +93,7 @@ def extract_and_check(url):
             'Balise Title': title,
             'H1': h1,
             'Hn Structure': hn_text,
-            'Redirection URL': redirected_url
+            'Redirection URL': 'Pas de redirection'
         }
     except requests.exceptions.RequestException as e:
         return {
@@ -103,7 +109,7 @@ def process_urls(df, keyword_column, url_column, progress_bar, time_estimation):
     total_urls = len(df)
     start_time = time.time()
 
-    with ThreadPoolExecutor(max_workers=20) as executor:  # Augmentez max_workers selon vos capacités matérielles
+    with ThreadPoolExecutor(max_workers=50) as executor:  # Augmenter à 50 threads pour accélérer le processus
         futures = {}
         for index, row in df.iterrows():
             url = row[url_column]
@@ -111,19 +117,20 @@ def process_urls(df, keyword_column, url_column, progress_bar, time_estimation):
                 futures[url] = executor.submit(extract_and_check, url)
         
         completed = 0
+        update_interval = 100  # Mettre à jour la barre de progression toutes les 100 URLs
         for url, future in futures.items():
             url_results[url] = future.result()
             completed += 1
-            progress_bar.progress(completed / total_urls)
             
-            # Calculer le temps écoulé et estimer le temps restant
-            elapsed_time = time.time() - start_time
-            time_per_url = elapsed_time / completed
-            estimated_total_time = time_per_url * total_urls
-            time_left = estimated_total_time - elapsed_time
-            
-            # Afficher le temps estimé restant
-            time_estimation.text(f"Temps estimé restant : {int(time_left // 60)} min {int(time_left % 60)} sec")
+            if completed % update_interval == 0:
+                # Mettre à jour la barre de progression et le temps estimé
+                progress_bar.progress(completed / total_urls)
+                
+                elapsed_time = time.time() - start_time
+                time_per_url = elapsed_time / completed
+                estimated_total_time = time_per_url * total_urls
+                time_left = estimated_total_time - elapsed_time
+                time_estimation.text(f"Temps estimé restant : {int(time_left // 60)} min {int(time_left % 60)} sec")
     
     return url_results
 
