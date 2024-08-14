@@ -2,36 +2,46 @@ import streamlit as st
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from io import BytesIO
 
-# Fonction pour extraire les balises et vérifier la présence des mots-clés
-def extract_and_display(soup):
-    # Récupérer le contenu de la balise title
-    title = soup.title.string if soup.title else ""
-    st.write(f"Title: {title}")
+# Fonction pour scrapper les balises title, h1, h2, h3, h4
+def scrape_tags_from_url(url):
+    try:
+        response = requests.get(url, timeout=10)
+        soup = BeautifulSoup(response.text, 'lxml')
+        
+        title = soup.title.string if soup.title else ""
+        h1 = soup.h1.get_text(strip=True) if soup.h1 else ""
+        
+        hn_texts = []
+        for tag in ['h2', 'h3', 'h4']:
+            tags = soup.find_all(tag)
+            for t in tags:
+                hn_texts.append(t.get_text(strip=True))
+        
+        hn_text = " | ".join(hn_texts)  # Structure lisible des balises h2, h3, h4
 
-    # Récupérer le contenu de la balise h1
-    h1 = soup.h1.get_text() if soup.h1 else ""
-    st.write(f"H1: {h1}")
-    
-    # Récupérer les contenus des balises h2, h3, h4
-    hn_texts = []
-    for tag in ['h2', 'h3', 'h4']:
-        tags = soup.find_all(tag)
-        for t in tags:
-            hn_texts.append(t.get_text())
-    
-    hn_text = " | ".join(hn_texts)  # Pour avoir une structure lisible des Hn
-    st.write(f"Hn: {hn_text}")
-    
-    return title, h1, hn_text
+        return url, title, h1, hn_text
+    except Exception as e:
+        return url, "Error", "Error", str(e)
+
+# Fonction pour lancer le scraping en parallèle
+def scrape_all_urls(urls):
+    scraped_results = []
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        future_to_url = {executor.submit(scrape_tags_from_url, url): url for url in urls}
+        for future in as_completed(future_to_url):
+            url, title, h1, hn_text = future.result()
+            scraped_results.append((url, title, h1, hn_text))
+    return scraped_results
 
 # Fonction principale pour l'application Streamlit
 def main():
     st.title("Vérification de mot-clé dans des pages web")
 
     # Chargement du fichier xlsx
-    uploaded_file = st.file_uploader("Choisissez un fichier Excel", type="xlsx")
+    uploaded_file = st.file_uploader("Choisissez un fichier Excel", type=["xlsx", "xls"])
 
     if uploaded_file is not None:
         df = pd.read_excel(uploaded_file)
@@ -43,52 +53,33 @@ def main():
         url_column = st.selectbox("Sélectionnez la colonne contenant les URLs", df.columns)
 
         if st.button("Lancer le crawl"):
-            # Initialisation des nouvelles colonnes
-            df['Balise Title'] = ''
-            df['H1'] = ''
-            df['Hn Structure'] = ''
-
-            for index, row in df.iterrows():
-                url = row[url_column].strip()
-
-                try:
-                    st.write(f"Scraping URL: {url}")
-
-                    # Récupérer la page web
-                    response = requests.get(url, timeout=10)
-                    
-                    # Vérifier si la requête est réussie
-                    if response.status_code != 200:
-                        st.error(f"Erreur pour l'URL {url}: Statut {response.status_code}")
-                        df.at[index, 'Balise Title'] = f"Erreur: {response.status_code}"
-                        df.at[index, 'H1'] = 'Erreur'
-                        df.at[index, 'Hn Structure'] = 'Erreur'
-                        continue
-
-                    soup = BeautifulSoup(response.content, 'html.parser')
-
-                    # Extraire et afficher les balises
-                    title, h1, hn_text = extract_and_display(soup)
-                    
-                    # Ajouter les résultats dans le dataframe
-                    df.at[index, 'Balise Title'] = title
-                    df.at[index, 'H1'] = h1
-                    df.at[index, 'Hn Structure'] = hn_text
-
-                except requests.exceptions.RequestException as e:
-                    st.error(f"Erreur pour l'URL {url}: {e}")
-                    df.at[index, 'Balise Title'] = 'Erreur'
-                    df.at[index, 'H1'] = 'Erreur'
-                    df.at[index, 'Hn Structure'] = 'Erreur'
+            urls = df[url_column].dropna().tolist()
+            scraped_data_list = scrape_all_urls(urls)
+            
+            # Ajouter les colonnes au fichier importé
+            for url, title, h1, hn_text in scraped_data_list:
+                # Recherchez l'index de la ligne dans le dataframe correspondant à l'URL
+                idx = df[df[url_column] == url].index[0]
+                df.at[idx, 'Balise Title'] = title
+                df.at[idx, 'H1'] = h1
+                df.at[idx, 'Hn Structure'] = hn_text
 
             # Affichage du résultat
             st.write("Résultat du crawl :")
             st.dataframe(df)
 
-            # Téléchargement du fichier résultant
-            df.to_excel("résultat.xlsx", index=False)
-            st.download_button(label="Télécharger le fichier avec les résultats", data=open("résultat.xlsx", "rb"), file_name="résultat.xlsx")
+            # Créer un fichier Excel pour téléchargement
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df.to_excel(writer, index=False)
+            excel_data = output.getvalue()
+            
+            st.download_button(
+                label="Télécharger le fichier avec les résultats",
+                data=excel_data,
+                file_name="résultat_scraping.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
-# Ajouter cette ligne pour que le script soit exécuté avec la fonction main()
 if __name__ == "__main__":
     main()
