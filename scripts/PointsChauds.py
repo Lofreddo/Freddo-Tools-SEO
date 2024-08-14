@@ -26,9 +26,9 @@ def remove_exclusions(text):
 def get_stem(word):
     return stemmer.stem(word.lower())
 
-# Fonction pour calculer la similarité entre deux mots
-def similar(a, b):
-    return SequenceMatcher(None, a, b).ratio()
+# Fonction pour calculer la similarité entre deux phrases
+def similar_phrases(phrase1, phrase2):
+    return SequenceMatcher(None, phrase1, phrase2).ratio()
 
 # Fonction pour vérifier la présence du mot-clé dans une balise spécifique avec des règles avancées
 def check_keyword_in_text(text, keyword):
@@ -36,29 +36,14 @@ def check_keyword_in_text(text, keyword):
     text = remove_exclusions(text)
     keyword = remove_exclusions(keyword)
 
-    # Tokenisation simple et stemming des mots du mot-clé
-    keyword_parts = [get_stem(part) for part in keyword.split()]
+    # Appliquer le stemming sur chaque mot
+    stemmed_text = " ".join([get_stem(word) for word in text.split()])
+    stemmed_keyword = " ".join([get_stem(part) for part in keyword.split()])
     
-    # Création du motif de recherche avec tolérance de 0 à 5 caractères entre les mots
-    pattern_1 = r'\b' + r'.{0,5}'.join(map(re.escape, keyword_parts)) + r'\b'
+    # Calculer la similarité entre les deux phrases
+    similarity = similar_phrases(stemmed_text, stemmed_keyword)
     
-    # Stemming du texte avant la recherche
-    text_words = [get_stem(word) for word in text.split()]
-    stemmed_text = " ".join(text_words)
-    
-    # Recherche des motifs dans le texte
-    match_1 = re.search(pattern_1, stemmed_text, re.IGNORECASE)
-    
-    if match_1:
-        return True
-    
-    # Vérification de la similarité entre les mots du texte et du mot-clé
-    for word in text_words:
-        for keyword_part in keyword_parts:
-            if similar(word, keyword_part) > 0.8:  # Seuil de similarité de 80%
-                return True
-    
-    return False
+    return similarity > 0.8  # Seuil de 80% pour la correspondance des phrases
 
 # Fonction pour extraire et vérifier les balises
 def extract_and_check(soup, keyword):
