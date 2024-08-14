@@ -5,6 +5,10 @@ from bs4 import BeautifulSoup
 import re
 from nltk.tokenize import word_tokenize
 from nltk.stem import PorterStemmer
+import nltk
+
+# Téléchargement du modèle punkt pour word_tokenize
+nltk.download('punkt')
 
 # Initialisation du stemmer
 stemmer = PorterStemmer()
@@ -59,9 +63,13 @@ def main():
     uploaded_file = st.file_uploader("Choisissez un fichier Excel", type="xlsx")
 
     if uploaded_file is not None:
-        df = pd.read_excel(uploaded_file)
-        st.write("Aperçu du fichier :")
-        st.dataframe(df)
+        try:
+            df = pd.read_excel(uploaded_file)
+            st.write("Aperçu du fichier :")
+            st.dataframe(df)
+        except Exception as e:
+            st.error(f"Erreur lors du chargement du fichier : {e}")
+            return
 
         # Sélection des colonnes
         keyword_column = st.selectbox("Sélectionnez la colonne contenant les mots-clés", df.columns)
@@ -69,18 +77,21 @@ def main():
 
         if st.button("Lancer le crawl"):
             # Initialisation des nouvelles colonnes
+            st.write("Initialisation des colonnes...")
             df['Balise Title'] = ''
             df['Title Match'] = ''
             df['H1'] = ''
             df['H1 Match'] = ''
             df['Hn Structure'] = ''
             df['Hn Match'] = ''
+            st.write("Colonnes initialisées avec succès.")
 
             for index, row in df.iterrows():
                 keyword = row[keyword_column]
                 url = row[url_column]
 
                 try:
+                    st.write(f"Scraping URL: {url}")
                     response = requests.get(url, timeout=10)
                     response.raise_for_status()
                     soup = BeautifulSoup(response.content, 'html.parser')
@@ -109,9 +120,19 @@ def main():
             st.write("Résultat du crawl :")
             st.dataframe(df)
 
-            # Téléchargement du fichier résultant
-            df.to_excel("résultat.xlsx", index=False)
-            st.download_button(label="Télécharger le fichier avec les résultats", data=open("résultat.xlsx", "rb"), file_name="résultat.xlsx")
+            # Sauvegarde du fichier Excel
+            try:
+                output_file = BytesIO()
+                with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
+                    df.to_excel(writer, index=False)
+                st.download_button(
+                    label="Télécharger le fichier avec les résultats",
+                    data=output_file.getvalue(),
+                    file_name="résultat_scraping.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            except Exception as e:
+                st.error(f"Erreur lors de la création du fichier Excel : {e}")
 
 # Ajouter cette ligne pour que le script soit exécuté avec la fonction main()
 if __name__ == "__main__":
