@@ -16,6 +16,11 @@ PAGES = {
 st.sidebar.title('Navigation')
 selection = st.sidebar.radio("Go to", list(PAGES.keys()))
 
-# Charger la page sélectionnée
+# Charger la page sélectionnée avec une vérification
 page = PAGES[selection]
-page.main()
+
+# Vérification de l'existence de la fonction main()
+if hasattr(page, 'main') and callable(getattr(page, 'main')):
+    page.main()
+else:
+    st.error(f"La page sélectionnée ({selection}) ne contient pas de fonction 'main()'.")
