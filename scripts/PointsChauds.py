@@ -50,10 +50,16 @@ def check_keyword_in_text(text, keyword):
     similarity = similar_phrases(stemmed_text, stemmed_keyword)
     return similarity > 0.8
 
+# Ajout du proxy ici
+proxies = {
+    "http": "http://91.167.180.194:8080",  # Remplacez le port 8080 par le port correct si nécessaire
+    "https": "http://91.167.180.194:8080"
+}
+
 # Fonction pour extraire et vérifier les balises
 def extract_and_check(url):
     try:
-        response = requests.get(url, timeout=5)  # Timeout réduit à 5 secondes
+        response = requests.get(url, timeout=5, proxies=proxies)  # Ajout du proxy dans les requêtes
         
         # Vérifier si la page retourne une erreur 404
         if response.status_code == 404:
