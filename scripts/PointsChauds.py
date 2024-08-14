@@ -3,26 +3,25 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import re
+from nltk.stem import PorterStemmer
 
-# Fonction pour obtenir la racine d'un mot (simple stemming basé sur la fin des mots)
-def simple_stem(word):
-    # Vous pouvez améliorer ce simple stemmer ou utiliser un stemmer comme Snowball
-    suffixes = ('ing', 'ly', 'ed', 'ious', 'ies', 'ive', 'es', 's', 'ment')
-    for suffix in suffixes:
-        if word.endswith(suffix):
-            return word[:-len(suffix)]
-    return word
+# Initialisation du stemmer
+stemmer = PorterStemmer()
+
+# Fonction pour obtenir la racine d'un mot
+def get_stem(word):
+    return stemmer.stem(word)
 
 # Fonction pour vérifier la présence du mot-clé dans une balise spécifique
 def check_keyword_in_text(text, keyword):
     # Tokenisation simple et stemming des mots du mot-clé
-    keyword_parts = [simple_stem(part) for part in keyword.split()]
+    keyword_parts = [get_stem(part) for part in keyword.split()]
     
     # Création du motif de recherche avec tolérance de 0 à 5 caractères entre les mots
     pattern = r'\b' + r'.{0,5}'.join(map(re.escape, keyword_parts)) + r'\b'
     
     # Stemming du texte avant la recherche
-    stemmed_text = " ".join([simple_stem(word) for word in text.split()])
+    stemmed_text = " ".join([get_stem(word) for word in text.split()])
     
     # Recherche du motif dans le texte
     return re.search(pattern, stemmed_text, re.IGNORECASE) is not None
