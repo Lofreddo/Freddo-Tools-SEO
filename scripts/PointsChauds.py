@@ -3,58 +3,28 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import re
-from nltk.tokenize import word_tokenize
-from nltk.stem import PorterStemmer
 
-# Initialisation du stemmer
-stemmer = PorterStemmer()
-
-# Fonction pour obtenir la racine d'un mot
-def get_stem(word):
-    return stemmer.stem(word.lower())
-
-# Fonction pour vérifier la présence du mot-clé dans une balise spécifique
-def check_keyword_in_text(text, keyword):
-    # Tokenisation et stemming des mots du mot-clé
-    keyword_parts = [get_stem(part) for part in word_tokenize(keyword)]
-    
-    # Création du motif de recherche avec tolérance de 0 à 5 caractères entre les mots
-    pattern = r'\b' + r'.{0,5}'.join(map(re.escape, keyword_parts)) + r'\b'
-    
-    # Stemming du texte avant la recherche
-    stemmed_text = " ".join([get_stem(word) for word in word_tokenize(text)])
-    
-    # Recherche du motif dans le texte
-    match = re.search(pattern, stemmed_text, re.IGNORECASE)
-    
-    # Pour débogage, afficher ce qui est comparé
-    st.write(f"Comparing: {keyword} with text: {text} (pattern: {pattern}) -> Match: {bool(match)}")
-    
-    return match is not None
-
-# Fonction pour extraire et vérifier les balises
-def extract_and_check(soup, keyword):
+# Fonction pour extraire les balises et vérifier la présence des mots-clés
+def extract_and_display(soup):
     # Récupérer le contenu de la balise title
     title = soup.title.string if soup.title else ""
-    title_match = check_keyword_in_text(title, keyword)
+    st.write(f"Title: {title}")
 
     # Récupérer le contenu de la balise h1
     h1 = soup.h1.get_text() if soup.h1 else ""
-    h1_match = check_keyword_in_text(h1, keyword)
+    st.write(f"H1: {h1}")
     
     # Récupérer les contenus des balises h2, h3, h4
     hn_texts = []
-    hn_match = False
     for tag in ['h2', 'h3', 'h4']:
         tags = soup.find_all(tag)
         for t in tags:
             hn_texts.append(t.get_text())
-            if check_keyword_in_text(t.get_text(), keyword):
-                hn_match = True
     
     hn_text = " | ".join(hn_texts)  # Pour avoir une structure lisible des Hn
+    st.write(f"Hn: {hn_text}")
     
-    return title, title_match, h1, h1_match, hn_text, hn_match
+    return title, h1, hn_text
 
 # Fonction principale pour l'application Streamlit
 def main():
@@ -75,50 +45,41 @@ def main():
         if st.button("Lancer le crawl"):
             # Initialisation des nouvelles colonnes
             df['Balise Title'] = ''
-            df['Title Match'] = ''
             df['H1'] = ''
-            df['H1 Match'] = ''
             df['Hn Structure'] = ''
-            df['Hn Match'] = ''
 
             for index, row in df.iterrows():
-                keyword = row[keyword_column]
-                url = row[url_column]
+                url = row[url_column].strip()
 
                 try:
-                    # Récupérer la page web
                     st.write(f"Scraping URL: {url}")
+
+                    # Récupérer la page web
                     response = requests.get(url, timeout=10)
                     
                     # Vérifier si la requête est réussie
                     if response.status_code != 200:
                         st.error(f"Erreur pour l'URL {url}: Statut {response.status_code}")
+                        df.at[index, 'Balise Title'] = f"Erreur: {response.status_code}"
+                        df.at[index, 'H1'] = 'Erreur'
+                        df.at[index, 'Hn Structure'] = 'Erreur'
                         continue
-
-                    # Pour débogage : afficher une partie du contenu récupéré
-                    st.write(f"Contenu HTML partiel de {url} :\n{response.text[:500]}")
 
                     soup = BeautifulSoup(response.content, 'html.parser')
 
-                    # Extraire et vérifier les balises
-                    title, title_match, h1, h1_match, hn_text, hn_match = extract_and_check(soup, keyword)
+                    # Extraire et afficher les balises
+                    title, h1, hn_text = extract_and_display(soup)
                     
                     # Ajouter les résultats dans le dataframe
                     df.at[index, 'Balise Title'] = title
-                    df.at[index, 'Title Match'] = "Oui" if title_match else "Non"
                     df.at[index, 'H1'] = h1
-                    df.at[index, 'H1 Match'] = "Oui" if h1_match else "Non"
                     df.at[index, 'Hn Structure'] = hn_text
-                    df.at[index, 'Hn Match'] = "Oui" if hn_match else "Non"
 
                 except requests.exceptions.RequestException as e:
                     st.error(f"Erreur pour l'URL {url}: {e}")
                     df.at[index, 'Balise Title'] = 'Erreur'
-                    df.at[index, 'Title Match'] = 'Erreur'
                     df.at[index, 'H1'] = 'Erreur'
-                    df.at[index, 'H1 Match'] = 'Erreur'
                     df.at[index, 'Hn Structure'] = 'Erreur'
-                    df.at[index, 'Hn Match'] = 'Erreur'
 
             # Affichage du résultat
             st.write("Résultat du crawl :")
