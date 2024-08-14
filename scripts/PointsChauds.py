@@ -86,8 +86,18 @@ def main():
                 url = row[url_column]
 
                 try:
+                    # Récupérer la page web
+                    st.write(f"Scraping URL: {url}")
                     response = requests.get(url, timeout=10)
-                    response.raise_for_status()
+                    
+                    # Vérifier si la requête est réussie
+                    if response.status_code != 200:
+                        st.error(f"Erreur pour l'URL {url}: Statut {response.status_code}")
+                        continue
+
+                    # Pour débogage : afficher une partie du contenu récupéré
+                    st.write(f"Contenu HTML partiel de {url} :\n{response.text[:500]}")
+
                     soup = BeautifulSoup(response.content, 'html.parser')
 
                     # Extraire et vérifier les balises
