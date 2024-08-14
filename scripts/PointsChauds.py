@@ -107,7 +107,7 @@ def process_urls(df, keyword_column, url_column):
     return url_results
 
 def main():
-    st.title("Vérification de mot-clé dans des pages web")
+    st.title("La Pythonerie n'est jamais finie")
 
     uploaded_file = st.file_uploader("Choisissez un fichier Excel", type="xlsx")
 
