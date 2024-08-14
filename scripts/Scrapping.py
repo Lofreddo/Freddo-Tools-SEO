@@ -56,47 +56,51 @@ def create_excel_file(df):
         writer.save()
     return output.getvalue()
 
-st.title("Scraper de contenu HTML")
+def main():
+    st.title("Scraper de contenu HTML")
 
-option = st.selectbox(
-    "Comment souhaitez-vous fournir les URLs ?",
-    ("Zone de texte", "Fichier Excel")
-)
+    option = st.selectbox(
+        "Comment souhaitez-vous fournir les URLs ?",
+        ("Zone de texte", "Fichier Excel")
+    )
 
-urls = []
+    urls = []
 
-if option == "Zone de texte":
-    url_input = st.text_area("Entrez les URLs à scraper (une par ligne)")
-    if url_input:
-        urls = url_input.splitlines()
+    if option == "Zone de texte":
+        url_input = st.text_area("Entrez les URLs à scraper (une par ligne)")
+        if url_input:
+            urls = url_input.splitlines()
 
-elif option == "Fichier Excel":
-    uploaded_file = st.file_uploader("Choisissez un fichier Excel", type=["xlsx", "xls"])
-    if uploaded_file:
-        df = pd.read_excel(uploaded_file)
-        column_name = st.selectbox("Sélectionnez la colonne contenant les URLs", df.columns)
-        urls = df[column_name].dropna().tolist()
+    elif option == "Fichier Excel":
+        uploaded_file = st.file_uploader("Choisissez un fichier Excel", type=["xlsx", "xls"])
+        if uploaded_file:
+            df = pd.read_excel(uploaded_file)
+            column_name = st.selectbox("Sélectionnez la colonne contenant les URLs", df.columns)
+            urls = df[column_name].dropna().tolist()
 
-if st.button("Scraper"):
-    if urls:
-        scraped_data_list = scrape_all_urls(urls)
-        
-        if option == "Fichier Excel":
-            # Ajouter les colonnes au fichier importé
-            df['Structure'] = df[column_name].apply(lambda url: [data['structure'] for data in dict(scraped_data_list).get(url, [])])
-            df['Contenu Scrapé'] = df[column_name].apply(lambda url: "\n".join([data['content'] for data in dict(scraped_data_list).get(url, [])]))
+    if st.button("Scraper"):
+        if urls:
+            scraped_data_list = scrape_all_urls(urls)
+            
+            if option == "Fichier Excel":
+                # Ajouter les colonnes au fichier importé
+                df['Structure'] = df[column_name].apply(lambda url: [data['structure'] for data in dict(scraped_data_list).get(url, [])])
+                df['Contenu Scrapé'] = df[column_name].apply(lambda url: "\n".join([data['content'] for data in dict(scraped_data_list).get(url, [])]))
+            else:
+                # Créer un nouveau dataframe pour les résultats
+                df = create_output_df(urls, scraped_data_list)
+            
+            excel_data = create_excel_file(df)
+            
+            st.success("Scraping terminé avec succès ! Téléchargez le fichier ci-dessous.")
+            st.download_button(
+                label="Télécharger le fichier Excel",
+                data=excel_data,
+                file_name="scraped_data.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
         else:
-            # Créer un nouveau dataframe pour les résultats
-            df = create_output_df(urls, scraped_data_list)
-        
-        excel_data = create_excel_file(df)
-        
-        st.success("Scraping terminé avec succès ! Téléchargez le fichier ci-dessous.")
-        st.download_button(
-            label="Télécharger le fichier Excel",
-            data=excel_data,
-            file_name="scraped_data.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    else:
-        st.error("Aucune URL fournie.")
+            st.error("Aucune URL fournie.")
+
+if __name__ == "__main__":
+    main()
