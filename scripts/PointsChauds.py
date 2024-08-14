@@ -5,8 +5,9 @@ from bs4 import BeautifulSoup
 from io import BytesIO
 from nltk.stem import PorterStemmer
 from difflib import SequenceMatcher
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import time
+from concurrent.futures import ThreadPoolExecutor
+import tracemalloc
+import gc
 import lxml.html
 
 # Initialisation du stemmer
@@ -91,35 +92,18 @@ def extract_and_check(url):
             'Redirection URL': 'Erreur'
         }
 
-def process_urls(df, keyword_column, url_column, progress_bar, time_estimation):
+def process_urls(df, keyword_column, url_column):
     url_results = {}
-    total_urls = len(df)
-    start_time = time.time()
 
-    max_workers = min(20, total_urls // 10 + 1)  # Ajuste dynamiquement le nombre de threads
+    max_workers = min(20, len(df) // 10 + 1)  # Ajuste dynamiquement le nombre de threads
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {}
-        for index, row in df.iterrows():
-            url = row[url_column]
-            if url not in url_results:
-                futures[url] = executor.submit(extract_and_check, url)
+        futures = {row[url_column]: executor.submit(extract_and_check, row[url_column]) for _, row in df.iterrows()}
         
-        completed = 0
-        update_interval = 100
         for url, future in futures.items():
             url_results[url] = future.result()
-            completed += 1
-            
-            if completed % update_interval == 0:
-                progress_bar.progress(completed / total_urls)
-                
-                elapsed_time = time.time() - start_time
-                time_per_url = elapsed_time / completed
-                estimated_total_time = time_per_url * total_urls
-                time_left = estimated_total_time - elapsed_time
-                time_estimation.text(f"Temps estimé restant : {int(time_left // 60)} min {int(time_left % 60)} sec")
-    
+            gc.collect()  # Collecte des ordures pour libérer de la mémoire
+
     return url_results
 
 def main():
@@ -140,11 +124,8 @@ def main():
         url_column = st.selectbox("Sélectionnez la colonne contenant les URLs", df.columns)
 
         if st.button("Lancer le crawl"):
-            progress_bar = st.progress(0)
-            time_estimation = st.empty()
-
             st.write("Initialisation des colonnes et démarrage du scraping en parallèle...")
-            url_results = process_urls(df, keyword_column, url_column, progress_bar, time_estimation)
+            url_results = process_urls(df, keyword_column, url_column)
             
             for index, row in df.iterrows():
                 keyword = row[keyword_column]
