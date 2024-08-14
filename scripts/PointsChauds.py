@@ -124,7 +124,7 @@ def main():
         url_column = st.selectbox("Sélectionnez la colonne contenant les URLs", df.columns)
 
         if st.button("Lancer le crawl"):
-            st.write("Initialisation des colonnes et démarrage du scraping en parallèle...")
+            st.write(""Si tu sais pas qui je suis Google moi Encul*" Le Duc du 100 - 8 Zoo")
             url_results = process_urls(df, keyword_column, url_column)
             
             for index, row in df.iterrows():
