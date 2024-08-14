@@ -7,6 +7,7 @@ from io import BytesIO
 from nltk.stem import PorterStemmer
 from difflib import SequenceMatcher
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 
 # Initialisation du stemmer
 stemmer = PorterStemmer()
@@ -96,10 +97,11 @@ def extract_and_check(url):
             'Redirection URL': 'Erreur'
         }
 
-# Fonction pour traiter les URLs en parallèle
-def process_urls(df, keyword_column, url_column, progress_bar):
+# Fonction pour traiter les URLs en parallèle avec estimation du temps restant
+def process_urls(df, keyword_column, url_column, progress_bar, time_estimation):
     url_results = {}
     total_urls = len(df)
+    start_time = time.time()
 
     with ThreadPoolExecutor(max_workers=20) as executor:  # Augmentez max_workers selon vos capacités matérielles
         futures = {}
@@ -113,6 +115,15 @@ def process_urls(df, keyword_column, url_column, progress_bar):
             url_results[url] = future.result()
             completed += 1
             progress_bar.progress(completed / total_urls)
+            
+            # Calculer le temps écoulé et estimer le temps restant
+            elapsed_time = time.time() - start_time
+            time_per_url = elapsed_time / completed
+            estimated_total_time = time_per_url * total_urls
+            time_left = estimated_total_time - elapsed_time
+            
+            # Afficher le temps estimé restant
+            time_estimation.text(f"Temps estimé restant : {int(time_left // 60)} min {int(time_left % 60)} sec")
     
     return url_results
 
@@ -137,11 +148,12 @@ def main():
         url_column = st.selectbox("Sélectionnez la colonne contenant les URLs", df.columns)
 
         if st.button("Lancer le crawl"):
-            # Initialisation de la barre de progression
+            # Initialisation de la barre de progression et de l'estimation du temps
             progress_bar = st.progress(0)
+            time_estimation = st.empty()
 
             st.write("Initialisation des colonnes et démarrage du scraping en parallèle...")
-            url_results = process_urls(df, keyword_column, url_column, progress_bar)
+            url_results = process_urls(df, keyword_column, url_column, progress_bar, time_estimation)
             
             # Ajouter les résultats dans le dataframe
             for index, row in df.iterrows():
