@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 import re
 from io import BytesIO
 from nltk.stem import PorterStemmer
+from difflib import SequenceMatcher
 
 # Initialisation du stemmer
 stemmer = PorterStemmer()
@@ -25,6 +26,10 @@ def remove_exclusions(text):
 def get_stem(word):
     return stemmer.stem(word.lower())
 
+# Fonction pour calculer la similarité entre deux mots
+def similar(a, b):
+    return SequenceMatcher(None, a, b).ratio()
+
 # Fonction pour vérifier la présence du mot-clé dans une balise spécifique avec des règles avancées
 def check_keyword_in_text(text, keyword):
     # Supprimer les articles et pronoms exclus
@@ -44,7 +49,16 @@ def check_keyword_in_text(text, keyword):
     # Recherche des motifs dans le texte
     match_1 = re.search(pattern_1, stemmed_text, re.IGNORECASE)
     
-    return match_1 is not None
+    if match_1:
+        return True
+    
+    # Vérification de la similarité entre les mots du texte et du mot-clé
+    for word in text_words:
+        for keyword_part in keyword_parts:
+            if similar(word, keyword_part) > 0.8:  # Seuil de similarité de 80%
+                return True
+    
+    return False
 
 # Fonction pour extraire et vérifier les balises
 def extract_and_check(soup, keyword):
