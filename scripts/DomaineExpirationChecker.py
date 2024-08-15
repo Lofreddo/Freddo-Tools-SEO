@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import pythonwhois
+import python-whois
 import time
 from datetime import datetime, timedelta
 from tldextract import extract
