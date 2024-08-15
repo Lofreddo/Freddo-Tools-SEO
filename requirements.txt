@@ -10,5 +10,5 @@ lxml
 aiohttp
 pyarrow
 playwright
-python-whois==0.7.3
+pythonwhois
 tldextract
