@@ -1,9 +1,9 @@
+import requests
+import json
+import datetime
 import streamlit as st
 import pandas as pd
-import whois
-import time
 import concurrent.futures
-from datetime import datetime, timedelta
 from tldextract import extract
 
 def check_domain_expiration():
@@ -39,7 +39,7 @@ def check_domain_expiration():
             # Supprimer les doublons après tout le traitement
             unique_domains = list(set(clean_domains))
 
-            # Utilisation d'un ThreadPoolExecutor pour paralléliser les requêtes WHOIS
+            # Utilisation d'un ThreadPoolExecutor pour paralléliser les requêtes RDAP
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 results = list(executor.map(perform_single_domain_check, unique_domains))
 
@@ -50,33 +50,38 @@ def check_domain_expiration():
             # Télécharger les résultats
             towrite = pd.ExcelWriter("domain_expiration_results.xlsx", engine='xlsxwriter')
             results_df.to_excel(towrite, index=False)
-            towrite.close()
+            towrite.save()
             st.download_button(label="Download Results",
-                               data=towrite.path,
+                               data=towrite.book.filename,
                                file_name="domain_expiration_results.xlsx")
 
 def perform_single_domain_check(domain):
-    soon_expire_threshold = timedelta(days=30)  # Notifier si le domaine expire dans moins de 30 jours
     try:
-        details = whois.whois(domain)
-        expiration_date = details.expiration_date
+        server = "https://rdap.org"  # Utilisez un serveur RDAP générique ou spécifique comme rdap.nic.fr
+        response = requests.get(f"{server}/domain/{domain}")
+        rdap = json.loads(response.content)
+
+        expiration_date = None
+        for event in rdap.get("events", []):
+            if event["eventAction"] == "expiration":
+                expiration_date = datetime.datetime.strptime(event["eventDate"], "%Y-%m-%dT%H:%M:%SZ")
+                break
 
         if expiration_date:
-            expiration_date = expiration_date[0] if isinstance(expiration_date, list) else expiration_date
-            status = expiration_date.strftime('%Y-%m-%d')
-            if expiration_date < datetime.now():
+            now = datetime.datetime.now()
+            days_left = (expiration_date - now).days
+            status = f"Expires in {days_left} days ({expiration_date.strftime('%Y-%m-%d')})"
+            if days_left < 0:
                 status += " (Expired)"
-            elif expiration_date < datetime.now() + soon_expire_threshold:
+            elif days_left <= 30:
                 status += " (Expiring Soon)"
         else:
             status = "Unknown Expiration Date"
 
         return (domain, status)
 
-    except whois.parser.PywhoisError as e:
-        return (domain, f"WHOIS Error: {e}")
     except Exception as e:
-        return (domain, f"General Error: {e}")
+        return (domain, f"Error: {e}")
 
 def main():
     check_domain_expiration()
