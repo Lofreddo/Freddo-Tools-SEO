@@ -1,5 +1,5 @@
 import streamlit as st
-from scripts import MyTextGuru, MyTextGuruBulk, ExtractSerps, MasterSpinGenerator, Scrapping, ExtractSerpsV2, PointsChauds, DomaineExpirationChecker
+from scripts import MyTextGuru, MyTextGuruBulk, ExtractSerps, MasterSpinGenerator, Scrapping, ExtractSerpsV2, PointsChauds, DomainExpirationChecker
 
 # Configuration des pages
 PAGES = {
@@ -10,7 +10,7 @@ PAGES = {
     "MasterSpinGenerator": MasterSpinGenerator,
     "Scrapping": Scrapping,
     "PointsChauds": PointsChauds,
-    "Domain Expiration Checker": DomaineExpirationChecker  # Ajout du nouveau script ici
+    "Domain Expiration Checker": DomainExpirationChecker
 }
 
 # Créer une sidebar pour la navigation
