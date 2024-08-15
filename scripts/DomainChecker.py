@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import pythonwhois
+import whois  # Nouvelle bibliothèque
 import time
 from datetime import datetime, timedelta
 from tldextract import extract
@@ -52,8 +52,8 @@ def perform_domain_expiration_check(domains):
 
     for domain in domains:
         try:
-            details = pythonwhois.get_whois(domain)
-            expiration_date = details.get('expiration_date')
+            details = whois.whois(domain)  # Utilisation de la nouvelle bibliothèque
+            expiration_date = details.expiration_date
 
             if expiration_date:
                 expiration_date = expiration_date[0] if isinstance(expiration_date, list) else expiration_date
