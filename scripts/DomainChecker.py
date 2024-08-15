@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import pythonwhois
+import whois
 import time
 import concurrent.futures
 from datetime import datetime, timedelta
@@ -58,8 +58,8 @@ def check_domain_expiration():
 def perform_single_domain_check(domain):
     soon_expire_threshold = timedelta(days=30)  # Notifier si le domaine expire dans moins de 30 jours
     try:
-        details = pythonwhois.get_whois(domain)
-        expiration_date = details.get('expiration_date')
+        details = whois.whois(domain)
+        expiration_date = details.expiration_date
 
         if expiration_date:
             expiration_date = expiration_date[0] if isinstance(expiration_date, list) else expiration_date
@@ -73,8 +73,10 @@ def perform_single_domain_check(domain):
 
         return (domain, status)
 
+    except whois.parser.PywhoisError as e:
+        return (domain, f"WHOIS Error: {e}")
     except Exception as e:
-        return (domain, f"Error: {e}")
+        return (domain, f"General Error: {e}")
 
 def main():
     check_domain_expiration()
