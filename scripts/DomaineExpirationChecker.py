@@ -1,10 +1,9 @@
-# DomainExpirationChecker.py
-
 import streamlit as st
 import pandas as pd
 import pythonwhois
 import time
 from datetime import datetime, timedelta
+from tldextract import extract
 
 def check_domain_expiration():
     st.title('Domain Expiration Checker')
@@ -20,9 +19,20 @@ def check_domain_expiration():
         if st.button('Check Expiration'):
             with st.spinner('Checking domain expiration...'):
                 domains = df[column_name].dropna().tolist()
-                
-                # Supprimer les doublons dans la liste des domaines
-                unique_domains = list(set(domains))
+
+                # Retirer le préfixe "www." des domaines et traiter les sous-domaines
+                clean_domains = []
+                for domain in domains:
+                    domain = domain.lstrip('www.')
+                    
+                    # Extraire le domaine principal (enlever le sous-domaine)
+                    extracted_domain = extract(domain)
+                    domain = f"{extracted_domain.domain}.{extracted_domain.suffix}"
+                    
+                    clean_domains.append(domain)
+
+                # Supprimer les doublons après tout le traitement
+                unique_domains = list(set(clean_domains))
 
                 results = perform_domain_expiration_check(unique_domains)
 
