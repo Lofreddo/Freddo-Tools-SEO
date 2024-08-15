@@ -4,10 +4,15 @@ import requests
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
+import gc
+
+# Initialisation d'une session pour réutiliser les connexions
+session = requests.Session()
 
 def scrape_text_from_url(url):
     try:
-        response = requests.get(url, timeout=10)
+        response = session.get(url, timeout=5)
+        response.raise_for_status()
         soup = BeautifulSoup(response.text, 'lxml')
         
         # Remove unwanted sections
@@ -25,17 +30,27 @@ def scrape_text_from_url(url):
                     'content': element.get_text(strip=True)
                 })
         
+        gc.collect()  # Libération de la mémoire
         return url, scraped_data
-    except Exception as e:
-        return url, [{"structure": "Error", "content": str(e)}]
+    except requests.exceptions.RequestException as e:
+        return url, [{"structure": "Error", "content": f"Request failed: {str(e)}"}]
 
 def scrape_all_urls(urls):
     scraped_results = []
-    with ThreadPoolExecutor(max_workers=20) as executor:
+    max_workers = min(100, len(urls) // 100 + 1)  # Ajuste dynamiquement le nombre de threads
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_url = {executor.submit(scrape_text_from_url, url): url for url in urls}
         for future in as_completed(future_to_url):
-            url, data = future.result()
-            scraped_results.append((url, data))
+            try:
+                url, data = future.result()
+                scraped_results.append((url, data))
+            except Exception as e:
+                scraped_results.append((future_to_url[future], [{"structure": "Error", "content": str(e)}]))
+
+            if len(scraped_results) % 1000 == 0:  # Collecte de la mémoire périodiquement
+                gc.collect()
+
     return scraped_results
 
 def create_output_df(urls, scraped_data_list):
@@ -69,7 +84,7 @@ def main():
     if option == "Zone de texte":
         url_input = st.text_area("Entrez les URLs à scraper (une par ligne)")
         if url_input:
-            urls = url_input.splitlines()
+            urls = list(filter(None, url_input.splitlines()))  # Supprime les lignes vides
 
     elif option == "Fichier Excel":
         uploaded_file = st.file_uploader("Choisissez un fichier Excel", type=["xlsx", "xls"])
@@ -80,15 +95,24 @@ def main():
 
     if st.button("Scraper"):
         if urls:
-            scraped_data_list = scrape_all_urls(urls)
-            
+            # Traiter les URLs par lots pour éviter les dépassements de mémoire
+            batch_size = 10000  # Taille du lot pour traiter par parties
+            total_batches = len(urls) // batch_size + 1
+            all_scraped_data = []
+
+            for batch_num in range(total_batches):
+                batch_urls = urls[batch_num * batch_size: (batch_num + 1) * batch_size]
+                scraped_data_list = scrape_all_urls(batch_urls)
+                all_scraped_data.extend(scraped_data_list)
+
+                # Libérer la mémoire entre les lots
+                gc.collect()
+
             if option == "Fichier Excel":
-                # Ajouter les colonnes au fichier importé
-                df['Structure'] = df[column_name].apply(lambda url: [data['structure'] for data in dict(scraped_data_list).get(url, [])])
-                df['Contenu Scrapé'] = df[column_name].apply(lambda url: "\n".join([data['content'] for data in dict(scraped_data_list).get(url, [])]))
+                df['Structure'] = df[column_name].apply(lambda url: [data['structure'] for data in dict(all_scraped_data).get(url, [])])
+                df['Contenu Scrapé'] = df[column_name].apply(lambda url: "\n".join([data['content'] for data in dict(all_scraped_data).get(url, [])]))
             else:
-                # Créer un nouveau dataframe pour les résultats
-                df = create_output_df(urls, scraped_data_list)
+                df = create_output_df(urls, all_scraped_data)
             
             excel_data = create_excel_file(df)
             
