@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import whois
+import whois  # Assurez-vous que c'est bien "whois" et non "python-whois"
 import time
 import concurrent.futures
 from datetime import datetime, timedelta
@@ -48,9 +48,11 @@ def check_domain_expiration():
             st.dataframe(results_df)  # Affichage propre des résultats
 
             # Télécharger les résultats
-            result_file = results_df.to_excel(index=False, engine='xlsxwriter')
+            towrite = pd.ExcelWriter("domain_expiration_results.xlsx", engine='xlsxwriter')
+            results_df.to_excel(towrite, index=False)
+            towrite.save()
             st.download_button(label="Download Results",
-                               data=result_file,
+                               data=towrite.book.filename,
                                file_name="domain_expiration_results.xlsx")
 
 def perform_single_domain_check(domain):
