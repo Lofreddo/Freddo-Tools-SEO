@@ -10,3 +10,4 @@ lxml
 aiohttp
 pyarrow
 playwright
+python-whois
