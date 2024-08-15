@@ -10,5 +10,4 @@ lxml
 aiohttp
 pyarrow
 playwright
-whois
 tldextract
