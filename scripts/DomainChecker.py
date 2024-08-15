@@ -52,12 +52,11 @@ def check_domain_expiration():
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
                 results_df.to_excel(writer, index=False)
-                writer.save()
 
             # Télécharger le fichier Excel
             st.download_button(
                 label="Download Results",
-                data=buffer,
+                data=buffer.getvalue(),
                 file_name="domain_expiration_results.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
