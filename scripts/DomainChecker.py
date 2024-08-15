@@ -12,6 +12,8 @@ def check_domain_expiration():
     # Option pour choisir entre fichier d'import et champ de texte libre
     input_option = st.radio("Choose input method:", ("Upload an Excel file", "Enter domains manually"))
 
+    domains = []
+
     if input_option == "Upload an Excel file":
         uploaded_file = st.file_uploader("Upload your Excel file with domains", type=["xlsx"])
         if uploaded_file:
@@ -21,7 +23,8 @@ def check_domain_expiration():
             domains = df[column_name].dropna().tolist()
     else:
         text_input = st.text_area("Enter domains (one per line):")
-        domains = text_input.splitlines()
+        if text_input:
+            domains = text_input.splitlines()
 
     if domains and st.button('Check Expiration'):
         with st.spinner('Checking domain expiration...'):
