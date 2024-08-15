@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import whois  # Assurez-vous que c'est bien "whois" et non "python-whois"
+import pythonwhois
 import time
 import concurrent.futures
 from datetime import datetime, timedelta
@@ -50,16 +50,16 @@ def check_domain_expiration():
             # Télécharger les résultats
             towrite = pd.ExcelWriter("domain_expiration_results.xlsx", engine='xlsxwriter')
             results_df.to_excel(towrite, index=False)
-            towrite.save()
+            towrite.close()
             st.download_button(label="Download Results",
-                               data=towrite.book.filename,
+                               data=towrite.path,
                                file_name="domain_expiration_results.xlsx")
 
 def perform_single_domain_check(domain):
     soon_expire_threshold = timedelta(days=30)  # Notifier si le domaine expire dans moins de 30 jours
     try:
-        details = whois.whois(domain)
-        expiration_date = details.expiration_date
+        details = pythonwhois.get_whois(domain)
+        expiration_date = details.get('expiration_date')
 
         if expiration_date:
             expiration_date = expiration_date[0] if isinstance(expiration_date, list) else expiration_date
