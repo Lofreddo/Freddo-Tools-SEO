@@ -1,10 +1,11 @@
+import streamlit as st
+import pandas as pd
 import requests
 import json
 import datetime
-import streamlit as st
-import pandas as pd
-import concurrent.futures
+import io
 from tldextract import extract
+import concurrent.futures
 
 def check_domain_expiration():
     st.title('Domain Expiration Checker')
@@ -47,13 +48,19 @@ def check_domain_expiration():
             results_df = pd.DataFrame(results, columns=['Domain', 'Status'])
             st.dataframe(results_df)  # Affichage propre des résultats
 
-            # Télécharger les résultats
-            towrite = pd.ExcelWriter("domain_expiration_results.xlsx", engine='xlsxwriter')
-            results_df.to_excel(towrite, index=False)
-            towrite.save()
-            st.download_button(label="Download Results",
-                               data=towrite.book.filename,
-                               file_name="domain_expiration_results.xlsx")
+            # Création du fichier Excel dans un buffer en mémoire
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                results_df.to_excel(writer, index=False)
+                writer.save()
+
+            # Télécharger le fichier Excel
+            st.download_button(
+                label="Download Results",
+                data=buffer,
+                file_name="domain_expiration_results.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
 def perform_single_domain_check(domain):
     try:
