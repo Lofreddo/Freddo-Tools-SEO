@@ -1,5 +1,5 @@
 import streamlit as st
-from scripts import MyTextGuru, MyTextGuruBulk, ExtractSerps, MadterSpinGenerator, Scrapping, ExtractSerpsV2, PointsChauds, DomainChecker
+from scripts import MyTextGuru, MyTextGuruBulk, ExtractSerps, MasterSpinGenerator, Scrapping, ExtractSerpsV2, PointsChauds, DomainChecker
 
 # Configuration des pages
 PAGES = {
@@ -7,7 +7,7 @@ PAGES = {
     "MyTextGuruBulk": MyTextGuruBulk,
     "ExtractSerps": ExtractSerps,
     "ExtractSerpsV2": ExtractSerpsV2,
-    "MasterSpinGenerator": MasterSpinGenerator,
+    "MasterSpinGenerator": MasterSpinGenerator,  # Correction ici
     "Scrapping": Scrapping,
     "PointsChauds": PointsChauds,
     "DomainChecker": DomainChecker
