@@ -33,7 +33,7 @@ def main():
 
     gl = st.selectbox(
         "Sélectionnez le pays:",
-        ["fr", "es", "de", "en"]
+        ["fr", "es", "de", "uk", "us"]
     )
 
     hl = st.selectbox(
