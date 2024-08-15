@@ -18,7 +18,6 @@ def check_domain_expiration():
         uploaded_file = st.file_uploader("Upload your Excel file with domains", type=["xlsx"])
         if uploaded_file:
             df = pd.read_excel(uploaded_file)
-            st.write("Columns found in your file:", df.columns.tolist())
             column_name = st.selectbox("Select the column with domains", df.columns.tolist())
             domains = df[column_name].dropna().tolist()
     else:
@@ -46,7 +45,7 @@ def check_domain_expiration():
 
             # Convertir les résultats en DataFrame pour exportation
             results_df = pd.DataFrame(results, columns=['Domain', 'Status'])
-            st.write(results_df)
+            st.dataframe(results_df)  # Affichage propre des résultats
 
             # Télécharger les résultats
             result_file = results_df.to_excel(index=False, engine='xlsxwriter')
