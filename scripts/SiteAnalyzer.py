@@ -2,6 +2,74 @@ import requests
 from bs4 import BeautifulSoup
 import streamlit as st
 import pandas as pd
+from urllib.parse import urljoin, urlparse
+import openpyxl
+
+def get_all_urls_from_sitemap(domain):
+    sitemaps = [f"{domain}/sitemap.xml", f"{domain}/sitemap_index.xml", f"{domain}/index_sitemap.xml"]
+    all_urls = set()
+    
+    for sitemap_url in sitemaps:
+        try:
+            response = requests.get(sitemap_url)
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.content, "xml")
+                urls = soup.find_all("loc")
+                for url in urls:
+                    all_urls.add(url.text.strip())
+        except requests.exceptions.RequestException:
+            continue
+    
+    return all_urls
+
+def get_all_urls(domain):
+    sitemap_urls = get_all_urls_from_sitemap(domain)
+    if sitemap_urls:
+        return sitemap_urls
+    
+    # Fallback: Crawl from homepage if no sitemap is found
+    crawled_urls = set()
+    to_crawl = {domain}
+    
+    while to_crawl:
+        url = to_crawl.pop()
+        try:
+            response = requests.get(url)
+            soup = BeautifulSoup(response.text, 'html.parser')
+            crawled_urls.add(url)
+            for link in soup.find_all('a', href=True):
+                full_url = urljoin(domain, link['href'])
+                if urlparse(full_url).netloc == urlparse(domain).netloc and full_url not in crawled_urls:
+                    to_crawl.add(full_url)
+        except requests.exceptions.RequestException:
+            continue
+            
+    return crawled_urls
+
+def check_canonical_for_all_urls(urls):
+    results = []
+    
+    for url in urls:
+        try:
+            response = requests.get(url)
+            soup = BeautifulSoup(response.text, 'html.parser')
+            canonical_tag = soup.find('link', rel='canonical')
+            
+            if canonical_tag:
+                canonical_url = canonical_tag['href']
+                if canonical_url == url:
+                    status = "Correcte"
+                else:
+                    status = f"Différente (Canonical vers: {canonical_url})"
+            else:
+                status = "Absente"
+            
+            results.append({"URL": url, "Canonical": canonical_url if canonical_tag else "N/A", "Statut": status})
+        
+        except requests.exceptions.RequestException:
+            results.append({"URL": url, "Canonical": "Erreur d'accès", "Statut": "Non vérifiable"})
+    
+    return results
 
 def check_robots_txt(domain):
     url = f"{domain}/robots.txt"
@@ -40,54 +108,48 @@ def check_links(domain):
             
     return broken_links, redirects
 
-def check_canonical(domain):
-    response = requests.get(domain)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    canonical = soup.find('link', rel='canonical')
-    if canonical:
-        canonical_url = canonical['href']
-        if canonical_url == domain:
-            return "Oui"
-        else:
-            return f"Non, Canonical vers: {canonical_url}"
-    return "Non"
-
 def main():
-    st.title("Site Analyzer")
+    st.title("Site Analyzer - Vérification des balises Canonical")
 
     domain = st.text_input("Entrez l'URL du domaine (incluez http:// ou https://)")
 
     if st.button("Analyser"):
         if domain:
-            results = {"Critère": [], "Présence": []}
+            st.write("Crawling des URLs, cela peut prendre quelques minutes...")
+            urls = get_all_urls(domain)
+            st.write(f"Nombre d'URLs trouvées : {len(urls)}")
 
-            # Vérifier robots.txt
+            st.write("Vérification des balises canonical...")
+            canonical_results = check_canonical_for_all_urls(urls)
+
+            # Résumé général pour la première feuille
+            results_summary = {"Critère": [], "Présence": []}
             robots_exists = check_robots_txt(domain)
-            results["Critère"].append("Robots.txt")
-            results["Présence"].append("Oui" if robots_exists else "Non")
+            results_summary["Critère"].append("Robots.txt")
+            results_summary["Présence"].append("Oui" if robots_exists else "Non")
 
-            # Vérifier sitemap
             sitemap_exists = check_sitemap(domain)
-            results["Critère"].append("Sitemap")
-            results["Présence"].append("Oui" if sitemap_exists else "Non")
+            results_summary["Critère"].append("Sitemap")
+            results_summary["Présence"].append("Oui" if sitemap_exists else "Non")
             
-            # Vérifier les liens (404 et 301)
             broken_links, redirects = check_links(domain)
-            results["Critère"].append("Liens 404")
-            results["Présence"].append(str(broken_links) if broken_links > 0 else "Non")
-            results["Critère"].append("Redirections 301")
-            results["Présence"].append(str(redirects) if redirects > 0 else "Non")
-            
-            # Vérifier canonical
-            canonical_check = check_canonical(domain)
-            results["Critère"].append("Balise Canonical")
-            results["Présence"].append(canonical_check)
+            results_summary["Critère"].append("Liens 404")
+            results_summary["Présence"].append(str(broken_links) if broken_links > 0 else "Non")
+            results_summary["Critère"].append("Redirections 301")
+            results_summary["Présence"].append(str(redirects) if redirects > 0 else "Non")
 
-            df = pd.DataFrame(results)
-            st.dataframe(df)
+            canonical_check = check_canonical_for_all_urls([domain])
+            results_summary["Critère"].append("Balise Canonical (page d'accueil)")
+            results_summary["Présence"].append(canonical_check[0]["Statut"])
+
+            df_summary = pd.DataFrame(results_summary)
+            df_canonical = pd.DataFrame(canonical_results)
 
             if st.button("Exporter en Excel"):
-                df.to_excel("site_analysis_results.xlsx", index=False)
+                with pd.ExcelWriter("site_analysis_results.xlsx") as writer:
+                    df_summary.to_excel(writer, sheet_name="Résumé", index=False)
+                    df_canonical.to_excel(writer, sheet_name="Canonical", index=False)
+                
                 st.write("Fichier exporté avec succès.")
         else:
             st.error("Veuillez entrer une URL valide.")
