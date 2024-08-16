@@ -3,6 +3,20 @@ from bs4 import BeautifulSoup
 import streamlit as st
 import pandas as pd
 
+def check_robots_txt(domain):
+    url = f"{domain}/robots.txt"
+    response = requests.get(url)
+    return response.status_code == 200
+
+def check_sitemap(domain):
+    sitemaps = ["sitemap.xml", "sitemap_index.xml", "index_sitemap.xml"]
+    for sitemap in sitemaps:
+        url = f"{domain}/{sitemap}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            return True
+    return False
+
 def check_links(domain):
     response = requests.get(domain)
     soup = BeautifulSoup(response.text, 'html.parser')
