@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import streamlit as st
 import pandas as pd
 from urllib.parse import urljoin, urlparse
-import openpyxl
+import io
 
 def get_all_urls_from_sitemap(domain):
     sitemaps = [f"{domain}/sitemap.xml", f"{domain}/sitemap_index.xml", f"{domain}/index_sitemap.xml"]
@@ -23,11 +23,14 @@ def get_all_urls_from_sitemap(domain):
     return all_urls
 
 def get_all_urls(domain):
+    st.write("Tentative de récupération des URLs à partir du sitemap...")
     sitemap_urls = get_all_urls_from_sitemap(domain)
+    
     if sitemap_urls:
+        st.write(f"{len(sitemap_urls)} URLs trouvées dans le sitemap.")
         return sitemap_urls
     
-    # Fallback: Crawl from homepage if no sitemap is found
+    st.write("Aucun sitemap trouvé. Démarrage du crawling à partir de la page d'accueil...")
     crawled_urls = set()
     to_crawl = {domain}
     
@@ -41,9 +44,11 @@ def get_all_urls(domain):
                 full_url = urljoin(domain, link['href'])
                 if urlparse(full_url).netloc == urlparse(domain).netloc and full_url not in crawled_urls:
                     to_crawl.add(full_url)
+            st.write(f"{len(crawled_urls)} URLs crawled jusqu'à présent...")
         except requests.exceptions.RequestException:
             continue
             
+    st.write(f"Crawling terminé. {len(crawled_urls)} URLs trouvées.")
     return crawled_urls
 
 def check_canonical_for_all_urls(urls):
@@ -109,16 +114,18 @@ def check_links(domain):
     return broken_links, redirects
 
 def main():
-    st.title("Site Analyzer - Vérification des balises Canonical")
+    st.title("Site Analyzer - Vérification des balises Canonical et SEO")
 
     domain = st.text_input("Entrez l'URL du domaine (incluez http:// ou https://)")
 
     if st.button("Analyser"):
         if domain:
-            st.write("Crawling des URLs, cela peut prendre quelques minutes...")
-            urls = get_all_urls(domain)
-            st.write(f"Nombre d'URLs trouvées : {len(urls)}")
+            st.write("Démarrage de l'analyse...")
 
+            # Crawler toutes les URLs du site
+            urls = get_all_urls(domain)
+
+            # Vérification des balises canonical pour chaque URL
             st.write("Vérification des balises canonical...")
             canonical_results = check_canonical_for_all_urls(urls)
 
@@ -138,18 +145,22 @@ def main():
             results_summary["Critère"].append("Redirections 301")
             results_summary["Présence"].append(str(redirects) if redirects > 0 else "Non")
 
-            canonical_check = check_canonical_for_all_urls([domain])
-            results_summary["Critère"].append("Balise Canonical (page d'accueil)")
-            results_summary["Présence"].append(canonical_check[0]["Statut"])
-
             df_summary = pd.DataFrame(results_summary)
             df_canonical = pd.DataFrame(canonical_results)
 
-            if st.button("Exporter en Excel"):
-                with pd.ExcelWriter("site_analysis_results.xlsx") as writer:
-                    df_summary.to_excel(writer, sheet_name="Résumé", index=False)
-                    df_canonical.to_excel(writer, sheet_name="Canonical", index=False)
-                
-                st.write("Fichier exporté avec succès.")
+            # Création du fichier Excel
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df_summary.to_excel(writer, sheet_name="Résumé", index=False)
+                df_canonical.to_excel(writer, sheet_name="Canonical", index=False)
+                writer.save()
+
+            st.write("Analyse terminée.")
+
+            # Téléchargement du fichier Excel
+            st.download_button(label="Télécharger le fichier Excel",
+                               data=output.getvalue(),
+                               file_name="site_analysis_results.xlsx",
+                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         else:
             st.error("Veuillez entrer une URL valide.")
