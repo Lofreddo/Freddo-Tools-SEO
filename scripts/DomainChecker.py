@@ -1,9 +1,10 @@
+import streamlit as st
+import pandas as pd
 import requests
 import json
 import datetime
 import time
 import logging
-import streamlit as st
 
 # Configuration du logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -59,6 +60,8 @@ def check_domain_expiration():
 
     input_option = st.radio("Choose input method:", ("Upload an Excel file", "Enter domains manually"))
 
+    domains = []  # Initialisation de la variable domains pour éviter l'UnboundLocalError
+
     if input_option == "Upload an Excel file":
         uploaded_file = st.file_uploader("Upload your Excel file with domains", type=["xlsx"])
         if uploaded_file:
@@ -67,7 +70,8 @@ def check_domain_expiration():
             domains = df[column_name].dropna().tolist()
     else:
         domains_input = st.text_area("Enter domains, one per line")
-        domains = domains_input.strip().splitlines()
+        if domains_input.strip():  # Assurer que l'entrée n'est pas vide
+            domains = domains_input.strip().splitlines()
 
     if domains and st.button('Check Expiration'):
         with st.spinner('Checking domain expiration...'):
