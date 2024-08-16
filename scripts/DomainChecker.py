@@ -5,22 +5,23 @@ import json
 import datetime
 import io
 from tldextract import extract
-import concurrent.futures
 
 def check_domain_expiration():
     st.title('Domain Expiration Checker')
 
-    # Option pour choisir entre fichier d'import et champ de texte libre
     input_option = st.radio("Choose input method:", ("Upload an Excel file", "Enter domains manually"))
-
     domains = []
 
     if input_option == "Upload an Excel file":
         uploaded_file = st.file_uploader("Upload your Excel file with domains", type=["xlsx"])
         if uploaded_file:
-            df = pd.read_excel(uploaded_file)
-            column_name = st.selectbox("Select the column with domains", df.columns.tolist())
-            domains = df[column_name].dropna().tolist()
+            try:
+                df = pd.read_excel(uploaded_file)
+                column_name = st.selectbox("Select the column with domains", df.columns.tolist())
+                domains = df[column_name].dropna().tolist()
+            except Exception as e:
+                st.error(f"Error reading the Excel file: {e}")
+                return
     else:
         text_input = st.text_area("Enter domains (one per line):")
         if text_input:
@@ -30,30 +31,23 @@ def check_domain_expiration():
         with st.spinner('Checking domain expiration...'):
             clean_domains = []
 
-            # Retirer le préfixe "www." des domaines et traiter les sous-domaines
             for domain in domains:
                 domain = domain.lstrip('www.')
                 extracted_domain = extract(domain)
                 domain = f"{extracted_domain.domain}.{extracted_domain.suffix}"
                 clean_domains.append(domain)
 
-            # Supprimer les doublons après tout le traitement
             unique_domains = list(set(clean_domains))
 
-            # Utilisation d'un ThreadPoolExecutor pour paralléliser les requêtes RDAP
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                results = list(executor.map(perform_single_domain_check, unique_domains))
+            results = process_in_batches(unique_domains, batch_size=100)
 
-            # Convertir les résultats en DataFrame pour exportation
             results_df = pd.DataFrame(results, columns=['Domain', 'Status'])
-            st.dataframe(results_df)  # Affichage propre des résultats
+            st.dataframe(results_df)
 
-            # Création du fichier Excel dans un buffer en mémoire
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
                 results_df.to_excel(writer, index=False)
 
-            # Télécharger le fichier Excel
             st.download_button(
                 label="Download Results",
                 data=buffer.getvalue(),
@@ -61,11 +55,20 @@ def check_domain_expiration():
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
+def process_in_batches(domains, batch_size=100):
+    results = []
+    for i in range(0, len(domains), batch_size):
+        batch = domains[i:i + batch_size]
+        batch_results = [perform_single_domain_check(domain) for domain in batch]
+        results.extend(batch_results)
+    return results
+
 def perform_single_domain_check(domain):
     try:
-        server = "https://rdap.org"  # Utilisez un serveur RDAP générique ou spécifique comme rdap.nic.fr
-        response = requests.get(f"{server}/domain/{domain}")
-        rdap = json.loads(response.content)
+        server = "https://rdap.org"
+        response = requests.get(f"{server}/domain/{domain}", timeout=10)
+        response.raise_for_status()
+        rdap = response.json()
 
         expiration_date = None
         for event in rdap.get("events", []):
@@ -86,6 +89,8 @@ def perform_single_domain_check(domain):
 
         return (domain, status)
 
+    except requests.exceptions.RequestException as e:
+        return (domain, f"Error: {e}")
     except Exception as e:
         return (domain, f"Error: {e}")
 
