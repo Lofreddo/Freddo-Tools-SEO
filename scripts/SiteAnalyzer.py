@@ -155,6 +155,8 @@ def main():
                 df_canonical.to_excel(writer, sheet_name="Canonical", index=False)
                 writer.save()
 
+            output.seek(0)  # Rewind the buffer to the beginning
+
             st.write("Analyse terminée.")
 
             # Téléchargement du fichier Excel
