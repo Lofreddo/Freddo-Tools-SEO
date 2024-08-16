@@ -153,7 +153,6 @@ def main():
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 df_summary.to_excel(writer, sheet_name="Résumé", index=False)
                 df_canonical.to_excel(writer, sheet_name="Canonical", index=False)
-                writer.save()
 
             output.seek(0)  # Rewind the buffer to the beginning
 
