@@ -35,16 +35,19 @@ def crawl_website(domain, max_urls=1000):
         
         while futures and len(crawled_urls) < max_urls:
             for future in as_completed(futures):
-                url, new_links = future.result()
-                crawled_urls.add(url)
-                to_crawl.update(new_links - crawled_urls)
-                counter += 1
+                try:
+                    url, new_links = future.result()
+                    crawled_urls.add(url)
+                    to_crawl.update(new_links - crawled_urls)
+                    counter += 1
 
-                if counter % 250 == 0:
-                    st.write(f"{counter} URLs crawled jusqu'à présent...")
-                
-                if len(crawled_urls) >= max_urls:
-                    break
+                    if counter % 250 == 0:
+                        st.write(f"{counter} URLs crawled jusqu'à présent...")
+                    
+                    if len(crawled_urls) >= max_urls:
+                        break
+                except Exception as e:
+                    st.write(f"Erreur lors du crawl de {url}: {e}")
             
             futures = {executor.submit(fetch_url, url): url for url in to_crawl}
             to_crawl.clear()
@@ -162,9 +165,14 @@ def process_urls(urls):
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(analyze_images, url): url for url in urls}
         
-        for url, future in futures.items():
-            results[url] = future.result()
-            gc.collect()
+        for future in as_completed(futures):
+            url = futures[future]
+            try:
+                results[url] = future.result()
+            except Exception as e:
+                st.write(f"Erreur lors de l'analyse de {url}: {e}")
+            finally:
+                gc.collect()
 
     return results
 
