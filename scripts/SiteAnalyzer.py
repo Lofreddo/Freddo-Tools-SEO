@@ -8,8 +8,6 @@ import io
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import ssl
 import socket
-import json
-from googlesearch import search
 
 def crawl_website(domain, max_urls=1000):
     crawled_urls = set()
@@ -42,7 +40,7 @@ def crawl_website(domain, max_urls=1000):
                     crawled_urls.add(url)
                     to_crawl.update(new_links - crawled_urls)
                     counter += 1
-                    if counter % 250 == 0:
+                    if counter % 100 == 0:
                         st.write(f"{counter} URLs crawled jusqu'à présent...")
                     if len(crawled_urls) >= max_urls:
                         break
@@ -60,11 +58,7 @@ def check_robots_txt(domain):
         return "Erreur"
 
 def check_sitemap(domain):
-    sitemap_urls = [
-        f"{domain}/sitemap.xml",
-        f"{domain}/sitemap_index.xml",
-        f"{domain}/index_sitemap.xml"
-    ]
+    sitemap_urls = [f"{domain}/sitemap.xml", f"{domain}/sitemap_index.xml", f"{domain}/index_sitemap.xml"]
     for sitemap_url in sitemap_urls:
         try:
             response = requests.get(sitemap_url)
@@ -75,98 +69,228 @@ def check_sitemap(domain):
     return "Non"
 
 def check_subdomains(domain):
-    query = f"site:{domain} -inurl:www"
-    try:
-        results = list(search(query, num_results=5))
-        return "Oui" if results else "Non"
-    except Exception:
-        return "Erreur"
+    return "Vérification manuelle requise"
 
-def analyze_url(url):
+def check_links(url):
     try:
-        response = requests.get(url, allow_redirects=True)
+        response = requests.get(url)
         soup = BeautifulSoup(response.text, 'html.parser')
-
-        # Vérification des redirections
-        http_https_redirection = "Oui" if url.startswith("https") and requests.get(url.replace("https", "http", 1)).status_code in [301, 302] else "Non"
-        trailing_slash_redirection = "Oui" if (url.endswith("/") and requests.get(url[:-1]).status_code in [301, 302]) or (not url.endswith("/") and requests.get(url + "/").status_code in [301, 302]) else "Non"
-        redirect_chain = "Oui" if len(response.history) > 1 else "Non"
-
-        # Analyse des liens
         links = soup.find_all('a', href=True)
-        broken_links = sum(1 for link in links if requests.head(urljoin(url, link['href'])).status_code == 404)
-        redirects = sum(1 for link in links if requests.head(urljoin(url, link['href'])).status_code == 301)
+        broken_links = 0
+        redirects = 0
+        for link in links:
+            link_url = urljoin(url, link['href'])
+            try:
+                link_response = requests.head(link_url, allow_redirects=False)
+                if link_response.status_code == 404:
+                    broken_links += 1
+                elif link_response.status_code in [301, 302]:
+                    redirects += 1
+            except requests.exceptions.RequestException:
+                broken_links += 1
+        return broken_links, redirects
+    except requests.exceptions.RequestException:
+        return 0, 0
 
-        # Vérification de la balise canonical
+def check_canonical_tag(url):
+    try:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
         canonical_tag = soup.find('link', rel='canonical')
         if canonical_tag:
             canonical_url = canonical_tag['href']
-            canonical = "Oui" if canonical_url == url else f"Différente ({canonical_url})"
-        else:
-            canonical = "Non"
+            return "Oui" if canonical_url == url else f"Différente ({canonical_url})"
+        return "Non"
+    except requests.exceptions.RequestException:
+        return "Erreur"
 
-        # Analyse des images
+def check_internal_links_to_canonicals(url):
+    return "Vérification manuelle requise"
+
+def check_http_https_redirection(url):
+    http_url = url.replace("https://", "http://", 1)
+    try:
+        response = requests.head(http_url, allow_redirects=False)
+        return "Oui" if response.status_code in [301, 302] and response.headers.get('Location', '').startswith("https://") else "Non"
+    except requests.exceptions.RequestException:
+        return "Erreur"
+
+def check_trailing_slash_redirection(url):
+    try:
+        with_slash = url if url.endswith('/') else url + '/'
+        without_slash = url[:-1] if url.endswith('/') else url
+        response_with = requests.head(with_slash, allow_redirects=False)
+        response_without = requests.head(without_slash, allow_redirects=False)
+        return "Oui" if (response_with.status_code in [301, 302] or response_without.status_code in [301, 302]) else "Non"
+    except requests.exceptions.RequestException:
+        return "Erreur"
+
+def check_redirect_chain(url):
+    try:
+        response = requests.get(url, allow_redirects=True)
+        return "Oui" if len(response.history) > 1 else "Non"
+    except requests.exceptions.RequestException:
+        return "Erreur"
+
+def analyze_images(url):
+    try:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
         images = soup.find_all('img')
+        total_images = len(images)
         large_images = sum(1 for img in images if int(requests.head(urljoin(url, img.get('src', ''))).headers.get('content-length', 0)) > 100 * 1024)
-        large_img_percentage = (large_images / len(images)) * 100 if images else 0
-        empty_alt = sum(1 for img in images if not img.get('alt'))
+        empty_alt_count = sum(1 for img in images if not img.get('alt'))
+        return large_images, (large_images / total_images) * 100 if total_images > 0 else 0, empty_alt_count, total_images
+    except requests.exceptions.RequestException:
+        return 0, 0, 0, 0
 
-        # Autres vérifications
-        lazy_loading = "Oui" if soup.find(attrs={"loading": "lazy"}) else "Non"
-        noindex = "Oui" if soup.find('meta', attrs={'name': 'robots', 'content': re.compile(r'noindex', re.I)}) else "Non"
-        hreflang = "Oui" if soup.find('link', rel='alternate', hreflang=True) else "Non"
+def check_lazy_loading(url):
+    try:
+        response = requests.get(url)
+        return "Oui" if 'loading="lazy"' in response.text else "Non"
+    except requests.exceptions.RequestException:
+        return "Erreur"
+
+def check_noindex(url):
+    try:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        return "Oui" if soup.find('meta', attrs={'name': 'robots', 'content': re.compile(r'noindex', re.I)}) else "Non"
+    except requests.exceptions.RequestException:
+        return "Erreur"
+
+def check_hreflang(url):
+    try:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        return "Oui" if soup.find('link', rel='alternate', hreflang=True) else "Non"
+    except requests.exceptions.RequestException:
+        return "Erreur"
+
+def check_title_length(url):
+    try:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
         title = soup.title.string if soup.title else ""
-        title_length = "Oui" if len(title) > 70 else "Non"
-        breadcrumb = "Oui" if soup.find(class_=re.compile(r'breadcrumb', re.I)) else "Non"
-        internal_links = len([link for link in links if urlparse(link['href']).netloc == urlparse(url).netloc])
-        js_in_body = "Oui" if soup.body.find('script') else "Non"
-        inline_css = "Oui" if soup.find('style') or soup.find(style=True) else "Non"
-        utm_links = sum(1 for link in links if 'utm_' in link['href'])
-        unique_title_h1 = "Oui" if title and soup.h1 and title.strip() != soup.h1.text.strip() else "Non"
-        correct_hn_structure = "Oui" if all(int(tag.name[1]) <= int(prev_tag.name[1])+1 for prev_tag, tag in zip(soup.find_all(re.compile(r'h\d')), soup.find_all(re.compile(r'h\d'))[1:])) else "Non"
-        line_breaks = "Oui" if '\n' in response.text else "Non"
-        unused_scripts = "Non"  # Cette vérification nécessiterait une analyse plus approfondie
-        html5_tags = "Oui" if soup.find(['header', 'nav', 'article', 'section', 'aside', 'footer']) else "Non"
-        structured_data = "Oui" if soup.find('script', type='application/ld+json') else "Non"
+        return "Oui" if len(title) > 70 else "Non"
+    except requests.exceptions.RequestException:
+        return "Erreur"
 
-        return {
-            "URL": url,
-            "HTTP -> HTTPS": http_https_redirection,
-            "Redirection /": trailing_slash_redirection,
-            "Chaîne de redirection": redirect_chain,
-            "Liens 404": f"{broken_links}" if broken_links > 0 else "Non",
-            "Redirections 301": f"{redirects}" if redirects > 0 else "Non",
-            "Canonical": canonical,
-            "Images > 100ko": f"{large_images} ({large_img_percentage:.2f}%)",
-            "Alt vides": f"{empty_alt}/{len(images)}",
-            "Lazy loading": lazy_loading,
-            "Noindex": noindex,
-            "Hreflang": hreflang,
-            "Title > 70 car": title_length,
-            "Breadcrumb": breadcrumb,
-            "Liens internes": f"{internal_links}" if internal_links > 5 else "Non",
-            "JS dans <body>": js_in_body,
-            "CSS inline": inline_css,
-            "Liens UTM": f"{utm_links}" if utm_links > 0 else "Non",
-            "Title et H1 uniques": unique_title_h1,
-            "Structure Hn correcte": correct_hn_structure,
-            "Retours à la ligne": line_breaks,
-            "Scripts non utilisés": unused_scripts,
-            "Balises HTML5": html5_tags,
-            "Données structurées": structured_data
-        }
-    except Exception as e:
-        return {"URL": url, "Erreur": str(e)}
+def check_breadcrumb(url):
+    try:
+        response = requests.get(url)
+        return "Oui" if 'class="breadcrumb"' in response.text or 'itemtype="http://schema.org/BreadcrumbList"' in response.text else "Non"
+    except requests.exceptions.RequestException:
+        return "Erreur"
 
-def check_ssl(domain):
+def check_internal_links_count(url):
+    try:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        internal_links = len([link for link in soup.find_all('a', href=True) if urlparse(link['href']).netloc == urlparse(url).netloc or not urlparse(link['href']).netloc])
+        return "Oui" if internal_links > 5 else "Non"
+    except requests.exceptions.RequestException:
+        return "Erreur"
+
+def check_javascript_in_body(url):
+    try:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        return "Oui" if soup.body.find('script') else "Non"
+    except requests.exceptions.RequestException:
+        return "Erreur"
+
+def check_inline_css(url):
+    try:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        return "Oui" if soup.find('style') or soup.find(style=True) else "Non"
+    except requests.exceptions.RequestException:
+        return "Erreur"
+
+def check_utm_links(url):
+    try:
+        response = requests.get(url)
+        return "Oui" if 'utm_' in response.text else "Non"
+    except requests.exceptions.RequestException:
+        return "Erreur"
+
+def check_unique_title_h1(url):
+    try:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        title = soup.title.string if soup.title else ""
+        h1 = soup.h1.string if soup.h1 else ""
+        return "Oui" if title.strip() != h1.strip() else "Non"
+    except requests.exceptions.RequestException:
+        return "Erreur"
+
+def check_heading_structure(url):
+    try:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        headings = soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+        for i in range(len(headings) - 1):
+            if int(headings[i].name[1]) - int(headings[i+1].name[1]) < -1:
+                return "Non"
+        return "Oui"
+    except requests.exceptions.RequestException:
+        return "Erreur"
+
+def check_line_breaks(url):
+    try:
+        response = requests.get(url)
+        return "Oui" if '\n' in response.text else "Non"
+    except requests.exceptions.RequestException:
+        return "Erreur"
+
+def check_html5_tags(url):
+    try:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        html5_tags = ['header', 'nav', 'article', 'section', 'aside', 'footer']
+        return "Oui" if any(soup.find(tag) for tag in html5_tags) else "Non"
+    except requests.exceptions.RequestException:
+        return "Erreur"
+
+def check_structured_data(url):
+    try:
+        response = requests.get(url)
+        return "Oui" if 'application/ld+json' in response.text else "Non"
+    except requests.exceptions.RequestException:
+        return "Erreur"
+
+def check_ssl_certificate(domain):
     try:
         context = ssl.create_default_context()
         with socket.create_connection((domain, 443)) as sock:
             with context.wrap_socket(sock, server_hostname=domain) as secure_sock:
-                cert = secure_sock.getpeercert()
-        return "Oui"
+                return "Oui"
     except:
         return "Non"
+
+def analyze_url(url):
+    return {
+        "URL": url,
+        "Canonical": check_canonical_tag(url),
+        "HTTP -> HTTPS": check_http_https_redirection(url),
+        "Redirection /": check_trailing_slash_redirection(url),
+        "Chaîne de redirection": check_redirect_chain(url),
+        "Lazy loading": check_lazy_loading(url),
+        "Noindex": check_noindex(url),
+        "Hreflang": check_hreflang(url),
+        "Title > 70 car": check_title_length(url),
+        "Breadcrumb": check_breadcrumb(url),
+        "Liens internes > 5": check_internal_links_count(url),
+        "JS dans <body>": check_javascript_in_body(url),
+        "CSS inline": check_inline_css(url),
+        "Liens UTM": check_utm_links(url),
+        "Title et H1 uniques": check_unique_title_h1(url),
+        "Structure Hn correcte": check_heading_structure(url),
+        "Retours à la ligne": check_line_breaks(url),
+        "Balises HTML5": check_html5_tags(url),
+        "Données structurées": check_structured_data(url)
+    }
 
 def main():
     st.title("Site Analyzer - Analyse complète")
@@ -176,39 +300,28 @@ def main():
         if domain:
             st.write("Démarrage de l'analyse...")
 
-            # Vérifications générales
-            robots_txt = check_robots_txt(domain)
-            sitemap = check_sitemap(domain)
-            subdomains = check_subdomains(domain)
-            ssl_cert = check_ssl(urlparse(domain).netloc)
-
-            # Crawl et analyse des URLs
             urls = crawl_website(domain)
-            results = []
-            for url in urls:
-                result = analyze_url(url)
-                results.append(result)
-
-            # Création du DataFrame
+            
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                results = list(executor.map(analyze_url, urls))
+            
             df = pd.DataFrame(results)
-
-            # Création du fichier Excel
+            
+            global_checks = {
+                "robots.txt": check_robots_txt(domain),
+                "Sitemap": check_sitemap(domain),
+                "Sous-domaines": check_subdomains(domain),
+                "Certificat SSL": check_ssl_certificate(urlparse(domain).netloc)
+            }
+            
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                # Feuille de résumé
-                summary = {
-                    "Critère": ["robots.txt", "Sitemap", "Sous-domaines", "Certificat SSL"],
-                    "Résultat": [robots_txt, sitemap, subdomains, ssl_cert]
-                }
-                pd.DataFrame(summary).to_excel(writer, sheet_name="Résumé", index=False)
-
-                # Feuille principale
+                pd.DataFrame([global_checks]).to_excel(writer, sheet_name="Vérifications globales", index=False)
                 df.to_excel(writer, sheet_name="Analyse détaillée", index=False)
-
+            
             output.seek(0)
             st.write("Analyse terminée.")
-
-            # Bouton de téléchargement
+            
             st.download_button(
                 label="Télécharger le fichier Excel",
                 data=output.getvalue(),
