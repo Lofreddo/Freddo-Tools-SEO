@@ -254,7 +254,7 @@ def process_urls(urls, domain):
                         results["redirects_total"] += redirects
                     elif len(result) == 4:  # Cas de analyze_images
                         large_images, large_img_percentage, empty_alt_count, total_images = result
-                        results["images_results"].append(result)
+                        results["images_results"].append((large_images, large_img_percentage, empty_alt_count, total_images))
                 
                 elif isinstance(result, str):  # Cas de check_canonical_tag
                     if "Canonical" in result or "Absente" in result or "Erreur" in result:
@@ -308,8 +308,8 @@ def main():
                     f"{results['http_https_redirections'].count('Oui')}/{len(results['http_https_redirections'])}",
                     f"{results['trailing_slash_redirections'].count('Oui')}/{len(results['trailing_slash_redirections'])}",
                     f"{results['redirect_chains'].count('Oui')}/{len(results['redirect_chains'])}",
-                    f"{sum(res[0] for res in results['images_results'])}/{len(results['images_results'])}",
-                    f"{sum(res[2] for res in results['images_results'])}/{sum(res[3] for res in results['images_results'])}",
+                    f"{sum(res[0] for res in results['images_results'] if isinstance(res, tuple))}/{len(results['images_results'])}",
+                    f"{sum(res[2] for res in results['images_results'] if isinstance(res, tuple))}/{sum(res[3] for res in results['images_results'] if isinstance(res, tuple))}",
                     f"{results['canonical_results'].count('Correcte')}/{len(results['canonical_results'])}",
                     results["robots_txt"],
                     str(results["broken_links_total"]),
