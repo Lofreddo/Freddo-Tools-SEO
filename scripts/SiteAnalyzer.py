@@ -5,51 +5,57 @@ import pandas as pd
 from urllib.parse import urljoin, urlparse
 import io
 
-def get_all_urls_from_sitemap(domain):
-    sitemaps = [f"{domain}/sitemap.xml", f"{domain}/sitemap_index.xml", f"{domain}/index_sitemap.xml"]
-    all_urls = set()
+def crawl_website(domain, max_urls=1000):
+    crawled_urls = set()
+    to_crawl = {domain}
     
-    for sitemap_url in sitemaps:
+    while to_crawl and len(crawled_urls) < max_urls:
+        url = to_crawl.pop()
         try:
-            response = requests.get(sitemap_url)
+            response = requests.get(url)
             if response.status_code == 200:
-                soup = BeautifulSoup(response.content, "xml")
-                urls = soup.find_all("loc")
-                for url in urls:
-                    all_urls.add(url.text.strip())
+                soup = BeautifulSoup(response.text, 'html.parser')
+                crawled_urls.add(url)
+                
+                for link in soup.find_all('a', href=True):
+                    href = link.get('href')
+                    full_url = urljoin(domain, href)
+                    
+                    if urlparse(full_url).netloc == urlparse(domain).netloc and full_url not in crawled_urls:
+                        to_crawl.add(full_url)
+                        
+                st.write(f"{len(crawled_urls)} URLs crawled jusqu'à présent...")
         except requests.exceptions.RequestException:
             continue
     
-    return all_urls
+    return crawled_urls
+
+def explore_sitemap(sitemap_url):
+    urls = set()
+    try:
+        response = requests.get(sitemap_url)
+        soup = BeautifulSoup(response.content, 'xml')
+        if soup.find_all("sitemap"):
+            # It is a sitemap index, explore each listed sitemap
+            for sitemap in soup.find_all("sitemap"):
+                loc = sitemap.findNext("loc").text
+                urls.update(explore_sitemap(loc))
+        else:
+            # It is a regular sitemap, collect all URLs
+            for loc in soup.find_all("loc"):
+                urls.add(loc.text.strip())
+    except requests.exceptions.RequestException:
+        pass
+    return urls
 
 def get_all_urls(domain):
-    st.write("Tentative de récupération des URLs à partir du sitemap...")
-    sitemap_urls = get_all_urls_from_sitemap(domain)
-    
+    sitemap_urls = explore_sitemap(f"{domain}/sitemap.xml")
     if sitemap_urls:
         st.write(f"{len(sitemap_urls)} URLs trouvées dans le sitemap.")
         return sitemap_urls
     
-    st.write("Aucun sitemap trouvé. Démarrage du crawling à partir de la page d'accueil...")
-    crawled_urls = set()
-    to_crawl = {domain}
-    
-    while to_crawl:
-        url = to_crawl.pop()
-        try:
-            response = requests.get(url)
-            soup = BeautifulSoup(response.text, 'html.parser')
-            crawled_urls.add(url)
-            for link in soup.find_all('a', href=True):
-                full_url = urljoin(domain, link['href'])
-                if urlparse(full_url).netloc == urlparse(domain).netloc and full_url not in crawled_urls:
-                    to_crawl.add(full_url)
-            st.write(f"{len(crawled_urls)} URLs crawled jusqu'à présent...")
-        except requests.exceptions.RequestException:
-            continue
-            
-    st.write(f"Crawling terminé. {len(crawled_urls)} URLs trouvées.")
-    return crawled_urls
+    st.write("Aucun sitemap trouvé ou index. Démarrage du crawling à partir de la page d'accueil...")
+    return crawl_website(domain)
 
 def check_canonical_for_all_urls(urls):
     results = []
@@ -80,15 +86,6 @@ def check_robots_txt(domain):
     url = f"{domain}/robots.txt"
     response = requests.get(url)
     return response.status_code == 200
-
-def check_sitemap(domain):
-    sitemaps = ["sitemap.xml", "sitemap_index.xml", "index_sitemap.xml"]
-    for sitemap in sitemaps:
-        url = f"{domain}/{sitemap}"
-        response = requests.get(url)
-        if response.status_code == 200:
-            return True
-    return False
 
 def check_links(domain):
     response = requests.get(domain)
@@ -135,10 +132,6 @@ def main():
             results_summary["Critère"].append("Robots.txt")
             results_summary["Présence"].append("Oui" if robots_exists else "Non")
 
-            sitemap_exists = check_sitemap(domain)
-            results_summary["Critère"].append("Sitemap")
-            results_summary["Présence"].append("Oui" if sitemap_exists else "Non")
-            
             broken_links, redirects = check_links(domain)
             results_summary["Critère"].append("Liens 404")
             results_summary["Présence"].append(str(broken_links) if broken_links > 0 else "Non")
