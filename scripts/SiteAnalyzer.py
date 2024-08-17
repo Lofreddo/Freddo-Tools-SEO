@@ -7,7 +7,7 @@ import io
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import gc
 
-# Fonction pour crawler les URLs du site en utilisant le multithreading pour plus de rapidité
+# Fonction pour crawler les URLs du site
 def crawl_website(domain, max_urls=1000):
     crawled_urls = set()
     to_crawl = {domain}
@@ -230,7 +230,7 @@ def process_urls(urls, domain):
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(analyze_images, url): url for url in urls}
-                futures.update({executor.submit(check_canonical_tag, url): url for url in urls})
+        futures.update({executor.submit(check_canonical_tag, url): url for url in urls})
         futures.update({executor.submit(check_links, url): url for url in urls})
         
         for future in as_completed(futures):
