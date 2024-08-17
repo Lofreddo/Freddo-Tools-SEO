@@ -188,9 +188,9 @@ def check_robots_txt(domain):
         return "Erreur"
 
 # Fonction pour vérifier les liens 404 et 301 sur une page
-def check_links(domain):
+def check_links(url):
     try:
-        response = requests.get(domain)
+        response = requests.get(url)
         soup = BeautifulSoup(response.text, 'lxml')
         links = soup.find_all('a', href=True)
         
@@ -198,11 +198,11 @@ def check_links(domain):
         redirects = 0
         
         for link in links:
-            url = link['href']
-            if url.startswith('/'):
-                url = domain + url
+            link_url = link['href']
+            if link_url.startswith('/'):
+                link_url = urljoin(url, link_url)
             try:
-                link_response = requests.head(url, allow_redirects=True)
+                link_response = requests.head(link_url, allow_redirects=True)
                 if link_response.status_code == 404:
                     broken_links += 1
                 if len(link_response.history) > 0 and link_response.history[0].status_code == 301:
@@ -212,7 +212,7 @@ def check_links(domain):
                 
         return broken_links, redirects
     except requests.exceptions.RequestException:
-        return "Erreur", "Erreur"
+        return 0, 0
 
 # Fonction pour traiter les URLs avec multithreading
 def process_urls(urls, domain):
@@ -230,7 +230,7 @@ def process_urls(urls, domain):
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(analyze_images, url): url for url in urls}
-        futures.update({executor.submit(check_canonical_tag, url): url for url in urls})
+                futures.update({executor.submit(check_canonical_tag, url): url for url in urls})
         futures.update({executor.submit(check_links, url): url for url in urls})
         
         for future in as_completed(futures):
@@ -241,10 +241,11 @@ def process_urls(urls, domain):
                     broken_links, redirects = result
                     results["broken_links_total"] += broken_links
                     results["redirects_total"] += redirects
-                elif isinstance(result, str) and "Canonical" in result:
-                    results["canonical_results"].append(result)
-                else:
-                    results["images_results"].append(result)
+                elif isinstance(result, str):
+                    if "Canonical" in result or "Absente" in result or "Erreur" in result:
+                        results["canonical_results"].append(result)
+                    else:
+                        results["images_results"].append(result)
             except Exception as e:
                 st.write(f"Erreur lors de l'analyse de {url}: {e}")
             finally:
