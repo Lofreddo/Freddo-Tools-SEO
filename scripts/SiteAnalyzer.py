@@ -58,12 +58,18 @@ def get_all_urls(domain):
     return crawl_website(domain)
 
 def check_canonical_for_all_urls(urls):
-    results = []
+    image_extensions = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".svg")
     
-    for url in urls:
+    # Filtrer les URLs pour exclure celles qui pointent vers des images
+    filtered_urls = [url for url in urls if not url.lower().endswith(image_extensions)]
+    
+    results = []
+    correct_canonical_count = 0
+    
+    for url in filtered_urls:
         try:
             response = requests.get(url)
-            soup = BeautifulSoup(response.text, 'lxml')  # Utilisation du parser lxml
+            soup = BeautifulSoup(response.text, 'lxml')
             
             canonical_tag = soup.find('link', rel='canonical')
             
@@ -71,6 +77,7 @@ def check_canonical_for_all_urls(urls):
                 canonical_url = canonical_tag['href']
                 if canonical_url == url:
                     status = "Correcte"
+                    correct_canonical_count += 1
                 else:
                     status = f"Différente (Canonical vers: {canonical_url})"
             else:
@@ -81,7 +88,7 @@ def check_canonical_for_all_urls(urls):
         except requests.exceptions.RequestException:
             results.append({"URL": url, "Canonical": "Erreur d'accès", "Statut": "Non vérifiable"})
     
-    return results
+    return results, correct_canonical_count, len(filtered_urls)
 
 def check_robots_txt(domain):
     url = f"{domain}/robots.txt"
@@ -90,7 +97,7 @@ def check_robots_txt(domain):
 
 def check_links(domain):
     response = requests.get(domain)
-    soup = BeautifulSoup(response.text, 'lxml')  # Utilisation du parser lxml
+    soup = BeautifulSoup(response.text, 'lxml')
     links = soup.find_all('a', href=True)
     
     broken_links = 0
@@ -125,7 +132,7 @@ def main():
 
             # Vérification des balises canonical pour chaque URL
             st.write("Vérification des balises canonical...")
-            canonical_results = check_canonical_for_all_urls(urls)
+            canonical_results, correct_canonical_count, total_urls_checked = check_canonical_for_all_urls(urls)
 
             # Résumé général pour la première feuille
             results_summary = {"Critère": [], "Présence": []}
@@ -138,6 +145,10 @@ def main():
             results_summary["Présence"].append(str(broken_links) if broken_links > 0 else "Non")
             results_summary["Critère"].append("Redirections 301")
             results_summary["Présence"].append(str(redirects) if redirects > 0 else "Non")
+
+            # Ajouter la ligne Canonical
+            results_summary["Critère"].append("Canonical")
+            results_summary["Présence"].append(f"{correct_canonical_count}/{total_urls_checked}")
 
             df_summary = pd.DataFrame(results_summary)
             df_canonical = pd.DataFrame(canonical_results)
