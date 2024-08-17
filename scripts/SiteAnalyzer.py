@@ -14,7 +14,7 @@ def crawl_website(domain, max_urls=1000):
         try:
             response = requests.get(url)
             if response.status_code == 200:
-                soup = BeautifulSoup(response.text, 'html.parser')
+                soup = BeautifulSoup(response.text, 'lxml')
                 crawled_urls.add(url)
                 
                 for link in soup.find_all('a', href=True):
@@ -63,7 +63,8 @@ def check_canonical_for_all_urls(urls):
     for url in urls:
         try:
             response = requests.get(url)
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(response.text, 'lxml')  # Utilisation du parser lxml
+            
             canonical_tag = soup.find('link', rel='canonical')
             
             if canonical_tag:
@@ -89,7 +90,7 @@ def check_robots_txt(domain):
 
 def check_links(domain):
     response = requests.get(domain)
-    soup = BeautifulSoup(response.text, 'html.parser')
+    soup = BeautifulSoup(response.text, 'lxml')  # Utilisation du parser lxml
     links = soup.find_all('a', href=True)
     
     broken_links = 0
