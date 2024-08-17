@@ -86,7 +86,6 @@ def check_http_https_redirection(url):
     if url.startswith("https://"):
         http_url = url.replace("https://", "http://", 1)
         try:
-            # Requête pour la version HTTP
             http_response = requests.head(http_url, allow_redirects=False)
             if http_response.status_code in [301, 302]:
                 location = http_response.headers.get('Location', '')
