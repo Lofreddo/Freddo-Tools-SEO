@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import gc
 
 # Fonction pour crawler les URLs du site
-def crawl_website(domain, max_urls=100000):
+def crawl_website(domain, max_urls=1000):
     crawled_urls = set()
     to_crawl = {domain}
     exclude_extensions = (".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".pdf", ".zip")
@@ -131,6 +131,9 @@ def check_redirect_chain(url):
 def analyze_images(url):
     try:
         response = requests.get(url)
+        if 'text/html' not in response.headers.get('Content-Type', ''):
+            return 0, 0, 0, 0
+        
         soup = BeautifulSoup(response.text, 'lxml')
         images = soup.find_all('img')
         
@@ -162,6 +165,9 @@ def analyze_images(url):
 def check_canonical_tag(url):
     try:
         response = requests.get(url)
+        if 'text/html' not in response.headers.get('Content-Type', ''):
+            return "Absente"
+        
         soup = BeautifulSoup(response.text, 'lxml')
         canonical_tag = soup.find('link', rel='canonical')
         if canonical_tag:
@@ -191,6 +197,9 @@ def check_robots_txt(domain):
 def check_links(url):
     try:
         response = requests.get(url)
+        if 'text/html' not in response.headers.get('Content-Type', ''):
+            return 0, 0
+        
         soup = BeautifulSoup(response.text, 'lxml')
         links = soup.find_all('a', href=True)
         
