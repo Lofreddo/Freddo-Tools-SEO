@@ -132,7 +132,7 @@ def analyze_images(url):
     try:
         response = requests.get(url)
         if 'text/html' not in response.headers.get('Content-Type', ''):
-            return 0, 0, 0, 0
+            return 0, 0, 0, 0  # Ignorer les non-HTML
         
         soup = BeautifulSoup(response.text, 'lxml')
         images = soup.find_all('img')
@@ -246,15 +246,22 @@ def process_urls(urls, domain):
             url = futures[future]
             try:
                 result = future.result()
+                
                 if isinstance(result, tuple):
-                    broken_links, redirects = result
-                    results["broken_links_total"] += broken_links
-                    results["redirects_total"] += redirects
-                elif isinstance(result, str):
+                    if len(result) == 2:  # Cas de check_links
+                        broken_links, redirects = result
+                        results["broken_links_total"] += broken_links
+                        results["redirects_total"] += redirects
+                    elif len(result) == 4:  # Cas de analyze_images
+                        large_images, large_img_percentage, empty_alt_count, total_images = result
+                        results["images_results"].append(result)
+                
+                elif isinstance(result, str):  # Cas de check_canonical_tag
                     if "Canonical" in result or "Absente" in result or "Erreur" in result:
                         results["canonical_results"].append(result)
                     else:
                         results["images_results"].append(result)
+                
             except Exception as e:
                 st.write(f"Erreur lors de l'analyse de {url}: {e}")
             finally:
