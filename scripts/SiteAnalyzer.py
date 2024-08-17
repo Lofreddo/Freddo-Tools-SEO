@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import gc
 
 # Fonction pour crawler les URLs du site
-def crawl_website(domain, max_urls=1000):
+def crawl_website(domain, max_urls=100000):
     crawled_urls = set()
     to_crawl = {domain}
     exclude_extensions = (".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".pdf", ".zip")
