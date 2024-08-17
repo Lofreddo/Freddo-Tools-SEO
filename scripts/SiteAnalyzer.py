@@ -127,6 +127,78 @@ def check_links(domain):
             
     return broken_links, redirects
 
+def check_http_https_redirection(url):
+    if url.startswith("https://"):
+        http_url = url.replace("https://", "http://", 1)
+        try:
+            response = requests.head(http_url, allow_redirects=False)
+            if response.status_code in [301, 302] and 'Location' in response.headers:
+                if response.headers['Location'].startswith("https://"):
+                    return "Oui"
+        except requests.exceptions.RequestException:
+            pass
+    return "Non"
+
+def check_trailing_slash_redirection(url):
+    if url.endswith("/"):
+        url_without_slash = url.rstrip("/")
+        try:
+            response = requests.head(url_without_slash, allow_redirects=False)
+            if response.status_code in [301, 302] and 'Location' in response.headers:
+                if response.headers['Location'].endswith("/"):
+                    return "Oui"
+        except requests.exceptions.RequestException:
+            pass
+    else:
+        url_with_slash = url + "/"
+        try:
+            response = requests.head(url_with_slash, allow_redirects=False)
+            if response.status_code in [301, 302] and 'Location' in response.headers:
+                if response.headers['Location'] == url:
+                    return "Oui"
+        except requests.exceptions.RequestException:
+            pass
+    return "Non"
+
+def check_redirect_chain(url):
+    try:
+        response = requests.head(url, allow_redirects=True)
+        if len(response.history) > 1:
+            return f"Oui ({len(response.history)} redirections)"
+    except requests.exceptions.RequestException:
+        pass
+    return "Non"
+
+def analyze_images(url):
+    try:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'lxml')
+        images = soup.find_all('img')
+        
+        large_images = 0
+        total_images = len(images)
+        empty_alt_count = 0
+        
+        for img in images:
+            img_url = img.get('src')
+            alt_text = img.get('alt', '').strip()
+            if alt_text == "":
+                empty_alt_count += 1
+            if img_url:
+                full_img_url = urljoin(url, img_url)
+                try:
+                    img_response = requests.head(full_img_url, allow_redirects=True)
+                    img_size = int(img_response.headers.get('content-length', 0))
+                    if img_size > 100 * 1024:  # 100 ko
+                        large_images += 1
+                except requests.exceptions.RequestException:
+                    continue
+        
+        large_img_percentage = (large_images / total_images) * 100 if total_images > 0 else 0
+        return large_images, large_img_percentage, empty_alt_count, total_images
+    except requests.exceptions.RequestException:
+        return 0, 0, 0, 0
+
 def main():
     st.title("Site Analyzer - Vérification des balises Canonical et SEO")
 
@@ -142,6 +214,22 @@ def main():
             # Vérification des balises canonical pour chaque URL
             st.write("Vérification des balises canonical...")
             canonical_results, correct_canonical_count, total_urls_checked = check_canonical_for_all_urls(urls)
+
+            # Vérification des redirections HTTP -> HTTPS, slashs, chaînes de redirections et analyse des images
+            http_https_redirections = []
+            trailing_slash_redirections = []
+            redirect_chains = []
+            large_images_summary = []
+            empty_alt_summary = []
+
+            for url in urls:
+                http_https_redirections.append(check_http_https_redirection(url))
+                trailing_slash_redirections.append(check_trailing_slash_redirection(url))
+                redirect_chains.append(check_redirect_chain(url))
+                
+                large_images, large_img_percentage, empty_alt_count, total_images = analyze_images(url)
+                large_images_summary.append(f"{large_images} images ({large_img_percentage:.2f}%)")
+                empty_alt_summary.append(f"{empty_alt_count}/{total_images}")
 
             # Résumé général pour la première feuille
             results_summary = {"Critère": [], "Présence": []}
@@ -162,6 +250,26 @@ def main():
             # Ajouter la ligne Canonical
             results_summary["Critère"].append("Canonical")
             results_summary["Présence"].append(f"{correct_canonical_count}/{total_urls_checked}")
+
+            # Ajouter les résultats des redirections HTTP -> HTTPS
+            results_summary["Critère"].append("Redirection HTTP -> HTTPS")
+            results_summary["Présence"].append(f"{http_https_redirections.count('Oui')}/{len(http_https_redirections)}")
+
+            # Ajouter les résultats des redirections avec/sans slash
+            results_summary["Critère"].append("Redirection avec/sans slash")
+            results_summary["Présence"].append(f"{trailing_slash_redirections.count('Oui')}/{len(trailing_slash_redirections)}")
+
+            # Ajouter les résultats des chaînes de redirections
+            results_summary["Critère"].append("Chaînes de redirection")
+            results_summary["Présence"].append(f"{redirect_chains.count('Oui')}/{len(redirect_chains)}")
+
+            # Ajouter les résultats des images > 100 ko
+            results_summary["Critère"].append("Images > 100 ko")
+            results_summary["Présence"].append(f"{sum(int(x.split()[0]) for x in large_images_summary)}/{sum(1 for x in large_images_summary)}")
+
+            # Ajouter les résultats des balises alt vides
+            results_summary["Critère"].append("Balises alt vides")
+            results_summary["Présence"].append(f"{sum(int(x.split('/')[0]) for x in empty_alt_summary)}/{sum(int(x.split('/')[1]) for x in empty_alt_summary)}")
 
             df_summary = pd.DataFrame(results_summary)
             df_canonical = pd.DataFrame(canonical_results)
