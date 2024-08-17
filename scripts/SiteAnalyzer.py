@@ -95,6 +95,15 @@ def check_robots_txt(domain):
     response = requests.get(url)
     return response.status_code == 200
 
+def check_sitemap(domain):
+    sitemaps = ["sitemap.xml", "sitemap_index.xml", "index_sitemap.xml"]
+    for sitemap in sitemaps:
+        url = f"{domain}/{sitemap}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            return True
+    return False
+
 def check_links(domain):
     response = requests.get(domain)
     soup = BeautifulSoup(response.text, 'lxml')
@@ -140,6 +149,10 @@ def main():
             results_summary["Critère"].append("Robots.txt")
             results_summary["Présence"].append("Oui" if robots_exists else "Non")
 
+            sitemap_exists = check_sitemap(domain)
+            results_summary["Critère"].append("Sitemap")
+            results_summary["Présence"].append("Oui" if sitemap_exists else "Non")
+            
             broken_links, redirects = check_links(domain)
             results_summary["Critère"].append("Liens 404")
             results_summary["Présence"].append(str(broken_links) if broken_links > 0 else "Non")
