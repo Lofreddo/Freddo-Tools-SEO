@@ -86,9 +86,11 @@ def check_http_https_redirection(url):
     if url.startswith("https://"):
         http_url = url.replace("https://", "http://", 1)
         try:
-            response = requests.head(http_url, allow_redirects=False)
-            if response.status_code in [301, 302] and 'Location' in response.headers:
-                if response.headers['Location'].startswith("https://"):
+            # Requête pour la version HTTP
+            http_response = requests.head(http_url, allow_redirects=False)
+            if http_response.status_code in [301, 302]:
+                location = http_response.headers.get('Location', '')
+                if location.startswith("https://"):
                     return "Oui"
         except requests.exceptions.RequestException:
             pass
@@ -157,22 +159,103 @@ def analyze_images(url):
     except requests.exceptions.RequestException:
         return 0, 0, 0, 0
 
+# Fonction pour vérifier la présence d'une balise canonical et sa validité
+def check_canonical_tag(url):
+    try:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'lxml')
+        canonical_tag = soup.find('link', rel='canonical')
+        if canonical_tag:
+            canonical_url = canonical_tag['href']
+            if canonical_url == url:
+                return "Correcte"
+            else:
+                return f"Différente (Canonical vers: {canonical_url})"
+        else:
+            return "Absente"
+    except requests.exceptions.RequestException:
+        return "Erreur"
+
+# Fonction pour vérifier la présence d'un fichier robots.txt
+def check_robots_txt(domain):
+    url = f"{domain}/robots.txt"
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            return "Oui"
+        else:
+            return "Non"
+    except requests.exceptions.RequestException:
+        return "Erreur"
+
+# Fonction pour vérifier les liens 404 et 301 sur une page
+def check_links(domain):
+    try:
+        response = requests.get(domain)
+        soup = BeautifulSoup(response.text, 'lxml')
+        links = soup.find_all('a', href=True)
+        
+        broken_links = 0
+        redirects = 0
+        
+        for link in links:
+            url = link['href']
+            if url.startswith('/'):
+                url = domain + url
+            try:
+                link_response = requests.head(url, allow_redirects=True)
+                if link_response.status_code == 404:
+                    broken_links += 1
+                if len(link_response.history) > 0 and link_response.history[0].status_code == 301:
+                    redirects += 1
+            except requests.exceptions.RequestException:
+                broken_links += 1
+                
+        return broken_links, redirects
+    except requests.exceptions.RequestException:
+        return "Erreur", "Erreur"
+
 # Fonction pour traiter les URLs avec multithreading
-def process_urls(urls):
+def process_urls(urls, domain):
     max_workers = min(20, len(urls) // 10 + 1)
-    results = {}
+    results = {
+        "http_https_redirections": [],
+        "trailing_slash_redirections": [],
+        "redirect_chains": [],
+        "images_results": [],
+        "canonical_results": [],
+        "robots_txt": check_robots_txt(domain),
+        "broken_links_total": 0,
+        "redirects_total": 0
+    }
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(analyze_images, url): url for url in urls}
+        futures.update({executor.submit(check_canonical_tag, url): url for url in urls})
+        futures.update({executor.submit(check_links, url): url for url in urls})
         
         for future in as_completed(futures):
             url = futures[future]
             try:
-                results[url] = future.result()
+                result = future.result()
+                if isinstance(result, tuple):
+                    broken_links, redirects = result
+                    results["broken_links_total"] += broken_links
+                    results["redirects_total"] += redirects
+                elif isinstance(result, str) and "Canonical" in result:
+                    results["canonical_results"].append(result)
+                else:
+                    results["images_results"].append(result)
             except Exception as e:
                 st.write(f"Erreur lors de l'analyse de {url}: {e}")
             finally:
                 gc.collect()
+
+        # Traiter les redirections HTTP -> HTTPS et trailing slash
+        for url in urls:
+            results["http_https_redirections"].append(check_http_https_redirection(url))
+            results["trailing_slash_redirections"].append(check_trailing_slash_redirection(url))
+            results["redirect_chains"].append(check_redirect_chain(url))
 
     return results
 
@@ -189,16 +272,8 @@ def main():
             # Récupération des URLs
             urls = get_all_urls(domain)
 
-            # Analyse des redirections HTTP -> HTTPS, trailing slash, chaînes de redirections et images
-            http_https_redirections = []
-            trailing_slash_redirections = []
-            redirect_chains = []
-            images_results = process_urls(urls)
-
-            for url in urls:
-                http_https_redirections.append(check_http_https_redirection(url))
-                trailing_slash_redirections.append(check_trailing_slash_redirection(url))
-                redirect_chains.append(check_redirect_chain(url))
+            # Analyse des redirections HTTP -> HTTPS, trailing slash, chaînes de redirections, images, canonical, robots.txt, 404, 301
+            results = process_urls(urls, domain)
 
             # Résumé général pour la première feuille
             results_summary = {
@@ -207,14 +282,22 @@ def main():
                     "Redirection avec/sans slash",
                     "Chaînes de redirection",
                     "Images > 100 ko",
-                    "Balises alt vides"
+                    "Balises alt vides",
+                    "Canonical",
+                    "robots.txt",
+                    "Liens 404",
+                    "Redirections 301"
                 ],
                 "Présence": [
-                    f"{http_https_redirections.count('Oui')}/{len(http_https_redirections)}",
-                    f"{trailing_slash_redirections.count('Oui')}/{len(trailing_slash_redirections)}",
-                    f"{redirect_chains.count('Oui')}/{len(redirect_chains)}",
-                    f"{sum(res[0] for res in images_results.values())}/{len(images_results)}",
-                    f"{sum(res[2] for res in images_results.values())}/{sum(res[3] for res in images_results.values())}"
+                    f"{results['http_https_redirections'].count('Oui')}/{len(results['http_https_redirections'])}",
+                    f"{results['trailing_slash_redirections'].count('Oui')}/{len(results['trailing_slash_redirections'])}",
+                    f"{results['redirect_chains'].count('Oui')}/{len(results['redirect_chains'])}",
+                    f"{sum(res[0] for res in results['images_results'])}/{len(results['images_results'])}",
+                    f"{sum(res[2] for res in results['images_results'])}/{sum(res[3] for res in results['images_results'])}",
+                    f"{results['canonical_results'].count('Correcte')}/{len(results['canonical_results'])}",
+                    results["robots_txt"],
+                    str(results["broken_links_total"]),
+                    str(results["redirects_total"])
                 ]
             }
 
