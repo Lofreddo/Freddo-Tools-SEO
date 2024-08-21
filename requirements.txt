@@ -6,7 +6,7 @@ beautifulsoup4
 openpyxl
 unidecode
 xlsxwriter
-lxml
+lxml==4.9.1
 aiohttp
 pyarrow
 playwright
