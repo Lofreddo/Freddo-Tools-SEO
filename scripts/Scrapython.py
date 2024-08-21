@@ -1,14 +1,14 @@
 import streamlit as st
 import pandas as pd
 import requests
-from readability import Document
+from boilerpy3 import extractors
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 import gc
 import logging
 from bs4 import BeautifulSoup
 from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.retry import Retry
+from urllib3.util.retry import Retry
 
 # Initialize a session for reusing connections
 session = requests.Session()
@@ -17,7 +17,7 @@ session = requests.Session()
 retry_strategy = Retry(
     total=3,
     status_forcelist=[403, 404, 500, 502, 503, 504],
-    method_whitelist=["HEAD", "GET", "OPTIONS"]
+    allowed_methods=["HEAD", "GET", "OPTIONS"]
 )
 adapter = HTTPAdapter(max_retries=retry_strategy)
 session.mount("https://", adapter)
@@ -37,12 +37,16 @@ def scrape_text_from_url(url):
             logging.error(f"Error {response.status_code} for {url}")
             return url, [{"structure": "Error", "content": f"HTTP Error {response.status_code}"}]
 
-        # Use readability to extract main content
-        doc = Document(response.text)
-        main_content_html = doc.summary()
-        
+        # Use boilerpy3 to extract main content
+        extractor = extractors.ArticleExtractor()
+        try:
+            cleaned_content = extractor.get_content(response.text)
+        except Exception as e:
+            logging.error(f"Error parsing HTML for {url}: {str(e)}")
+            return url, [{"structure": "Error", "content": "Parsing Error"}]
+
         # Use BeautifulSoup with html5lib to parse the cleaned content
-        soup = BeautifulSoup(main_content_html, 'html5lib')
+        soup = BeautifulSoup(cleaned_content, 'html5lib')
         scraped_data = [{'structure': 'content', 'content': soup.get_text(strip=True)}]
 
         gc.collect()  # Free memory
