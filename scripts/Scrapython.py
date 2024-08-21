@@ -36,7 +36,7 @@ def scrape_text_from_url(url):
 
 def scrape_all_urls(urls):
     scraped_results = []
-    max_workers = min(100, len(urls) // 100 + 1)  # Dynamically adjust the number of threads
+    max_workers = min(20, len(urls) // 10 + 1)  # Dynamically adjust the number of threads
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_url = {executor.submit(scrape_text_from_url, url): url for url in urls}
@@ -47,8 +47,7 @@ def scrape_all_urls(urls):
             except Exception as e:
                 scraped_results.append((future_to_url[future], [{"structure": "Error", "content": str(e)}]))
 
-            if len(scraped_results) % 1000 == 0:  # Periodically collect memory
-                gc.collect()
+            gc.collect()  # Periodically collect memory
 
     return scraped_results
 
