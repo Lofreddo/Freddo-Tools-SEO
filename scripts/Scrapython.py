@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import requests
-from boilerpy3 import extractors
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 import gc
@@ -29,7 +28,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 def scrape_text_from_url(url):
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
-        response = session.get(url, headers=headers, timeout=5)
+        response = session.get(url, headers=headers, timeout=5, verify=False)
         response.raise_for_status()
 
         # Handle specific HTTP errors
@@ -37,17 +36,10 @@ def scrape_text_from_url(url):
             logging.error(f"Error {response.status_code} for {url}")
             return url, [{"structure": "Error", "content": f"HTTP Error {response.status_code}"}]
 
-        # Use boilerpy3 to extract main content
-        extractor = extractors.ArticleExtractor()
-        try:
-            cleaned_content = extractor.get_content(response.text)
-        except Exception as e:
-            logging.error(f"Error parsing HTML for {url}: {str(e)}")
-            return url, [{"structure": "Error", "content": "Parsing Error"}]
-
-        # Use BeautifulSoup with html5lib to parse the cleaned content
-        soup = BeautifulSoup(cleaned_content, 'html5lib')
-        scraped_data = [{'structure': 'content', 'content': soup.get_text(strip=True)}]
+        # Use BeautifulSoup to extract main content
+        soup = BeautifulSoup(response.text, 'html.parser')
+        main_content = soup.get_text(strip=True)
+        scraped_data = [{'structure': 'content', 'content': main_content}]
 
         gc.collect()  # Free memory
         return url, scraped_data
