@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import requests
-from readability import Document
 from boilerpy3 import extractors
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
@@ -20,29 +19,14 @@ def scrape_text_from_url(url):
         response = session.get(url, timeout=5)
         response.raise_for_status()
         
-        # Using readability to extract main content
-        doc = Document(response.text)
-        main_content_html = doc.summary()  # This gives the main content as HTML
-        
-        # Using boilerpy3 to strip unwanted tags and get clean text
+        # Using boilerpy3 to extract main content
         extractor = extractors.ArticleExtractor()
-        cleaned_content = extractor.get_content(main_content_html)
+        cleaned_content = extractor.get_content(response.text)
         
-        # Normalize the output by removing CSS classes from tags
-        soup = BeautifulSoup(cleaned_content, 'lxml')
-        for tag in soup.find_all(True):
-            tag.attrs = {key: value for key, value in tag.attrs.items() if key != 'class'}
-
-        scraped_data = []
-        tags_to_extract = ['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'li', 'ul', 'ol']
-
-        for tag in tags_to_extract:
-            elements = soup.find_all(tag)
-            for element in elements:
-                scraped_data.append({
-                    'structure': f"<{tag}>",
-                    'content': element.get_text(strip=True)
-                })
+        # Use BeautifulSoup with html5lib to parse the cleaned content
+        soup = BeautifulSoup(cleaned_content, 'html5lib')
+        
+        scraped_data = [{'structure': 'content', 'content': soup.get_text(strip=True)}]
         
         gc.collect()  # Free memory
         return url, scraped_data
