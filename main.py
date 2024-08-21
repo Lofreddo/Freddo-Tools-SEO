@@ -1,5 +1,5 @@
 import streamlit as st
-from scripts import MyTextGuru, MyTextGuruBulk, ExtractSerps, MasterSpinGenerator, Scrapping, ExtractSerpsV2, PointsChauds, DomainChecker, SiteAnalyzer
+from scripts import MyTextGuru, MyTextGuruBulk, ExtractSerps, MasterSpinGenerator, Scrapping, ExtractSerpsV2, PointsChauds, DomainChecker, SiteAnalyzer, Scrapython
 
 # Configuration des pages
 PAGES = {
@@ -11,7 +11,8 @@ PAGES = {
     "Scrapping": Scrapping,
     "PointsChauds": PointsChauds,
     "DomainChecker": DomainChecker,
-    "SiteAnalyzer": SiteAnalyzer
+    "SiteAnalyzer": SiteAnalyzer,
+    "Scrapython": Scrapython
 }
 
 # Créer une sidebar pour la navigation
