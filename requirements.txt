@@ -12,3 +12,5 @@ pyarrow
 playwright
 tldextract
 google
+readability-lxml
+boilerpy3
