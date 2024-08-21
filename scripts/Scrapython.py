@@ -1,33 +1,50 @@
 import streamlit as st
 import pandas as pd
 import requests
-from boilerpy3 import extractors
+from readability import Document
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 import gc
 import logging
 from bs4 import BeautifulSoup
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 
 # Initialize a session for reusing connections
 session = requests.Session()
 
+# Setup retry strategy
+retry_strategy = Retry(
+    total=3,
+    status_forcelist=[403, 404, 500, 502, 503, 504],
+    method_whitelist=["HEAD", "GET", "OPTIONS"]
+)
+adapter = HTTPAdapter(max_retries=retry_strategy)
+session.mount("https://", adapter)
+session.mount("http://", adapter)
+
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def scrape_text_from_url(url):
     try:
-        response = session.get(url, timeout=5)
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = session.get(url, headers=headers, timeout=5)
         response.raise_for_status()
-        
-        # Using boilerpy3 to extract main content
-        extractor = extractors.ArticleExtractor()
-        cleaned_content = extractor.get_content(response.text)
+
+        # Handle specific HTTP errors
+        if response.status_code in [403, 404]:
+            logging.error(f"Error {response.status_code} for {url}")
+            return url, [{"structure": "Error", "content": f"HTTP Error {response.status_code}"}]
+
+        # Use readability to extract main content
+        doc = Document(response.text)
+        main_content_html = doc.summary()
         
         # Use BeautifulSoup with html5lib to parse the cleaned content
-        soup = BeautifulSoup(cleaned_content, 'html5lib')
-        
+        soup = BeautifulSoup(main_content_html, 'html5lib')
         scraped_data = [{'structure': 'content', 'content': soup.get_text(strip=True)}]
-        
+
         gc.collect()  # Free memory
         return url, scraped_data
     except requests.exceptions.RequestException as e:
