@@ -91,7 +91,7 @@ def main():
                     replacements = {key: '' if pd.isna(value) else str(value) for key, value in row.items()}
                     
                     text = master_spin(master_spin_text, replacements)
-                    url_component = (url_components)
+                    url_component = "-".join(url_components)
                     h1_content = extract_h1_content(text)
                     # Append the selected first column and other results to the list
                     results.append([row[selected_first_column], text, f"{url_prefix}{url_component}", h1_content])
