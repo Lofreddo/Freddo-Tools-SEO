@@ -40,7 +40,7 @@ def generate_excel(unclosed_tags, empty_tags):
     df_unclosed.to_excel(writer, index=False, sheet_name='Unclosed Tags')
     df_empty.to_excel(writer, index=False, sheet_name='Empty Tags')
 
-    writer.save()
+    writer.close()  # Utiliser close() au lieu de save()
     output.seek(0)
     return output
 
