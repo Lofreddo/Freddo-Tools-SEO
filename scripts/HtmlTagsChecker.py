@@ -10,12 +10,16 @@ def find_unclosed_tags(html):
     unclosed_tags = []
 
     for tag in soup.find_all(True):
-        opened_tags.append(tag.name)
-        if tag.find_all(True):
-            closed_tags.extend([child.name for child in tag.find_all(True)])
+        tag_str = str(tag)
+        opened_tags.append(tag_str)
 
+        # Registre les balises fermées avec leur contenu complet
+        if tag.find_all(True):
+            closed_tags.extend([str(child) for child in tag.find_all(True)])
+
+    # Identifier les balises non fermées en comparant les occurrences
     for tag in opened_tags:
-        if opened_tags.count(tag) != closed_tags.count(tag):
+        if opened_tags.count(tag) > closed_tags.count(tag):
             unclosed_tags.append(tag)
 
     return list(set(unclosed_tags))
@@ -25,6 +29,7 @@ def find_empty_tags(html):
     empty_tags = []
 
     for tag in soup.find_all(True):
+        # Vérifie si la balise est vide et récupère la balise complète
         if not tag.text.strip() and not tag.find_all(True):
             empty_tags.append(str(tag))
 
