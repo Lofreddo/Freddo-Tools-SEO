@@ -1,38 +1,39 @@
 import streamlit as st
-from bs4 import BeautifulSoup
+import re
 import pandas as pd
 from io import BytesIO
-import re
 
 def find_unclosed_tags(html):
-    soup = BeautifulSoup(html, 'html.parser')
+    tag_pattern = re.compile(r'<([^/\s>]+)[^>]*>')  # Regex to find opening tags
+    closing_tag_pattern = re.compile(r'</([^>]+)>')  # Regex to find closing tags
+    tags = re.findall(tag_pattern, html)
+    closing_tags = re.findall(closing_tag_pattern, html)
+    
     stack = []
     unclosed_tags = []
 
-    # Parcourir toutes les balises dans l'ordre
-    for tag in soup.find_all(True):
-        tag_str = str(tag)
-        if not tag_str.startswith("</"):  # Ignorer les balises fermantes
-            stack.append(tag)
-        else:
-            # Retirer de la pile la balise ouvrante correspondante
-            if stack and stack[-1].name == tag.name:
-                stack.pop()
-    
-    # Les balises restantes dans la pile sont les balises non fermées
-    for tag in stack:
-        unclosed_tags.append(str(tag))
+    for match in re.finditer(tag_pattern, html):
+        tag_str = match.group(0)
+        tag_name = match.group(1)
+        stack.append((tag_name, tag_str))
 
+    for match in re.finditer(closing_tag_pattern, html):
+        closing_tag_name = match.group(1)
+        if stack and stack[-1][0] == closing_tag_name:
+            stack.pop()
+    
+    unclosed_tags = [tag[1] for tag in stack]
+    
     return unclosed_tags
 
 def find_empty_tags(html):
-    soup = BeautifulSoup(html, 'html.parser')
+    empty_tag_pattern = re.compile(r'<(\w+)([^>]*)/?>')
     empty_tags = []
 
-    for tag in soup.find_all(True):
-        if not tag.text.strip() and not tag.find_all(True):
-            # Utilisation de la méthode prettify pour conserver l'ordre des attributs
-            empty_tags.append(tag.prettify(formatter=None).strip())
+    for match in re.finditer(empty_tag_pattern, html):
+        tag_str = match.group(0)
+        if match.group(0).endswith('/>') or not re.search(r'</\s*' + re.escape(match.group(1)) + r'\s*>', html):
+            empty_tags.append(tag_str.strip())
 
     return empty_tags
 
