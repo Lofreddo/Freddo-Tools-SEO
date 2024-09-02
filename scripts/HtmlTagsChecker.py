@@ -2,28 +2,35 @@ import streamlit as st
 from bs4 import BeautifulSoup
 import pandas as pd
 from io import BytesIO
+import re
 
 def find_unclosed_tags(html):
     soup = BeautifulSoup(html, 'html.parser')
+    stack = []
     unclosed_tags = []
 
-    # Garder trace des balises ouvertes non fermées
-    open_tags_stack = []
+    # Regex pour identifier les balises ouvrantes et fermantes
+    tag_regex = re.compile(r'<(/?[\w\s=\"\'\-:;]*)>')
 
-    for tag in soup.find_all(True):
-        # Ajouter la balise au stack lorsqu'elle est ouverte
-        open_tags_stack.append(tag)
+    # Extraire toutes les balises dans l'ordre où elles apparaissent
+    for match in tag_regex.finditer(html):
+        tag_str = match.group(0)
+        is_closing_tag = tag_str.startswith("</")
+        tag_name = tag_str.split()[0].replace("</", "").replace("<", "").replace(">", "")
 
-        # Si une balise fermante est trouvée, enlever la balise correspondante du stack
-        if tag.find_all(True):
-            for child in tag.find_all(True):
-                if child in open_tags_stack:
-                    open_tags_stack.remove(child)
+        if not is_closing_tag:
+            # Balise ouvrante, ajouter à la pile
+            stack.append(tag_str)
+        else:
+            # Balise fermante, vérifier si elle correspond à la dernière balise ouvrante
+            if stack and tag_name in stack[-1]:
+                stack.pop()  # Balise fermée correctement, enlever de la pile
+            else:
+                unclosed_tags.append(tag_str)  # Balise fermante sans balise ouvrante correspondante
 
-    # Toutes les balises restantes dans le stack sont des balises ouvertes non fermées
-    for tag in open_tags_stack:
-        unclosed_tags.append(str(tag))
-
+    # Toutes les balises restantes dans la pile sont non fermées
+    unclosed_tags.extend(stack)
+    
     return unclosed_tags
 
 def find_empty_tags(html):
@@ -31,7 +38,7 @@ def find_empty_tags(html):
     empty_tags = []
 
     for tag in soup.find_all(True):
-        # Vérifie si la balise est vide et récupère la balise complète
+        # Vérifie si la balise est vide et récupère la balise complète avec attributs dans l'ordre
         if not tag.text.strip() and not tag.find_all(True):
             empty_tags.append(str(tag))
 
@@ -50,7 +57,7 @@ def generate_excel(unclosed_tags, empty_tags):
     df_unclosed.to_excel(writer, index=False, sheet_name='Unclosed Tags')
     df_empty.to_excel(writer, index=False, sheet_name='Empty Tags')
 
-    writer.close()
+    writer.close()  # Utiliser close() au lieu de save()
     output.seek(0)
     return output
 
