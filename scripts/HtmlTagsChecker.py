@@ -11,11 +11,12 @@ def find_unclosed_tags(html):
 
     # Parcourir toutes les balises dans l'ordre
     for tag in soup.find_all(True):
-        if not tag.name.startswith("/"):  # Ignorer les balises fermantes
+        tag_str = str(tag)
+        if not tag_str.startswith("</"):  # Ignorer les balises fermantes
             stack.append(tag)
         else:
             # Retirer de la pile la balise ouvrante correspondante
-            if stack and stack[-1].name == tag.name.replace("/", ""):
+            if stack and stack[-1].name == tag.name:
                 stack.pop()
     
     # Les balises restantes dans la pile sont les balises non fermées
@@ -37,18 +38,14 @@ def find_empty_tags(html):
 
 def generate_excel(unclosed_tags, empty_tags):
     output = BytesIO()
-    writer = pd.ExcelWriter(output, engine='openpyxl')
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # Unclosed Tags: Chaque balise dans une cellule distincte
+        df_unclosed = pd.DataFrame({'Unclosed Tag': unclosed_tags})
+        df_empty = pd.DataFrame({'Empty Tag': empty_tags})
 
-    # Unclosed Tags: Chaque balise dans une cellule distincte
-    df_unclosed = pd.DataFrame({'Unclosed Tag': unclosed_tags})
-    
-    # Empty Tags: Lister les balises vides en entier avec attributs dans l'ordre
-    df_empty = pd.DataFrame({'Empty Tag': empty_tags})
+        df_unclosed.to_excel(writer, index=False, sheet_name='Unclosed Tags')
+        df_empty.to_excel(writer, index=False, sheet_name='Empty Tags')
 
-    df_unclosed.to_excel(writer, index=False, sheet_name='Unclosed Tags')
-    df_empty.to_excel(writer, index=False, sheet_name='Empty Tags')
-
-    writer.close()  # Utiliser close() au lieu de save()
     output.seek(0)
     return output
 
