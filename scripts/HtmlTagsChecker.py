@@ -1,71 +1,44 @@
 import streamlit as st
-import re
 import pandas as pd
-from io import BytesIO
+from html.parser import HTMLParser
 
-def find_unclosed_tags(html):
-    tag_pattern = re.compile(r'<([^/\s>]+)[^>]*>')  # Regex to find opening tags
-    closing_tag_pattern = re.compile(r'</([^>]+)>')  # Regex to find closing tags
-    tags = re.findall(tag_pattern, html)
-    closing_tags = re.findall(closing_tag_pattern, html)
-    
-    stack = []
-    unclosed_tags = []
+class UnclosedTagFinder(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.open_tags = []
 
-    for match in re.finditer(tag_pattern, html):
-        tag_str = match.group(0)
-        tag_name = match.group(1)
-        stack.append((tag_name, tag_str))
+    def handle_starttag(self, tag, attrs):
+        self.open_tags.append(tag)
 
-    for match in re.finditer(closing_tag_pattern, html):
-        closing_tag_name = match.group(1)
-        if stack and stack[-1][0] == closing_tag_name:
-            stack.pop()
-    
-    unclosed_tags = [tag[1] for tag in stack]
-    
-    return unclosed_tags
+    def handle_endtag(self, tag):
+        if tag in self.open_tags:
+            self.open_tags.remove(tag)
 
-def find_empty_tags(html):
-    empty_tag_pattern = re.compile(r'<(\w+)([^>]*)/?>')
-    empty_tags = []
+    def get_unclosed_tags(self):
+        return self.open_tags
 
-    for match in re.finditer(empty_tag_pattern, html):
-        tag_str = match.group(0)
-        if match.group(0).endswith('/>') or not re.search(r'</\s*' + re.escape(match.group(1)) + r'\s*>', html):
-            empty_tags.append(tag_str.strip())
-
-    return empty_tags
-
-def generate_excel(unclosed_tags, empty_tags):
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        # Unclosed Tags: Chaque balise dans une cellule distincte
-        df_unclosed = pd.DataFrame({'Unclosed Tag': unclosed_tags})
-        df_empty = pd.DataFrame({'Empty Tag': empty_tags})
-
-        df_unclosed.to_excel(writer, index=False, sheet_name='Unclosed Tags')
-        df_empty.to_excel(writer, index=False, sheet_name='Empty Tags')
-
-    output.seek(0)
-    return output
+def find_unclosed_tags(html_content):
+    parser = UnclosedTagFinder()
+    parser.feed(html_content)
+    return parser.get_unclosed_tags()
 
 def main():
-    st.title("HTML Tags Checker")
+    st.title("HTML Unclosed Tags Finder")
 
-    html_code = st.text_area("Paste your HTML code here:")
+    # Input text area for HTML content
+    html_content = st.text_area("Enter HTML content:")
 
-    if st.button("Analyze HTML"):
-        unclosed_tags = find_unclosed_tags(html_code)
-        empty_tags = find_empty_tags(html_code)
+    if st.button("Find Unclosed Tags"):
+        unclosed_tags = find_unclosed_tags(html_content)
+        if unclosed_tags:
+            st.write("Unclosed tags found:", unclosed_tags)
 
-        if unclosed_tags or empty_tags:
-            excel_file = generate_excel(unclosed_tags, empty_tags)
-            st.download_button(
-                label="Download Excel file",
-                data=excel_file,
-                file_name="html_analysis.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            # Create a DataFrame and export to Excel
+            df = pd.DataFrame(unclosed_tags, columns=["Unclosed Tags"])
+            df.to_excel("unclosed_tags.xlsx", index=False)
+            st.success("Excel file created: unclosed_tags.xlsx")
         else:
-            st.write("No unclosed or empty tags found.")
+            st.write("No unclosed tags found.")
+
+if __name__ == "__main__":
+    main()
