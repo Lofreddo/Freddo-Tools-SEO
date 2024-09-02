@@ -3,52 +3,26 @@ import pandas as pd
 import re
 import io
 
-htmlRegex = '<[^\!][^>]*>'
-openingTagRegex = '<[^/]'
-closingTagRegex = '</'
-
-def get_tag_list(html):
-    tags = re.compile(htmlRegex, flags=re.I | re.M)
-    tag_list = re.findall(tags, html)
-    return tag_list
-
-def get_opening_tag_list(tag_list):
-    opening_tag = list(
-        filter(
-            lambda tag: re.match(openingTagRegex, tag),
-            tag_list
-        )
-    )
-    return opening_tag
-
-def get_closing_tag_list(tag_list):
-    closing_tag_list = list(
-        filter(
-            lambda tag: re.match(closingTagRegex, tag),
-            tag_list
-        )
-    )
-    return closing_tag_list
-
-def clean_html(raw_html):
-    cleantext = re.sub(r'\W+', '', raw_html)
-    return cleantext
-
-def clean_list(the_list):
-    return [clean_html(val) for val in the_list]
-
 def find_unclosed_tags(html_content):
-    tag_list = get_tag_list(html_content)
-    opening_tag_list = get_opening_tag_list(tag_list)
-    closing_tag_list = get_closing_tag_list(tag_list)
-    
-    clean_opening = clean_list(opening_tag_list)
-    clean_closing = clean_list(closing_tag_list)
-    
+    stack = []
     unclosed_tags = []
-    for tag in clean_opening:
-        if tag not in clean_closing:
-            unclosed_tags.append(tag)
+    tag_pattern = re.compile(r'<[^>]+>')
+    
+    for match in tag_pattern.finditer(html_content):
+        tag = match.group()
+        if tag.startswith('</'):
+            # Closing tag
+            if stack and stack[-1].split()[0][1:] == tag[2:-1]:
+                stack.pop()
+            else:
+                # Mismatched closing tag, ignore it
+                pass
+        elif not tag.endswith('/>'):
+            # Opening tag
+            stack.append(tag)
+    
+    # Any tags left in the stack are unclosed
+    unclosed_tags = stack
     
     return unclosed_tags
 
