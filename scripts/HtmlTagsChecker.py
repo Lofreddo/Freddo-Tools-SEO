@@ -31,7 +31,15 @@ def find_empty_tags(html):
     for tag in soup.find_all(True):
         # Vérifie si la balise est vide et récupère la balise complète
         if not tag.text.strip() and not tag.find_all(True):
-            empty_tags.append(str(tag))
+            tag_details = {
+                'tag': tag.name,
+                'id': tag.get('id', ''),
+                'class': tag.get('class', ''),
+                'name': tag.get('name', ''),
+                'rel': tag.get('rel', ''),
+                'other_attributes': {k: v for k, v in tag.attrs.items() if k not in ['id', 'class', 'name', 'rel']}
+            }
+            empty_tags.append(tag_details)
 
     return empty_tags
 
@@ -39,8 +47,22 @@ def generate_excel(unclosed_tags, empty_tags):
     output = BytesIO()
     writer = pd.ExcelWriter(output, engine='openpyxl')
 
-    df_unclosed = pd.DataFrame(unclosed_tags, columns=["Unclosed Tags"])
-    df_empty = pd.DataFrame(empty_tags, columns=["Empty Tags"])
+    # Unclosed Tags: Chaque balise dans une cellule distincte
+    df_unclosed = pd.DataFrame({'Unclosed Tag': unclosed_tags})
+    
+    # Empty Tags: Lister les attributs des balises vides
+    empty_tags_data = []
+    for tag in empty_tags:
+        empty_tags_data.append([
+            tag['tag'],
+            tag['id'],
+            tag['class'],
+            tag['name'],
+            tag['rel'],
+            ', '.join([f"{k}={v}" for k, v in tag['other_attributes'].items()])
+        ])
+    
+    df_empty = pd.DataFrame(empty_tags_data, columns=["Tag", "ID", "Class", "Name", "Rel", "Other Attributes"])
 
     df_unclosed.to_excel(writer, index=False, sheet_name='Unclosed Tags')
     df_empty.to_excel(writer, index=False, sheet_name='Empty Tags')
