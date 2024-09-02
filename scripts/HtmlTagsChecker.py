@@ -5,24 +5,26 @@ from io import BytesIO
 
 def find_unclosed_tags(html):
     soup = BeautifulSoup(html, 'html.parser')
-    opened_tags = []
-    closed_tags = []
     unclosed_tags = []
 
+    # Garder trace des balises ouvertes non fermées
+    open_tags_stack = []
+
     for tag in soup.find_all(True):
-        tag_str = str(tag)
-        opened_tags.append(tag_str)
+        # Ajouter la balise au stack lorsqu'elle est ouverte
+        open_tags_stack.append(tag)
 
-        # Registre les balises fermées avec leur contenu complet
+        # Si une balise fermante est trouvée, enlever la balise correspondante du stack
         if tag.find_all(True):
-            closed_tags.extend([str(child) for child in tag.find_all(True)])
+            for child in tag.find_all(True):
+                if child in open_tags_stack:
+                    open_tags_stack.remove(child)
 
-    # Identifier les balises non fermées en comparant les occurrences
-    for tag in opened_tags:
-        if opened_tags.count(tag) > closed_tags.count(tag):
-            unclosed_tags.append(tag)
+    # Toutes les balises restantes dans le stack sont des balises ouvertes non fermées
+    for tag in open_tags_stack:
+        unclosed_tags.append(str(tag))
 
-    return list(set(unclosed_tags))
+    return unclosed_tags
 
 def find_empty_tags(html):
     soup = BeautifulSoup(html, 'html.parser')
@@ -31,15 +33,7 @@ def find_empty_tags(html):
     for tag in soup.find_all(True):
         # Vérifie si la balise est vide et récupère la balise complète
         if not tag.text.strip() and not tag.find_all(True):
-            tag_details = {
-                'tag': tag.name,
-                'id': tag.get('id', ''),
-                'class': tag.get('class', ''),
-                'name': tag.get('name', ''),
-                'rel': tag.get('rel', ''),
-                'other_attributes': {k: v for k, v in tag.attrs.items() if k not in ['id', 'class', 'name', 'rel']}
-            }
-            empty_tags.append(tag_details)
+            empty_tags.append(str(tag))
 
     return empty_tags
 
@@ -50,24 +44,13 @@ def generate_excel(unclosed_tags, empty_tags):
     # Unclosed Tags: Chaque balise dans une cellule distincte
     df_unclosed = pd.DataFrame({'Unclosed Tag': unclosed_tags})
     
-    # Empty Tags: Lister les attributs des balises vides
-    empty_tags_data = []
-    for tag in empty_tags:
-        empty_tags_data.append([
-            tag['tag'],
-            tag['id'],
-            tag['class'],
-            tag['name'],
-            tag['rel'],
-            ', '.join([f"{k}={v}" for k, v in tag['other_attributes'].items()])
-        ])
-    
-    df_empty = pd.DataFrame(empty_tags_data, columns=["Tag", "ID", "Class", "Name", "Rel", "Other Attributes"])
+    # Empty Tags: Lister les balises vides en entier avec attributs
+    df_empty = pd.DataFrame({'Empty Tag': empty_tags})
 
     df_unclosed.to_excel(writer, index=False, sheet_name='Unclosed Tags')
     df_empty.to_excel(writer, index=False, sheet_name='Empty Tags')
 
-    writer.close()  # Utiliser close() au lieu de save()
+    writer.close()
     output.seek(0)
     return output
 
