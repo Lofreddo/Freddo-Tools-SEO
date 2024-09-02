@@ -9,28 +9,19 @@ def find_unclosed_tags(html):
     stack = []
     unclosed_tags = []
 
-    # Regex pour identifier les balises ouvrantes et fermantes
-    tag_regex = re.compile(r'<(/?[\w\s=\"\'\-:;]*)>')
-
-    # Extraire toutes les balises dans l'ordre où elles apparaissent
-    for match in tag_regex.finditer(html):
-        tag_str = match.group(0)
-        is_closing_tag = tag_str.startswith("</")
-        tag_name = tag_str.split()[0].replace("</", "").replace("<", "").replace(">", "")
-
-        if not is_closing_tag:
-            # Balise ouvrante, ajouter à la pile
-            stack.append(tag_str)
+    # Parcourir toutes les balises dans l'ordre
+    for tag in soup.find_all(True):
+        if not tag.name.startswith("/"):  # Ignorer les balises fermantes
+            stack.append(tag)
         else:
-            # Balise fermante, vérifier si elle correspond à la dernière balise ouvrante
-            if stack and tag_name in stack[-1]:
-                stack.pop()  # Balise fermée correctement, enlever de la pile
-            else:
-                unclosed_tags.append(tag_str)  # Balise fermante sans balise ouvrante correspondante
-
-    # Toutes les balises restantes dans la pile sont non fermées
-    unclosed_tags.extend(stack)
+            # Retirer de la pile la balise ouvrante correspondante
+            if stack and stack[-1].name == tag.name.replace("/", ""):
+                stack.pop()
     
+    # Les balises restantes dans la pile sont les balises non fermées
+    for tag in stack:
+        unclosed_tags.append(str(tag))
+
     return unclosed_tags
 
 def find_empty_tags(html):
@@ -38,9 +29,9 @@ def find_empty_tags(html):
     empty_tags = []
 
     for tag in soup.find_all(True):
-        # Vérifie si la balise est vide et récupère la balise complète avec attributs dans l'ordre
         if not tag.text.strip() and not tag.find_all(True):
-            empty_tags.append(str(tag))
+            # Utilisation de la méthode prettify pour conserver l'ordre des attributs
+            empty_tags.append(tag.prettify(formatter=None).strip())
 
     return empty_tags
 
@@ -51,7 +42,7 @@ def generate_excel(unclosed_tags, empty_tags):
     # Unclosed Tags: Chaque balise dans une cellule distincte
     df_unclosed = pd.DataFrame({'Unclosed Tag': unclosed_tags})
     
-    # Empty Tags: Lister les balises vides en entier avec attributs
+    # Empty Tags: Lister les balises vides en entier avec attributs dans l'ordre
     df_empty = pd.DataFrame({'Empty Tag': empty_tags})
 
     df_unclosed.to_excel(writer, index=False, sheet_name='Unclosed Tags')
