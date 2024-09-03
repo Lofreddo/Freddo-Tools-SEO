@@ -1,4 +1,7 @@
+import streamlit as st
+import pandas as pd
 import re
+import io
 from collections import defaultdict
 
 def find_unclosed_tags(html_content):
@@ -54,7 +57,6 @@ def find_unclosed_tags(html_content):
 
     return unclosed_tags
 
-# Fonction principale pour Streamlit (inchangée)
 def main():
     st.title("HTML Unclosed Tags Finder")
 
@@ -66,6 +68,9 @@ def main():
         if unclosed_tags:
             flat_list = [(tag, item) for tag, items in unclosed_tags.items() for item in items]
             df = pd.DataFrame(flat_list, columns=["Tag Name", "Issue"])
+            
+            st.write("Unclosed Tags Found:")
+            st.dataframe(df)
             
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
