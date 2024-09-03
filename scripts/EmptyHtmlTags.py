@@ -2,18 +2,24 @@ import streamlit as st
 import pandas as pd
 from bs4 import BeautifulSoup
 import io
+import re
+
+def is_self_closing(tag):
+    return tag.name in ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr', 'path']
 
 def find_empty_tags(html_content):
     soup = BeautifulSoup(html_content, 'html.parser')
     empty_tags = []
 
-    for tag in soup.find_all():
-        if not tag.contents and not tag.string:
-            empty_tags.append(str(tag))
-        elif len(tag.contents) == 1 and isinstance(tag.contents[0], str) and not tag.contents[0].strip():
-            empty_tags.append(str(tag))
-        elif all(isinstance(child, str) and not child.strip() for child in tag.contents):
-            empty_tags.append(str(tag))
+    for tag in re.finditer(r'<[^/][^>]*>(?:\s*</[^>]+>)?', html_content):
+        tag_content = tag.group()
+        if '/>' in tag_content:  # Ignorer les balises auto-fermantes
+            continue
+        
+        parsed_tag = BeautifulSoup(tag_content, 'html.parser').find()
+        if parsed_tag and not is_self_closing(parsed_tag):
+            if not parsed_tag.contents or all(isinstance(child, str) and not child.strip() for child in parsed_tag.contents):
+                empty_tags.append(tag_content)
 
     return empty_tags
 
