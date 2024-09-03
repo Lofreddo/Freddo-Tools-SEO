@@ -5,9 +5,12 @@ import io
 from collections import defaultdict
 
 # Liste des balises auto-fermantes
-self_closing_tags = {'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'keygen', 'link', 'meta', 'param', 'source', 'track', 'wbr'}
+self_closing_tags = {'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'keygen', 'link', 'meta', 'param', 'source', 'track', 'wbr', 'path'}
 
 def find_unclosed_tags(html_content):
+    # Minification du code HTML pour supprimer les espaces inutiles
+    html_content = re.sub(r'>\s+<', '><', html_content.strip())
+
     tag_pattern = re.compile(r'<(/?)(\w+)([^>]*)>')
     stack = []
     unclosed_tags = defaultdict(list)
@@ -17,22 +20,21 @@ def find_unclosed_tags(html_content):
         tag_name = match.group(2).lower()
         full_tag = match.group(0)
         
-        if tag_name in self_closing_tags:
+        # Vérifier si la balise est auto-fermante
+        if tag_name in self_closing_tags or full_tag.endswith('/>'):
             continue
         
         if not is_closing:
             stack.append((tag_name, full_tag))
         else:
+            while stack and stack[-1][0] != tag_name:
+                unclosed_tag = stack.pop()
+                unclosed_tags[unclosed_tag[0]].append(unclosed_tag[1])
             if stack and stack[-1][0] == tag_name:
                 stack.pop()
             else:
-                # Closing tag without matching opening tag
-                while stack and stack[-1][0] != tag_name:
-                    unclosed_tag = stack.pop()
-                    unclosed_tags[unclosed_tag[0]].append(unclosed_tag[1])
-                if not stack:
-                    # Extra closing tag
-                    unclosed_tags[tag_name].append(f"Extra closing tag: {full_tag}")
+                # Extra closing tag
+                unclosed_tags[tag_name].append(f"Extra closing tag: {full_tag}")
     
     # Any tags left in the stack are unclosed
     for tag_name, full_tag in reversed(stack):
