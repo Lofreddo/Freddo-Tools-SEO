@@ -13,6 +13,7 @@ def find_unclosed_tags(html_content):
 
     tag_pattern = re.compile(r'<(/?)(\w+)([^>]*)>')
     stack = []
+    tag_count = defaultdict(lambda: {'open': 0, 'close': 0})
     unclosed_tags = defaultdict(list)
     
     for match in tag_pattern.finditer(html_content):
@@ -26,20 +27,26 @@ def find_unclosed_tags(html_content):
         
         if not is_closing:
             stack.append((tag_name, full_tag))
+            tag_count[tag_name]['open'] += 1
         else:
-            while stack and stack[-1][0] != tag_name:
-                unclosed_tag = stack.pop()
-                unclosed_tags[unclosed_tag[0]].append(unclosed_tag[1])
+            tag_count[tag_name]['close'] += 1
             if stack and stack[-1][0] == tag_name:
                 stack.pop()
             else:
-                # Extra closing tag
-                unclosed_tags[tag_name].append(f"Extra closing tag: {full_tag}")
-    
-    # Any tags left in the stack are unclosed
+                # Si la balise fermante ne correspond pas à la dernière balise ouverte
+                unclosed_tags[tag_name].append(f"Mismatched closing tag: {full_tag}")
+
+    # Vérifier les balises non fermées restantes dans la pile
     for tag_name, full_tag in reversed(stack):
         unclosed_tags[tag_name].append(full_tag)
-    
+
+    # Vérifier le décompte final des balises
+    for tag, count in tag_count.items():
+        if count['open'] > count['close']:
+            unclosed_tags[tag].append(f"{count['open'] - count['close']} unclosed {tag} tag(s)")
+        elif count['close'] > count['open']:
+            unclosed_tags[tag].append(f"{count['close'] - count['open']} extra closing {tag} tag(s)")
+
     return unclosed_tags
 
 def main():
@@ -53,7 +60,7 @@ def main():
         if unclosed_tags:
             # Flatten the dictionary into a list of tuples
             flat_list = [(tag, item) for tag, items in unclosed_tags.items() for item in items]
-            df = pd.DataFrame(flat_list, columns=["Tag Name", "Unclosed Tag"])
+            df = pd.DataFrame(flat_list, columns=["Tag Name", "Issue"])
             
             # Create an in-memory Excel file
             output = io.BytesIO()
