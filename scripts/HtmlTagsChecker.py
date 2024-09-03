@@ -2,27 +2,41 @@ import streamlit as st
 import pandas as pd
 import re
 import io
+from collections import defaultdict
+
+# Liste des balises auto-fermantes
+self_closing_tags = {'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'keygen', 'link', 'meta', 'param', 'source', 'track', 'wbr'}
 
 def find_unclosed_tags(html_content):
+    tag_pattern = re.compile(r'<(/?)(\w+)([^>]*)>')
     stack = []
-    unclosed_tags = []
-    tag_pattern = re.compile(r'<[^>]+>')
+    unclosed_tags = defaultdict(list)
     
     for match in tag_pattern.finditer(html_content):
-        tag = match.group()
-        if tag.startswith('</'):
-            # Closing tag
-            if stack and stack[-1].split()[0][1:] == tag[2:-1]:
+        is_closing = match.group(1) == '/'
+        tag_name = match.group(2).lower()
+        full_tag = match.group(0)
+        
+        if tag_name in self_closing_tags:
+            continue
+        
+        if not is_closing:
+            stack.append((tag_name, full_tag))
+        else:
+            if stack and stack[-1][0] == tag_name:
                 stack.pop()
             else:
-                # Mismatched closing tag, ignore it
-                pass
-        elif not tag.endswith('/>'):
-            # Opening tag
-            stack.append(tag)
+                # Closing tag without matching opening tag
+                while stack and stack[-1][0] != tag_name:
+                    unclosed_tag = stack.pop()
+                    unclosed_tags[unclosed_tag[0]].append(unclosed_tag[1])
+                if not stack:
+                    # Extra closing tag
+                    unclosed_tags[tag_name].append(f"Extra closing tag: {full_tag}")
     
     # Any tags left in the stack are unclosed
-    unclosed_tags = stack
+    for tag_name, full_tag in reversed(stack):
+        unclosed_tags[tag_name].append(full_tag)
     
     return unclosed_tags
 
@@ -35,7 +49,9 @@ def main():
         unclosed_tags = find_unclosed_tags(html_content)
         
         if unclosed_tags:
-            df = pd.DataFrame(unclosed_tags, columns=["Unclosed Tags"])
+            # Flatten the dictionary into a list of tuples
+            flat_list = [(tag, item) for tag, items in unclosed_tags.items() for item in items]
+            df = pd.DataFrame(flat_list, columns=["Tag Name", "Unclosed Tag"])
             
             # Create an in-memory Excel file
             output = io.BytesIO()
