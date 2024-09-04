@@ -1,6 +1,7 @@
 import streamlit as st
 from bs4 import BeautifulSoup
 import re
+import pandas as pd  # Import de pandas pour générer des fichiers Excel
 
 def extract_css_classes(css_content):
     """Extraire toutes les classes CSS du contenu CSS"""
@@ -38,20 +39,16 @@ def detect_unused_css(css_content, html_content):
 
     return list(unused_classes), unused_elements
 
-def generate_unused_report(unused_classes, unused_elements):
-    """Générer un rapport des classes CSS non utilisées et des éléments HTML correspondants"""
-    report = []
+def generate_unused_report_excel(unused_classes):
+    """Générer un fichier Excel listant les classes CSS inutilisées"""
     if unused_classes:
-        report.append(f"Classes CSS inutilisées : {', '.join(unused_classes)}")
-    else:
-        report.append("Aucune classe CSS inutilisée détectée.")
-    
-    if unused_elements:
-        report.append("\nÉléments HTML avec classes inutilisées :")
-        for element, classes in unused_elements:
-            report.append(f"Balise : {str(element)} -- Classes inutilisées : {', '.join(classes)}")
-    
-    return '\n'.join(report)
+        # Créer un DataFrame avec une colonne "Classes CSS non utilisées"
+        df = pd.DataFrame(unused_classes, columns=["Classes CSS non utilisées"])
+
+        # Écrire dans un fichier Excel
+        df.to_excel("unused_css_report.xlsx", index=False)
+        return "unused_css_report.xlsx"
+    return None
 
 # Fonction principale appelée depuis main.py
 def main():
@@ -65,19 +62,17 @@ def main():
     if st.button("Analyser"):
         if html_content and css_content:
             unused_classes, unused_elements = detect_unused_css(css_content, html_content)
-            report = generate_unused_report(unused_classes, unused_elements)
 
-            # Affichage du rapport
-            st.subheader("Résultats de l'analyse")
-            st.text(report)
+            # Générer un fichier Excel avec les classes CSS inutilisées
+            excel_file = generate_unused_report_excel(unused_classes)
 
-            # Génération d'un fichier de rapport
-            with open("unused_css_report.txt", "w") as f:
-                f.write(report)
-            st.success("Le fichier de rapport a été généré avec succès !")
+            if excel_file:
+                st.success("Le fichier Excel a été généré avec succès !")
 
-            # Lien pour télécharger le fichier
-            with open("unused_css_report.txt", "r") as f:
-                st.download_button("Télécharger le rapport", f, file_name="unused_css_report.txt")
+                # Télécharger le fichier Excel
+                with open(excel_file, "rb") as f:
+                    st.download_button("Télécharger le rapport Excel", f, file_name=excel_file)
+            else:
+                st.info("Aucune classe CSS inutilisée n'a été détectée.")
         else:
             st.error("Veuillez entrer du contenu HTML et CSS avant de lancer l'analyse.")
