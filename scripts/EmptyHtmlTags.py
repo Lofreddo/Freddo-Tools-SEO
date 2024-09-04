@@ -7,7 +7,10 @@ def is_self_closing(tag):
     return tag.tag in ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr', 'path']
 
 def is_empty_tag(tag):
-    return not tag.text_content().strip() and len(tag) == 0
+    # Vérifier si l'élément a un contenu texte vide et pas d'enfants
+    if tag.text is None or not tag.text.strip():
+        return len(tag) == 0  # Vérifie si l'élément n'a pas d'enfants
+    return False
 
 def find_empty_tags(html_content):
     tree = lxml.html.fromstring(html_content)
