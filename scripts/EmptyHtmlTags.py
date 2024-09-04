@@ -8,10 +8,12 @@ def is_self_closing(tag):
 
 def is_empty_tag(tag):
     if isinstance(tag, Tag):
-        # Vérifier si tous les contenus non vides sont des espaces ou des balises vides
-        return all(isinstance(child, NavigableString) and not child.strip() or 
-                   (isinstance(child, Tag) and is_empty_tag(child)) 
-                   for child in tag.contents)
+        # Vérifier si la balise est vide ou ne contient que des espaces/sauts de ligne
+        return not tag.contents or all(
+            (isinstance(child, NavigableString) and not child.strip()) or
+            (isinstance(child, Tag) and is_empty_tag(child))
+            for child in tag.contents
+        )
     return False
 
 def find_empty_tags(html_content):
@@ -23,10 +25,8 @@ def find_empty_tags(html_content):
             continue
         
         if is_empty_tag(tag):
-            # Extraire la balise complète du HTML d'origine
-            start = tag.sourceline
-            end = start + len(str(tag))
-            empty_tags.append(html_content[start:end])
+            # Récupérer la balise complète avec son contenu original
+            empty_tags.append(str(tag))
 
     return empty_tags
 
