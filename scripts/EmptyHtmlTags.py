@@ -1,32 +1,25 @@
 import streamlit as st
 import pandas as pd
-from bs4 import BeautifulSoup, Tag, NavigableString
+import lxml.html
 import io
 
 def is_self_closing(tag):
-    return tag.name in ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr', 'path']
+    return tag.tag in ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr', 'path']
 
 def is_empty_tag(tag):
-    if isinstance(tag, Tag):
-        return not tag.contents or all(
-            (isinstance(child, NavigableString) and not child.strip()) or
-            (isinstance(child, Tag) and is_empty_tag(child))
-            for child in tag.contents
-        )
-    return False
+    return not tag.text_content().strip() and len(tag) == 0
 
 def find_empty_tags(html_content):
-    soup = BeautifulSoup(html_content, 'html.parser')
+    tree = lxml.html.fromstring(html_content)
     empty_tags = []
 
-    for tag in soup.find_all():
-        if is_self_closing(tag):
+    for element in tree.iter():
+        if is_self_closing(element):
             continue
         
-        if is_empty_tag(tag):
-            # Utiliser la méthode .prettify() pour conserver la structure originale de la balise
-            original_tag = str(tag)
-            empty_tags.append(original_tag)
+        if is_empty_tag(element):
+            # Utiliser lxml pour récupérer le code source d'origine de l'élément
+            empty_tags.append(lxml.html.tostring(element, encoding='unicode'))
 
     return empty_tags
 
