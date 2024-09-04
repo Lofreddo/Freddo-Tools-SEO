@@ -9,7 +9,9 @@ def is_self_closing(tag):
 
 def is_empty_tag(tag):
     if isinstance(tag, Tag):
-        return not tag.contents or all(isinstance(child, str) and not child.strip() for child in tag.contents)
+        if not tag.contents:
+            return True
+        return all(isinstance(child, (str, Tag)) and (not child.strip() if isinstance(child, str) else is_empty_tag(child)) for child in tag.contents)
     return False
 
 def find_empty_tags(html_content):
@@ -24,9 +26,11 @@ def find_empty_tags(html_content):
             # Récupérer la balise complète (ouvrante et fermante) du HTML original
             tag_str = str(tag)
             # Utiliser une expression régulière pour trouver la balise complète dans le HTML original
-            match = re.search(re.escape(tag_str), html_content)
-            if match:
-                empty_tags.append(match.group())
+            pattern = re.escape(tag_str).replace(r"\s+", r"\s*")
+            matches = list(re.finditer(pattern, html_content, re.DOTALL))
+            if matches:
+                start, end = matches[-1].span()
+                empty_tags.append(html_content[start:end])
 
     return empty_tags
 
