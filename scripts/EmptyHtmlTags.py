@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup, Tag, NavigableString
 import io
 
 def is_self_closing(tag):
@@ -8,8 +8,11 @@ def is_self_closing(tag):
 
 def is_empty_tag(tag):
     if isinstance(tag, Tag):
-        # Check if the tag has no content or only contains empty tags
-        return not tag.contents or all(isinstance(child, Tag) and is_empty_tag(child) for child in tag.contents)
+        # Filtrer les contenus non vides
+        non_empty_contents = [child for child in tag.contents if not (isinstance(child, NavigableString) and not child.strip())]
+        
+        # Vérifier si tous les contenus non vides sont des balises vides
+        return all(isinstance(child, Tag) and is_empty_tag(child) for child in non_empty_contents)
     return False
 
 def find_empty_tags(html_content):
@@ -21,7 +24,7 @@ def find_empty_tags(html_content):
             continue
         
         if is_empty_tag(tag):
-            # Retrieve the full tag including its content
+            # Récupérer la balise complète avec son contenu original
             empty_tags.append(str(tag))
 
     return empty_tags
