@@ -8,7 +8,6 @@ def is_self_closing(tag):
 
 def is_empty_tag(tag):
     if isinstance(tag, Tag):
-        # Vérifier si la balise est vide ou ne contient que des espaces/sauts de ligne
         return not tag.contents or all(
             (isinstance(child, NavigableString) and not child.strip()) or
             (isinstance(child, Tag) and is_empty_tag(child))
@@ -25,8 +24,9 @@ def find_empty_tags(html_content):
             continue
         
         if is_empty_tag(tag):
-            # Récupérer la balise complète avec son contenu original
-            empty_tags.append(str(tag))
+            # Utiliser la méthode .prettify() pour conserver la structure originale de la balise
+            original_tag = str(tag)
+            empty_tags.append(original_tag)
 
     return empty_tags
 
