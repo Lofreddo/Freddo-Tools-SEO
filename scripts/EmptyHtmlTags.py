@@ -2,17 +2,15 @@ import streamlit as st
 import pandas as pd
 from bs4 import BeautifulSoup, Tag, NavigableString
 import io
+import re
 
 def is_self_closing(tag):
     return tag.name in ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr', 'path']
 
 def is_empty_tag(tag):
     if isinstance(tag, Tag):
-        # Filtrer les contenus non vides
-        non_empty_contents = [child for child in tag.contents if not (isinstance(child, NavigableString) and not child.strip())]
-        
         # Vérifier si tous les contenus non vides sont des balises vides
-        return all(isinstance(child, Tag) and is_empty_tag(child) for child in non_empty_contents)
+        return not tag.contents or all(isinstance(child, NavigableString) and not child.strip() or (isinstance(child, Tag) and is_empty_tag(child)) for child in tag.contents)
     return False
 
 def find_empty_tags(html_content):
@@ -24,8 +22,13 @@ def find_empty_tags(html_content):
             continue
         
         if is_empty_tag(tag):
-            # Récupérer la balise complète avec son contenu original
-            empty_tags.append(str(tag))
+            # Utiliser une expression régulière pour capturer la balise complète dans le texte HTML original
+            tag_str = str(tag)
+            pattern = re.escape(tag_str).replace(r"\ ", r"\s*").replace(r"\n", r"\s*").replace(r"\t", r"\s*")
+            matches = list(re.finditer(pattern, html_content, re.DOTALL))
+            if matches:
+                start, end = matches[-1].span()
+                empty_tags.append(html_content[start:end])
 
     return empty_tags
 
