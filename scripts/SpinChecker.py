@@ -26,16 +26,24 @@ def check_unbalanced_brackets(text):
     
     return sorted(unbalanced, key=lambda x: x[1]), missing
 
-def highlight_text(text, positions, color):
+def highlight_text(text, unbalanced, missing):
     parts = []
     last_pos = 0
-    for start, end in positions:
-        parts.append(text[last_pos:start])
-        if color == "bold":
-            parts.append(f"**{text[start:end]}**")
-        elif color == "yellow":
+    
+    all_positions = sorted(unbalanced + [(start, end) for start, end in missing])
+    
+    for pos in all_positions:
+        if isinstance(pos, tuple):  # Missing bracket
+            start, end = pos
+            parts.append(text[last_pos:start])
             parts.append(f"<span style='background-color: yellow;'>{text[start:end]}</span>")
-        last_pos = end
+            last_pos = end
+        else:  # Unbalanced bracket
+            char_pos = pos[1]
+            parts.append(text[last_pos:char_pos])
+            parts.append(f"<span style='background-color: red;'>{text[char_pos]}</span>")
+            last_pos = char_pos + 1
+    
     parts.append(text[last_pos:])
     return "".join(parts)
 
@@ -71,11 +79,8 @@ def main():
         if unbalanced or missing:
             st.error("Issues found in the master spin:")
             
-            # Highlight unbalanced brackets in bold
-            highlighted_text = highlight_text(spin_text, [(pos, pos+1) for _, pos in unbalanced], "bold")
-            
-            # Highlight missing brackets in yellow
-            highlighted_text = highlight_text(highlighted_text, missing, "yellow")
+            # Highlight unbalanced brackets in red and missing brackets in yellow
+            highlighted_text = highlight_text(spin_text, unbalanced, missing)
             
             st.markdown(highlighted_text, unsafe_allow_html=True)
             
