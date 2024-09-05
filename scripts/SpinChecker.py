@@ -30,19 +30,20 @@ def highlight_text(text, unbalanced, missing):
     parts = []
     last_pos = 0
     
-    all_positions = sorted(unbalanced + [(start, end) for start, end in missing])
+    all_positions = sorted([(pos, 'unbalanced') for _, pos in unbalanced] + 
+                           [(start, 'missing_start') for start, _ in missing] + 
+                           [(end, 'missing_end') for _, end in missing])
     
-    for pos in all_positions:
-        if isinstance(pos, tuple):  # Missing bracket
-            start, end = pos
-            parts.append(text[last_pos:start])
-            parts.append(f"<span style='background-color: yellow;'>{text[start:end]}</span>")
-            last_pos = end
-        else:  # Unbalanced bracket
-            char_pos = pos[1]
-            parts.append(text[last_pos:char_pos])
-            parts.append(f"<span style='background-color: red;'>{text[char_pos]}</span>")
-            last_pos = char_pos + 1
+    for pos, type in all_positions:
+        parts.append(text[last_pos:pos])
+        if type == 'unbalanced':
+            parts.append(f"<span style='background-color: red;'>{text[pos]}</span>")
+            last_pos = pos + 1
+        elif type == 'missing_start':
+            parts.append("<span style='background-color: yellow;'>")
+        elif type == 'missing_end':
+            parts.append("</span>")
+            last_pos = pos
     
     parts.append(text[last_pos:])
     return "".join(parts)
