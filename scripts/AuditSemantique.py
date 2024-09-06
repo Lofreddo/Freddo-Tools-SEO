@@ -1,23 +1,29 @@
 import streamlit as st
 import pandas as pd
 
+# Liste des encodages courants à essayer
+encodings = ['utf-8', 'ISO-8859-1', 'latin1', 'cp1252']
+
+# Fonction pour charger un fichier avec plusieurs encodages et séparateurs
 def load_file(uploaded_file):
     # Liste des séparateurs courants
-    separators = [',', ';', '\t', '|']
+    separators = [',', ';', '\t', '|', ' ']
 
-    # Essayer chaque séparateur jusqu'à ce que les données soient correctement chargées
-    for sep in separators:
-        try:
-            # Tenter de charger le fichier CSV avec le séparateur
-            df = pd.read_csv(uploaded_file, encoding='utf-8', sep=sep, engine='python')
-            
-            # Si les colonnes sont détectées correctement (au moins 2 colonnes avec données), retourner le DataFrame
-            if len(df.columns) > 1 and df.notna().sum().sum() > 0:
-                return df
-        except Exception as e:
-            st.write(f"Erreur avec le séparateur '{sep}': {str(e)}")
+    # Essayer plusieurs encodages
+    for encoding in encodings:
+        for sep in separators:
+            try:
+                # Tenter de charger le fichier avec chaque encodage et séparateur
+                df = pd.read_csv(uploaded_file, encoding=encoding, sep=sep, engine='python')
+                
+                # Vérifier s'il y a des colonnes et des données valides
+                if len(df.columns) > 1 and df.notna().sum().sum() > 0:
+                    st.write(f"Fichier chargé avec l'encodage '{encoding}' et le séparateur '{sep}'")
+                    return df
+            except Exception as e:
+                st.write(f"Erreur avec l'encodage '{encoding}' et le séparateur '{sep}': {str(e)}")
 
-    # Si aucun séparateur n'a fonctionné, retourner None
+    # Si aucun encodage/séparateur ne fonctionne, retourner None
     return None
 
 def main():
