@@ -47,20 +47,21 @@ def main():
                     st.write(f"Analyse du fichier avec {len(df)} lignes.")
                     
                     # Appliquer les filtres : par le nombre de sites et les positions maximales
-                    filtered_df = df[(df[position_column] <= max_position) & 
-                                     (df.groupby(keyword_column)[position_column].transform('count') >= min_sites)]
+                    filtered_df = df[df[position_column] <= max_position]
                     
-                    st.write(f"Résultats après filtrage : {len(filtered_df)} lignes.")
+                    st.write(f"Résultats après filtrage de position : {len(filtered_df)} lignes.")
                     
                     grouped = filtered_df.groupby(keyword_column)
                     
                     for keyword, group in grouped:
                         top_position = group[position_column].min()
                         if top_position <= max_site_position:
+                            # Compter le nombre de sites positionnés
+                            num_sites = group[keyword_column].nunique()
                             row = {
                                 'Mot-clé': keyword,
                                 'Volume': group[volume_column].max(),
-                                'Nombre de sites positionnés': group[position_column].count()
+                                'Nombre de sites positionnés': num_sites
                             }
                             # Ajouter la position et l'URL de chaque site
                             for i, (_, row_data) in enumerate(group.iterrows()):
