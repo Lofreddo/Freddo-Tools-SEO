@@ -10,10 +10,15 @@ def main():
     if uploaded_files:
         dataframes = []
         for uploaded_file in uploaded_files:
-            if uploaded_file.name.endswith('.csv'):
-                df = pd.read_csv(uploaded_file)
-            else:
-                df = pd.read_excel(uploaded_file)
+            try:
+                if uploaded_file.name.endswith('.csv'):
+                    df = pd.read_csv(uploaded_file, encoding='utf-8')
+                else:
+                    df = pd.read_excel(uploaded_file)
+            except UnicodeDecodeError:
+                # Essayer avec un autre encodage si UTF-8 échoue
+                df = pd.read_csv(uploaded_file, encoding='ISO-8859-1')
+
             dataframes.append(df)
 
         st.write("Fichiers importés :")
@@ -22,7 +27,7 @@ def main():
             st.write(df.head())
 
         # Étape 2: Sélectionner les colonnes appropriées
-        column_names = dataframes[0].columns.tolist()  # On suppose que les colonnes sont identiques entre fichiers
+        column_names = dataframes[0].columns.tolist()
 
         keyword_column = st.selectbox("Sélectionner la colonne Mot-clé", column_names)
         volume_column = st.selectbox("Sélectionner la colonne Volume de recherche", column_names)
