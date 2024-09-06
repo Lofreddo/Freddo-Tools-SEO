@@ -9,22 +9,23 @@ def main():
     uploaded_files = st.file_uploader("Importer les fichiers de données", accept_multiple_files=True, type=['csv', 'xlsx'])
 
     if uploaded_files:
-        dataframes = []
+        dataframes = {}
         for uploaded_file in uploaded_files:
             if uploaded_file.name.endswith('.csv'):
                 df = pd.read_csv(uploaded_file, encoding='utf-16', sep='\t')
             else:
                 df = pd.read_excel(uploaded_file)
-            dataframes.append(df)
+            # Utiliser le nom de fichier comme clé pour identifier chaque fichier/site
+            dataframes[uploaded_file.name] = df
 
         if dataframes:
             st.write("Fichiers importés :")
-            for i, df in enumerate(dataframes):
-                st.write(f"Fichier {i + 1} :")
+            for name, df in dataframes.items():
+                st.write(f"Fichier : {name}")
                 st.write(df.head())
 
-            # Étape 2: Sélectionner les colonnes appropriées
-            column_names = dataframes[0].columns.tolist()
+            # Étape 2: Sélectionner les colonnes appropriées pour tous les fichiers
+            column_names = list(dataframes.values())[0].columns.tolist()
 
             keyword_column = st.selectbox("Sélectionner la colonne Mot-clé", column_names)
             volume_column = st.selectbox("Sélectionner la colonne Volume de recherche", column_names)
@@ -32,42 +33,68 @@ def main():
             url_column = st.selectbox("Sélectionner la colonne URL", column_names)
 
             # Étape 3: Paramètres de filtrage
-            min_sites = st.number_input("Nombre minimum de sites positionnés sur le mot-clé", min_value=1, value=3)
+            min_sites = st.number_input("Nombre minimum de sites positionnés sur le mot-clé", min_value=1, value=2)
             max_position = st.number_input("Position maximum pour le mot-clé", min_value=1, value=20)
             max_site_position = st.number_input("Position maximum pour le site le mieux positionné", min_value=1, value=10)
 
             # Étape 4: Analyse et création du fichier final
             if st.button("Lancer l'analyse"):
-                result_df = pd.DataFrame()
+                result_rows = []  # Liste pour stocker les résultats finaux
 
-                # Ajout de logs pour suivre l'analyse
-                st.write("Démarrage de l'analyse...")
-                
-                for df in dataframes:
-                    st.write(f"Analyse du fichier avec {len(df)} lignes.")
-                    
-                    # Appliquer les filtres : par le nombre de sites et les positions maximales
+                # Dictionnaire pour stocker les informations par mot-clé
+                keyword_info = {}
+
+                # Analyser chaque fichier/site
+                for site_name, df in dataframes.items():
+                    st.write(f"Analyse du fichier {site_name} avec {len(df)} lignes.")
+
+                    # Filtrer les mots-clés par la position maximum
                     filtered_df = df[df[position_column] <= max_position]
-                    
-                    st.write(f"Résultats après filtrage de position : {len(filtered_df)} lignes.")
-                    
+
+                    # Grouper par mot-clé
                     grouped = filtered_df.groupby(keyword_column)
-                    
+
                     for keyword, group in grouped:
                         top_position = group[position_column].min()
+
+                        # Vérifier si le site le mieux positionné est dans la limite
                         if top_position <= max_site_position:
-                            # Compter le nombre de sites positionnés
-                            num_sites = group[keyword_column].nunique()
-                            row = {
-                                'Mot-clé': keyword,
-                                'Volume': group[volume_column].max(),
-                                'Nombre de sites positionnés': num_sites
-                            }
-                            # Ajouter la position et l'URL de chaque site
-                            for i, (_, row_data) in enumerate(group.iterrows()):
-                                row[f'Site {i+1} - Position'] = row_data[position_column]
-                                row[f'Site {i+1} - URL'] = row_data[url_column]
-                            result_df = result_df.append(row, ignore_index=True)
+                            if keyword not in keyword_info:
+                                keyword_info[keyword] = {
+                                    'Volume': group[volume_column].max(),  # Prendre le volume maximum
+                                    'Nombre de sites positionnés': 0,
+                                    'Sites': {}
+                                }
+
+                            # Ajouter ce site au comptage
+                            keyword_info[keyword]['Nombre de sites positionnés'] += 1
+
+                            # Ajouter la position et l'URL de ce site
+                            for _, row_data in group.iterrows():
+                                keyword_info[keyword]['Sites'][site_name] = {
+                                    'Position': row_data[position_column],
+                                    'URL': row_data[url_column]
+                                }
+
+                # Étape 5: Créer les lignes du DataFrame final
+                for keyword, info in keyword_info.items():
+                    # Ne garder que les mots-clés avec suffisamment de sites positionnés
+                    if info['Nombre de sites positionnés'] >= min_sites:
+                        row = {
+                            'Mot-clé': keyword,
+                            'Volume': info['Volume'],
+                            'Nombre de sites positionnés': info['Nombre de sites positionnés']
+                        }
+
+                        # Ajouter la position et l'URL de chaque site
+                        for site_name, site_info in info['Sites'].items():
+                            row[f'{site_name} - Position'] = site_info['Position']
+                            row[f'{site_name} - URL'] = site_info['URL']
+
+                        result_rows.append(row)
+
+                # Créer le DataFrame final
+                result_df = pd.DataFrame(result_rows)
 
                 # Afficher le résultat avant génération du fichier
                 if not result_df.empty:
