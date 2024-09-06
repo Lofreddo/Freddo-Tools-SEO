@@ -1,6 +1,25 @@
 import streamlit as st
 import pandas as pd
 
+def load_file(uploaded_file):
+    # Liste des séparateurs courants
+    separators = [',', ';', '\t', '|']
+
+    # Essayer chaque séparateur jusqu'à ce que les données soient correctement chargées
+    for sep in separators:
+        try:
+            # Tenter de charger le fichier CSV avec le séparateur
+            df = pd.read_csv(uploaded_file, encoding='utf-8', sep=sep, engine='python')
+            
+            # Si les colonnes sont détectées correctement (au moins 2 colonnes avec données), retourner le DataFrame
+            if len(df.columns) > 1 and df.notna().sum().sum() > 0:
+                return df
+        except Exception as e:
+            st.write(f"Erreur avec le séparateur '{sep}': {str(e)}")
+
+    # Si aucun séparateur n'a fonctionné, retourner None
+    return None
+
 def main():
     st.title("Analyse de mots-clés")
 
@@ -10,61 +29,60 @@ def main():
     if uploaded_files:
         dataframes = []
         for uploaded_file in uploaded_files:
-            try:
-                if uploaded_file.name.endswith('.csv'):
-                    # Utiliser '\t' comme séparateur pour les fichiers CSV en colonnes
-                    df = pd.read_csv(uploaded_file, encoding='utf-8', sep='\t', low_memory=False, on_bad_lines='skip')
-                else:
-                    df = pd.read_excel(uploaded_file)
-            except (UnicodeDecodeError, pd.errors.ParserError):
-                # Essayer avec un autre encodage
-                df = pd.read_csv(uploaded_file, encoding='ISO-8859-1', sep='\t', low_memory=False, on_bad_lines='skip')
+            if uploaded_file.name.endswith('.csv'):
+                df = load_file(uploaded_file)
+            else:
+                df = pd.read_excel(uploaded_file)
 
-            dataframes.append(df)
+            if df is not None:
+                dataframes.append(df)
+            else:
+                st.write(f"Impossible de charger le fichier {uploaded_file.name}.")
 
-        st.write("Fichiers importés :")
-        for i, df in enumerate(dataframes):
-            st.write(f"Fichier {i + 1} :")
-            st.write(df.head())
+        if dataframes:
+            st.write("Fichiers importés :")
+            for i, df in enumerate(dataframes):
+                st.write(f"Fichier {i + 1} :")
+                st.write(df.head())
 
-        # Étape 2: Sélectionner les colonnes appropriées
-        column_names = dataframes[0].columns.tolist()
+            # Étape 2: Sélectionner les colonnes appropriées
+            column_names = dataframes[0].columns.tolist()
 
-        keyword_column = st.selectbox("Sélectionner la colonne Mot-clé", column_names)
-        volume_column = st.selectbox("Sélectionner la colonne Volume de recherche", column_names)
-        position_column = st.selectbox("Sélectionner la colonne Position", column_names)
-        url_column = st.selectbox("Sélectionner la colonne URL", column_names)
+            keyword_column = st.selectbox("Sélectionner la colonne Mot-clé", column_names)
+            volume_column = st.selectbox("Sélectionner la colonne Volume de recherche", column_names)
+            position_column = st.selectbox("Sélectionner la colonne Position", column_names)
+            url_column = st.selectbox("Sélectionner la colonne URL", column_names)
 
-        # Étape 3: Paramètres de filtrage
-        min_sites = st.number_input("Nombre minimum de sites positionnés sur le mot-clé", min_value=1, value=3)
-        max_position = st.number_input("Position maximum pour le mot-clé", min_value=1, value=20)
-        max_site_position = st.number_input("Position maximum pour le site le mieux positionné", min_value=1, value=10)
+            # Étape 3: Paramètres de filtrage
+            min_sites = st.number_input("Nombre minimum de sites positionnés sur le mot-clé", min_value=1, value=3)
+            max_position = st.number_input("Position maximum pour le mot-clé", min_value=1, value=20)
+            max_site_position = st.number_input("Position maximum pour le site le mieux positionné", min_value=1, value=10)
 
-        # Étape 4: Analyse et création du fichier final
-        if st.button("Lancer l'analyse"):
-            result_df = pd.DataFrame()
+            # Étape 4: Analyse et création du fichier final
+            if st.button("Lancer l'analyse"):
+                result_df = pd.DataFrame()
 
-            for df in dataframes:
-                # Filtrer les données par le nombre de sites positionnés et les positions
-                filtered_df = df[(df[position_column] <= max_position) & 
-                                 (df.groupby(keyword_column)[position_column].transform('count') >= min_sites)]
+                for df in dataframes:
+                    # Filtrer les données par le nombre de sites positionnés et les positions
+                    filtered_df = df[(df[position_column] <= max_position) & 
+                                     (df.groupby(keyword_column)[position_column].transform('count') >= min_sites)]
 
-                grouped = filtered_df.groupby(keyword_column)
-                for keyword, group in grouped:
-                    top_position = group[position_column].min()
-                    if top_position <= max_site_position:
-                        row = {
-                            'Mot-clé': keyword,
-                            'Volume': group[volume_column].max(),
-                            'Nombre de sites positionnés': group[position_column].count()
-                        }
-                        for i, (_, row_data) in enumerate(group.iterrows()):
-                            row[f'Site {i+1} - Position'] = row_data[position_column]
-                            row[f'Site {i+1} - URL'] = row_data[url_column]
-                        result_df = result_df.append(row, ignore_index=True)
+                    grouped = filtered_df.groupby(keyword_column)
+                    for keyword, group in grouped:
+                        top_position = group[position_column].min()
+                        if top_position <= max_site_position:
+                            row = {
+                                'Mot-clé': keyword,
+                                'Volume': group[volume_column].max(),
+                                'Nombre de sites positionnés': group[position_column].count()
+                            }
+                            for i, (_, row_data) in enumerate(group.iterrows()):
+                                row[f'Site {i+1} - Position'] = row_data[position_column]
+                                row[f'Site {i+1} - URL'] = row_data[url_column]
+                            result_df = result_df.append(row, ignore_index=True)
 
-            # Afficher et télécharger le fichier Excel
-            st.write(result_df)
+                # Afficher et télécharger le fichier Excel
+                st.write(result_df)
 
-            result_file = result_df.to_excel("resultat_analyse.xlsx", index=False)
-            st.download_button("Télécharger le fichier", result_file, file_name="resultat_analyse.xlsx")
+                result_file = result_df.to_excel("resultat_analyse.xlsx", index=False)
+                st.download_button("Télécharger le fichier", result_file, file_name="resultat_analyse.xlsx")
