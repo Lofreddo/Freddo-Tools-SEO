@@ -40,12 +40,20 @@ def main():
             if st.button("Lancer l'analyse"):
                 result_df = pd.DataFrame()
 
+                # Ajout de logs pour suivre l'analyse
+                st.write("Démarrage de l'analyse...")
+                
                 for df in dataframes:
-                    # Filtrer les données par le nombre de sites positionnés et les positions
+                    st.write(f"Analyse du fichier avec {len(df)} lignes.")
+                    
+                    # Appliquer les filtres : par le nombre de sites et les positions maximales
                     filtered_df = df[(df[position_column] <= max_position) & 
                                      (df.groupby(keyword_column)[position_column].transform('count') >= min_sites)]
-
+                    
+                    st.write(f"Résultats après filtrage : {len(filtered_df)} lignes.")
+                    
                     grouped = filtered_df.groupby(keyword_column)
+                    
                     for keyword, group in grouped:
                         top_position = group[position_column].min()
                         if top_position <= max_site_position:
@@ -59,6 +67,13 @@ def main():
                                 row[f'Site {i+1} - Position'] = row_data[position_column]
                                 row[f'Site {i+1} - URL'] = row_data[url_column]
                             result_df = result_df.append(row, ignore_index=True)
+
+                # Afficher le résultat avant génération du fichier
+                if not result_df.empty:
+                    st.write("Résultats de l'analyse :")
+                    st.write(result_df.head())
+                else:
+                    st.write("Aucun résultat trouvé. Vérifiez les filtres.")
 
                 # Créer un fichier Excel en mémoire
                 output = BytesIO()
