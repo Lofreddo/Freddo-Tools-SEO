@@ -12,12 +12,13 @@ def main():
         for uploaded_file in uploaded_files:
             try:
                 if uploaded_file.name.endswith('.csv'):
-                    df = pd.read_csv(uploaded_file, encoding='utf-8')
+                    # Utiliser '\t' comme séparateur pour les fichiers CSV en colonnes
+                    df = pd.read_csv(uploaded_file, encoding='utf-8', sep='\t', low_memory=False, on_bad_lines='skip')
                 else:
                     df = pd.read_excel(uploaded_file)
-            except UnicodeDecodeError:
-                # Essayer avec un autre encodage si UTF-8 échoue
-                df = pd.read_csv(uploaded_file, encoding='ISO-8859-1')
+            except (UnicodeDecodeError, pd.errors.ParserError):
+                # Essayer avec un autre encodage
+                df = pd.read_csv(uploaded_file, encoding='ISO-8859-1', sep='\t', low_memory=False, on_bad_lines='skip')
 
             dataframes.append(df)
 
