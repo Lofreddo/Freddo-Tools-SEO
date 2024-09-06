@@ -1,30 +1,16 @@
 import streamlit as st
 import pandas as pd
 
-# Liste des encodages courants à essayer
-encodings = ['utf-8', 'ISO-8859-1', 'latin1', 'cp1252']
-
-# Fonction pour charger un fichier avec plusieurs encodages et séparateurs
+# Fonction pour charger un fichier avec l'encodage et séparateur corrects
 def load_file(uploaded_file):
-    # Liste des séparateurs courants
-    separators = [',', ';', '\t', '|', ' ']
-
-    # Essayer plusieurs encodages
-    for encoding in encodings:
-        for sep in separators:
-            try:
-                # Tenter de charger le fichier avec chaque encodage et séparateur
-                df = pd.read_csv(uploaded_file, encoding=encoding, sep=sep, engine='python')
-                
-                # Vérifier s'il y a des colonnes et des données valides
-                if len(df.columns) > 1 and df.notna().sum().sum() > 0:
-                    st.write(f"Fichier chargé avec l'encodage '{encoding}' et le séparateur '{sep}'")
-                    return df
-            except Exception as e:
-                st.write(f"Erreur avec l'encodage '{encoding}' et le séparateur '{sep}': {str(e)}")
-
-    # Si aucun encodage/séparateur ne fonctionne, retourner None
-    return None
+    try:
+        # Utiliser UTF-16 et la tabulation comme séparateur
+        df = pd.read_csv(uploaded_file, encoding='utf-16', sep='\t')
+        st.write(f"Fichier chargé avec succès avec l'encodage UTF-16 et le séparateur tabulation")
+        return df
+    except Exception as e:
+        st.write(f"Erreur de chargement avec UTF-16: {str(e)}")
+        return None
 
 def main():
     st.title("Analyse de mots-clés")
@@ -35,11 +21,7 @@ def main():
     if uploaded_files:
         dataframes = []
         for uploaded_file in uploaded_files:
-            if uploaded_file.name.endswith('.csv'):
-                df = load_file(uploaded_file)
-            else:
-                df = pd.read_excel(uploaded_file)
-
+            df = load_file(uploaded_file)
             if df is not None:
                 dataframes.append(df)
             else:
