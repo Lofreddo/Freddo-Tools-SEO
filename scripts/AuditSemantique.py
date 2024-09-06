@@ -11,13 +11,11 @@ def main():
     if uploaded_files:
         dataframes = []
         for uploaded_file in uploaded_files:
-            try:
-                # Utiliser UTF-16 et la tabulation comme séparateur
+            if uploaded_file.name.endswith('.csv'):
                 df = pd.read_csv(uploaded_file, encoding='utf-16', sep='\t')
-                st.write(f"Fichier chargé avec succès avec l'encodage UTF-16 et le séparateur tabulation")
-                dataframes.append(df)
-            except Exception as e:
-                st.write(f"Erreur de chargement avec UTF-16: {str(e)}")
+            else:
+                df = pd.read_excel(uploaded_file)
+            dataframes.append(df)
 
         if dataframes:
             st.write("Fichiers importés :")
@@ -56,6 +54,7 @@ def main():
                                 'Volume': group[volume_column].max(),
                                 'Nombre de sites positionnés': group[position_column].count()
                             }
+                            # Ajouter la position et l'URL de chaque site
                             for i, (_, row_data) in enumerate(group.iterrows()):
                                 row[f'Site {i+1} - Position'] = row_data[position_column]
                                 row[f'Site {i+1} - URL'] = row_data[url_column]
