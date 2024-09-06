@@ -1,16 +1,6 @@
 import streamlit as st
 import pandas as pd
-
-# Fonction pour charger un fichier avec l'encodage et séparateur corrects
-def load_file(uploaded_file):
-    try:
-        # Utiliser UTF-16 et la tabulation comme séparateur
-        df = pd.read_csv(uploaded_file, encoding='utf-16', sep='\t')
-        st.write(f"Fichier chargé avec succès avec l'encodage UTF-16 et le séparateur tabulation")
-        return df
-    except Exception as e:
-        st.write(f"Erreur de chargement avec UTF-16: {str(e)}")
-        return None
+from io import BytesIO
 
 def main():
     st.title("Analyse de mots-clés")
@@ -21,11 +11,13 @@ def main():
     if uploaded_files:
         dataframes = []
         for uploaded_file in uploaded_files:
-            df = load_file(uploaded_file)
-            if df is not None:
+            try:
+                # Utiliser UTF-16 et la tabulation comme séparateur
+                df = pd.read_csv(uploaded_file, encoding='utf-16', sep='\t')
+                st.write(f"Fichier chargé avec succès avec l'encodage UTF-16 et le séparateur tabulation")
                 dataframes.append(df)
-            else:
-                st.write(f"Impossible de charger le fichier {uploaded_file.name}.")
+            except Exception as e:
+                st.write(f"Erreur de chargement avec UTF-16: {str(e)}")
 
         if dataframes:
             st.write("Fichiers importés :")
@@ -69,8 +61,16 @@ def main():
                                 row[f'Site {i+1} - URL'] = row_data[url_column]
                             result_df = result_df.append(row, ignore_index=True)
 
-                # Afficher et télécharger le fichier Excel
-                st.write(result_df)
+                # Créer un fichier Excel en mémoire
+                output = BytesIO()
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                    result_df.to_excel(writer, index=False)
 
-                result_file = result_df.to_excel("resultat_analyse.xlsx", index=False)
-                st.download_button("Télécharger le fichier", result_file, file_name="resultat_analyse.xlsx")
+                # Assurer le format correct pour le téléchargement
+                output.seek(0)
+                st.download_button(
+                    label="Télécharger le fichier",
+                    data=output,
+                    file_name="resultat_analyse.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
