@@ -20,7 +20,7 @@ def authenticate_gsc():
     # Si pas de token ou token invalide, redirige vers l'authentification OAuth
     if not creds or not creds.valid:
         flow = Flow.from_client_secrets_file(
-            'client_secret.json',  # Remplace par ton fichier client_secret.json
+            'client_secrets.json',  # Remplace par ton fichier client_secret.json
             scopes=SCOPES
         )
         flow.redirect_uri = 'http://localhost:8501'  # L'URL où Streamlit est hébergé
