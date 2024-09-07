@@ -101,8 +101,8 @@ def download_data(data):
     else:
         st.write("Aucune donnée disponible pour les critères sélectionnés.")
 
-# Fonction pour exécuter tout le script Google Search Console
-def run_gsc_script():
+# Fonction principale pour le script GSC
+def main():
     st.title('Récupération de données Google Search Console')
 
     service = authenticate_gsc()
