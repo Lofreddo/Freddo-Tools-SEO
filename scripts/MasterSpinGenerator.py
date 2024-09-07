@@ -22,13 +22,23 @@ def master_spin(text, replacements):
     return text
 
 def transform_text(text):
+    # S'assurer que le texte est une chaîne de caractères
     if text is None or text == "":
         return ""
+    
+    # Convertir le texte en chaîne si ce n'est pas déjà une chaîne
+    text = str(text)
+    
+    # Vérifier et traiter les apostrophes
     if "'" in text:
-        text = text.split("'")[1].strip()
-    text = text.lower()
-    text = text.replace(" ", "-")
+        parts = text.split("'")
+        if len(parts) > 1:
+            text = parts[1].strip()  # Récupérer la partie après l'apostrophe
+    
+    # Conversion en minuscule, remplacement des espaces par des tirets, et suppression des accents
+    text = text.lower().replace(" ", "-")
     text = unidecode.unidecode(text)
+    
     return text
 
 def extract_h1_content(text):
