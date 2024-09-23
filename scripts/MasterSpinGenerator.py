@@ -22,36 +22,29 @@ def master_spin(text, replacements):
     return text
 
 def transform_text(text):
-    # S'assurer que le texte est une chaîne de caractères
     if text is None or text == "":
         return ""
     
-    # Convertir le texte en chaîne si ce n'est pas déjà une chaîne
     text = str(text)
     
-    # Vérifier et traiter les apostrophes
     if "'" in text:
         parts = text.split("'")
         if len(parts) > 1:
-            text = parts[1].strip()  # Récupérer la partie après l'apostrophe
+            text = parts[1].strip()
     
-    # Conversion en minuscule, remplacement des espaces par des tirets, et suppression des accents
     text = text.lower().replace(" ", "-")
     text = unidecode.unidecode(text)
     
     return text
 
-def extract_h1_content(text):
-    h1_content = re.findall(r'<h1>(.*?)</h1>', text)
-    return ' '.join(h1_content)
+def remove_h1_content(text):
+    return re.sub(r'<h1>.*?</h1>', '', text)
 
 def main():
     st.title("Générateur de Texte Dynamique")
 
-    # Upload Excel file
     uploaded_excel_file = st.file_uploader("Importer le fichier Excel avec les variables ($key)", type=["xlsx"])
 
-    # Option to upload a TXT file or enter text manually
     text_input_option = st.radio("Choisir la méthode pour fournir le texte maître", ("Télécharger un fichier TXT", "Entrer le texte manuellement"))
 
     master_spin_text = ""
@@ -63,29 +56,32 @@ def main():
     else:
         master_spin_text = st.text_area("Entrer le texte maître ici", height=300)
 
-    # Text input for URL prefix
     url_prefix = st.text_input("Définir le préfixe pour l'URL", "pompes-funebres")
 
-    # Dropdown to select 1 to 5 keys for URL
+    # Nouveau champ pour la balise Title
+    title_template = st.text_area("Balise Title (utilisez $key pour les variables)", height=100)
+
+    # Nouveau champ pour la Meta Description
+    meta_description_template = st.text_area("Meta Description (optionnel, utilisez $key pour les variables)", height=100)
+
+    # Option pour supprimer le H1
+    remove_h1 = st.selectbox("Suppression H1", ("Non", "Oui"))
+
     if uploaded_excel_file is not None:
         df = pd.read_excel(uploaded_excel_file)
         
-        # User selects the column to be used as the first column in the output
         selected_first_column = st.selectbox("Sélectionner la colonne à utiliser comme première colonne du fichier de sortie", df.columns)
 
-        # User selects the keys to construct the URL
         selected_keys = st.multiselect("Sélectionner 1 à 5 clés à utiliser pour l'URL", df.columns, max_selections=5)
 
         if st.button("Générer le fichier de sortie"):
             if uploaded_excel_file is not None and (text_input_option == "Télécharger un fichier TXT" and master_spin_text.strip() != "") or (text_input_option == "Entrer le texte manuellement" and master_spin_text.strip() != ""):
                 results = []
 
-                # Setup a progress bar
                 progress_bar = st.progress(0)
                 total_rows = len(df)
 
                 for index, row in df.iterrows():
-                    # Récupérer les valeurs des clés sélectionnées pour construire l'URL
                     url_components = []
                     for key in selected_keys:
                         value = row[key]
@@ -101,24 +97,36 @@ def main():
                     replacements = {key: '' if pd.isna(value) else str(value) for key, value in row.items()}
                     
                     text = master_spin(master_spin_text, replacements)
+                    if remove_h1 == "Oui":
+                        text = remove_h1_content(text)
+                    
                     url_component = "-".join(url_components)
-                    h1_content = extract_h1_content(text)
-                    # Append the selected first column and other results to the list
-                    results.append([row[selected_first_column], text, f"{url_prefix}{url_component}", h1_content])
+                    
+                    # Générer la balise Title
+                    title = master_spin(title_template, replacements)
+                    
+                    # Générer la Meta Description si elle est fournie
+                    meta_description = master_spin(meta_description_template, replacements) if meta_description_template else None
+                    
+                    result = [row[selected_first_column], text, f"{url_prefix}{url_component}", title]
+                    if meta_description:
+                        result.append(meta_description)
+                    
+                    results.append(result)
 
-                    # Update progress bar
                     progress_bar.progress((index + 1) / total_rows)
 
-                # Create a DataFrame with the selected first column as the first column in the output
-                output_df = pd.DataFrame(results, columns=[selected_first_column, "Texte", "URL", "H1_Content"])
+                columns = [selected_first_column, "Texte", "URL", "Balise Title"]
+                if meta_description_template:
+                    columns.append("Meta Description")
+                
+                output_df = pd.DataFrame(results, columns=columns)
 
-                # Convert DataFrame to Excel and save to BytesIO
                 buffer = BytesIO()
                 with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
                     output_df.to_excel(writer, index=False)
                 buffer.seek(0)
 
-                # Create download button
                 st.success("Génération terminée !")
                 st.download_button(
                     label="Télécharger le fichier de sortie",
