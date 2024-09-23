@@ -40,6 +40,12 @@ def transform_text(text):
 def remove_h1_content(text):
     return re.sub(r'<h1>.*?</h1>', '', text)
 
+def extract_h1_content(text):
+    h1_match = re.search(r'<h1>(.*?)</h1>', text)
+    if h1_match:
+        return h1_match.group(1), re.sub(r'<h1>.*?</h1>', '', text)
+    return None, text
+
 def main():
     st.title("Générateur de Texte Dynamique")
 
@@ -58,14 +64,13 @@ def main():
 
     url_prefix = st.text_input("Définir le préfixe pour l'URL", "pompes-funebres")
 
-    # Nouveau champ pour la balise Title
     title_template = st.text_area("Balise Title (utilisez $key pour les variables)", height=100)
 
-    # Nouveau champ pour la Meta Description
     meta_description_template = st.text_area("Meta Description (optionnel, utilisez $key pour les variables)", height=100)
 
-    # Option pour supprimer le H1
     remove_h1 = st.selectbox("Suppression H1", ("Non", "Oui"))
+
+    extract_h1 = st.selectbox("H1 dans une colonne dédiée", ("Non", "Oui"))
 
     if uploaded_excel_file is not None:
         df = pd.read_excel(uploaded_excel_file)
@@ -97,18 +102,22 @@ def main():
                     replacements = {key: '' if pd.isna(value) else str(value) for key, value in row.items()}
                     
                     text = master_spin(master_spin_text, replacements)
-                    if remove_h1 == "Oui":
+                    h1_content = None
+
+                    if extract_h1 == "Oui":
+                        h1_content, text = extract_h1_content(text)
+                    elif remove_h1 == "Oui":
                         text = remove_h1_content(text)
                     
                     url_component = "-".join(url_components)
                     
-                    # Générer la balise Title
                     title = master_spin(title_template, replacements)
                     
-                    # Générer la Meta Description si elle est fournie
                     meta_description = master_spin(meta_description_template, replacements) if meta_description_template else None
                     
                     result = [row[selected_first_column], text, f"{url_prefix}{url_component}", title]
+                    if extract_h1 == "Oui":
+                        result.append(h1_content)
                     if meta_description:
                         result.append(meta_description)
                     
@@ -117,6 +126,8 @@ def main():
                     progress_bar.progress((index + 1) / total_rows)
 
                 columns = [selected_first_column, "Texte", "URL", "Balise Title"]
+                if extract_h1 == "Oui":
+                    columns.append("H1")
                 if meta_description_template:
                     columns.append("Meta Description")
                 
