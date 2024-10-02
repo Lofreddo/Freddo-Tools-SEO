@@ -30,6 +30,11 @@ def scrape_text_from_url(url):
         # Suppression des balises html et body
         main_content = re.sub(r'</?html>|</?body>', '', main_content)
         
+        # Ajout du <h1> au début du contenu s'il n'est pas déjà présent
+        h1_tags = [h for h in header_structure if h.startswith('<h1>')]
+        if h1_tags and not re.search(r'<h1>', main_content):
+            main_content = h1_tags[0] + main_content
+        
         gc.collect()
         return url, main_content, header_structure
     except Exception as e:
