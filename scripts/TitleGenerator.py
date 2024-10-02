@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import re
 from io import BytesIO
 from product_category import ProductCategoryClassifier
 from polyglot.detect import Detector
@@ -11,10 +12,30 @@ nlp = spacy.load("en_core_web_sm")  # Modèle anglais de spaCy
 
 # Dictionnaire étendu pour les genres
 GENDERS = {
-    'en': ['men', 'women', 'children', 'kids', 'unisex'],
-    'es': ['hombre', 'mujer', 'niños', 'unisex'],
-    'it': ['uomo', 'donna', 'bambini', 'unisex'],
-    'fr': ['homme', 'femme', 'enfants', 'unisexe']
+    'en': {
+        'men': ['men', 'man', 'male', 'gentleman', 'gent'],
+        'women': ['women', 'woman', 'female', 'lady', 'ladies'],
+        'children': ['children', 'child', 'kid', 'kids', 'youth', 'junior', 'juniors'],
+        'unisex': ['unisex', 'universal', 'all gender']
+    },
+    'es': {
+        'hombre': ['hombre', 'hombres', 'masculino', 'caballero', 'caballeros'],
+        'mujer': ['mujer', 'mujeres', 'femenino', 'dama', 'damas'],
+        'niños': ['niño', 'niña', 'niños', 'niñas', 'infantil', 'juvenil'],
+        'unisex': ['unisex', 'universal']
+    },
+    'it': {
+        'uomo': ['uomo', 'uomini', 'maschile', 'maschio'],
+        'donna': ['donna', 'donne', 'femminile', 'femmina'],
+        'bambini': ['bambino', 'bambina', 'bambini', 'bambine', 'ragazzo', 'ragazza', 'ragazzi', 'ragazze'],
+        'unisex': ['unisex', 'universale']
+    },
+    'fr': {
+        'homme': ['homme', 'hommes', 'masculin', 'monsieur', 'messieurs'],
+        'femme': ['femme', 'femmes', 'féminin', 'madame', 'mesdames'],
+        'enfants': ['enfant', 'enfants', 'garçon', 'garçons', 'fille', 'filles', 'junior', 'juniors'],
+        'unisexe': ['unisexe', 'universel']
+    }
 }
 
 def main():
@@ -78,10 +99,17 @@ def generate_title(row):
 
 def extract_gender(text, language):
     lower_text = text.lower()
-    for gender in GENDERS.get(language, GENDERS['en']):
-        if gender in lower_text:
-            return gender
-    return ''
+    
+    # Si la langue n'est pas dans notre dictionnaire, on utilise l'anglais par défaut
+    gender_dict = GENDERS.get(language, GENDERS['en'])
+    
+    for main_gender, variations in gender_dict.items():
+        for variation in variations:
+            # Utilisation d'une expression régulière pour trouver le mot entier
+            if re.search(r'\b' + variation + r'\b', lower_text):
+                return main_gender
+    
+    return ''  # Retourne une chaîne vide si aucun genre n'est trouvé
 
 def extract_color(text):
     doc = nlp(text)
