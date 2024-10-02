@@ -5,7 +5,7 @@ from openai import OpenAI
 from io import BytesIO
 
 # Initialisation du client OpenAI avec la clé API stockée dans les secrets de Streamlit Cloud
-openai.api_key = st.secrets["openai_api_key"]
+client = OpenAI(api_key=st.secrets["openai_api_key"])
 
 def create_embedding(text):
     """Crée un embedding pour le texte donné."""
