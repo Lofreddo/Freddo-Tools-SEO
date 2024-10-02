@@ -2,13 +2,19 @@ import streamlit as st
 import pandas as pd
 import re
 from io import BytesIO
-from product_category import ProductCategoryClassifier
-from polyglot.detect import Detector
 import spacy
+from spacy.language import Language
+from spacy_language_detection import LanguageDetector
 
-# Charger les modèles
-product_classifier = ProductCategoryClassifier()
-nlp = spacy.load("en_core_web_sm")  # Modèle anglais de spaCy
+# Charger le modèle spaCy
+nlp = spacy.load("en_core_web_sm")
+
+# Ajouter le détecteur de langue à spaCy
+@Language.factory("language_detector")
+def get_lang_detector(nlp, name):
+    return LanguageDetector()
+
+nlp.add_pipe("language_detector", last=True)
 
 # Dictionnaire étendu pour les genres
 GENDERS = {
@@ -73,19 +79,17 @@ def generate_title(row):
     all_text = f"{row['Titre actuel']} {row['H1']} {row['Description']}"
     
     # Détection de la langue
-    detector = Detector(all_text)
-    language = detector.language.code
+    doc = nlp(all_text)
+    language = doc._.language['language']
     
     # Classification du produit
-    product_categories = product_classifier.predict(all_text)
-    product_kind = product_categories[0] if product_categories else ''
+    product_kind = extract_product_kind(all_text)
     
     # Extraction du genre
     gender = extract_gender(all_text, language)
     
     # Extraction du nom du produit et de la couleur
-    doc = nlp(row['H1'])
-    product_name = ' '.join([token.text for token in doc if not token.is_stop and not token.is_punct])
+    product_name = extract_product_name(row['H1'])
     color = extract_color(all_text)
     
     # Génération du titre
@@ -97,19 +101,28 @@ def generate_title(row):
         Color=color
     )
 
+def extract_product_kind(text):
+    doc = nlp(text)
+    for ent in doc.ents:
+        if ent.label_ == "PRODUCT":
+            return ent.text
+    return ''
+
 def extract_gender(text, language):
     lower_text = text.lower()
     
-    # Si la langue n'est pas dans notre dictionnaire, on utilise l'anglais par défaut
     gender_dict = GENDERS.get(language, GENDERS['en'])
     
     for main_gender, variations in gender_dict.items():
         for variation in variations:
-            # Utilisation d'une expression régulière pour trouver le mot entier
             if re.search(r'\b' + variation + r'\b', lower_text):
                 return main_gender
     
-    return ''  # Retourne une chaîne vide si aucun genre n'est trouvé
+    return ''
+
+def extract_product_name(h1):
+    doc = nlp(h1)
+    return ' '.join([token.text for token in doc if not token.is_stop and not token.is_punct])
 
 def extract_color(text):
     doc = nlp(text)
