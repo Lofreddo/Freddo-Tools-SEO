@@ -79,11 +79,37 @@ def create_output_df(urls, scraped_data_list):
     return pd.DataFrame(output_data)
 
 def create_excel_file(df):
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name='Scraped Data')
-        writer.save()
-    return output.getvalue()
+    try:
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Scraped Data')
+        output.seek(0)
+        return output.getvalue()
+    except Exception as e:
+        st.error(f"Erreur lors de la création du fichier Excel : {str(e)}")
+        return None
+
+# Modification de la partie principale du script où cette fonction est appelée
+if st.button("Scraper"):
+    if urls:
+        # ... (le code existant pour le scraping)
+
+        df = create_output_df(urls, all_scraped_data)
+        
+        excel_data = create_excel_file(df)
+        
+        if excel_data:
+            st.success("Scraping terminé avec succès ! Téléchargez le fichier ci-dessous.")
+            st.download_button(
+                label="Télécharger le fichier Excel",
+                data=excel_data,
+                file_name="scraped_data.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        else:
+            st.error("Impossible de créer le fichier Excel. Veuillez vérifier les logs pour plus de détails.")
+    else:
+        st.error("Aucune URL fournie.")
 
 def main():
     st.title("Scraper de contenu HTML avec Trafilatura")
