@@ -1,51 +1,57 @@
 import streamlit as st
 import pandas as pd
-import re
+import openai
+from openai import OpenAI
 from io import BytesIO
-import spacy
-from spacy.language import Language
-from spacy_language_detection import LanguageDetector
 
-# Charger le modèle spaCy
-nlp = spacy.load("en_core_web_sm")
+# Initialisation du client OpenAI
+client = OpenAI(api_key=st.secrets["sk-R2lhuciafrgxPrKY12_Yz0ahGlrZBTKAbck_PsSWs8T3BlbkFJOxE9_6CJKhhNVvLR1qkcpN8s21N4pteg4xNNv5PEIA"])
 
-# Ajouter le détecteur de langue à spaCy
-@Language.factory("language_detector")
-def get_lang_detector(nlp, name):
-    return LanguageDetector()
+def create_embedding(text):
+    """Crée un embedding pour le texte donné."""
+    try:
+        response = client.embeddings.create(input=text, model="text-embedding-3-small")
+        return response.data[0].embedding
+    except Exception as e:
+        st.error(f"Erreur lors de la création de l'embedding : {str(e)}")
+        return None
 
-nlp.add_pipe("language_detector", last=True)
+def generate_title_with_gpt(product_info, embedding):
+    """Génère un titre SEO en utilisant GPT-3.5-turbo."""
+    try:
+        prompt = f"""
+        Utilise les éléments trouvés dans {product_info} pour créer une balise title structurée comme ceci : "Product type" "Gender" "Product Name" "Color"
+        Voici un exemple en anglais : Jacket Woman Le Vrai Claude 3.0 Red
+        La balise title doit être générée dans la langue correspondante aux éléments trouvés dans {product_info}
+        """
+        
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "Vous êtes un expert en SEO qui génère des balises title pour un site anglais, espagnol et italien."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        st.error(f"Erreur lors de la génération du titre : {str(e)}")
+        return None
 
-# Dictionnaire étendu pour les genres
-GENDERS = {
-    'en': {
-        'men': ['men', 'man', 'male', 'gentleman', 'gent'],
-        'women': ['women', 'woman', 'female', 'lady', 'ladies'],
-        'children': ['children', 'child', 'kid', 'kids', 'youth', 'junior', 'juniors'],
-        'unisex': ['unisex', 'universal', 'all gender']
-    },
-    'es': {
-        'hombre': ['hombre', 'hombres', 'masculino', 'caballero', 'caballeros'],
-        'mujer': ['mujer', 'mujeres', 'femenino', 'dama', 'damas'],
-        'niños': ['niño', 'niña', 'niños', 'niñas', 'infantil', 'juvenil'],
-        'unisex': ['unisex', 'universal']
-    },
-    'it': {
-        'uomo': ['uomo', 'uomini', 'maschile', 'maschio'],
-        'donna': ['donna', 'donne', 'femminile', 'femmina'],
-        'bambini': ['bambino', 'bambina', 'bambini', 'bambine', 'ragazzo', 'ragazza', 'ragazzi', 'ragazze'],
-        'unisex': ['unisex', 'universale']
-    },
-    'fr': {
-        'homme': ['homme', 'hommes', 'masculin', 'monsieur', 'messieurs'],
-        'femme': ['femme', 'femmes', 'féminin', 'madame', 'mesdames'],
-        'enfants': ['enfant', 'enfants', 'garçon', 'garçons', 'fille', 'filles', 'junior', 'juniors'],
-        'unisexe': ['unisexe', 'universel']
-    }
-}
+def process_dataframe(df):
+    """Traite le DataFrame pour créer les embeddings et générer les titres."""
+    # Création des embeddings
+    df['embedding'] = df.apply(lambda row: create_embedding(f"{row['Titre actuel']} {row['H1']} {row['Description']}"), axis=1)
+    
+    # Génération des nouveaux titres
+    df['Nouveau Titre'] = df.apply(lambda row: generate_title_with_gpt(
+        f"Produit: {row['H1']}, Description: {row['Description']}", 
+        row['embedding']
+    ), axis=1)
+    
+    return df[['URL', 'Nouveau Titre']]
 
 def main():
-    st.title("Générateur de balises title multilingue et multi-catégories")
+    st.title("Générateur de balises title optimisées avec OpenAI")
 
     uploaded_file = st.file_uploader("Choisissez un fichier XLSX", type="xlsx")
     
@@ -58,76 +64,23 @@ def main():
             return
 
         if st.button("Générer les titres"):
-            df['Nouveau Titre'] = df.apply(generate_title, axis=1)
+            with st.spinner('Génération des titres en cours...'):
+                result_df = process_dataframe(df)
             
-            result_df = df[['URL', 'Nouveau Titre']]
-            
+            st.success("Génération terminée !")
             st.dataframe(result_df)
             
             output = BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 result_df.to_excel(writer, index=False)
             output.seek(0)
+            
             st.download_button(
                 label="Télécharger les résultats",
                 data=output,
                 file_name="nouvelles_balises_title.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-
-def generate_title(row):
-    all_text = f"{row['Titre actuel']} {row['H1']} {row['Description']}"
-    
-    # Détection de la langue
-    doc = nlp(all_text)
-    language = doc._.language['language']
-    
-    # Classification du produit
-    product_kind = extract_product_kind(all_text)
-    
-    # Extraction du genre
-    gender = extract_gender(all_text, language)
-    
-    # Extraction du nom du produit et de la couleur
-    product_name = extract_product_name(row['H1'])
-    color = extract_color(all_text)
-    
-    # Génération du titre
-    title_structure = "{Product Kind} {Gender} {Product Name} {Color}"
-    return title_structure.format(
-        Product_Kind=product_kind,
-        Gender=gender,
-        Product_Name=product_name,
-        Color=color
-    )
-
-def extract_product_kind(text):
-    doc = nlp(text)
-    for ent in doc.ents:
-        if ent.label_ == "PRODUCT":
-            return ent.text
-    return ''
-
-def extract_gender(text, language):
-    lower_text = text.lower()
-    
-    gender_dict = GENDERS.get(language, GENDERS['en'])
-    
-    for main_gender, variations in gender_dict.items():
-        for variation in variations:
-            if re.search(r'\b' + variation + r'\b', lower_text):
-                return main_gender
-    
-    return ''
-
-def extract_product_name(h1):
-    doc = nlp(h1)
-    return ' '.join([token.text for token in doc if not token.is_stop and not token.is_punct])
-
-def extract_color(text):
-    doc = nlp(text)
-    colors = [ent.text for ent in doc.ents if ent.label_ == 'COLOR']
-    return colors[0] if colors else ''
 
 if __name__ == "__main__":
     main()
