@@ -1,5 +1,5 @@
 import streamlit as st
-from scripts import MyTextGuru, MyTextGuruBulk, ExtractSerps, MasterSpinGenerator, Scrapping, ExtractSerpsV2, PointsChauds, DomainChecker, SiteAnalyzer, Scrapython, HtmlTagsChecker, EmptyHtmlTags, SpinChecker, UnusedCSSDetector, AuditSemantique, GscExtract, SimilarityText
+from scripts import MyTextGuru, MyTextGuruBulk, ExtractSerps, MasterSpinGenerator, Scrapping, ExtractSerpsV2, PointsChauds, DomainChecker, SiteAnalyzer, Scrapython, HtmlTagsChecker, EmptyHtmlTags, SpinChecker, UnusedCSSDetector, AuditSemantique, GscExtract, SimilarityText, TitleGenerator
 
 # Configuration des pages
 PAGES = {
@@ -19,7 +19,8 @@ PAGES = {
     "UnusedCSSDetector": UnusedCSSDetector,
     "AuditSemantique": AuditSemantique,
     "GscExtract": GscExtract,
-    "SimilarityText": SimilarityText
+    "SimilarityText": SimilarityText,
+    "TitleGenerator": TitleGenerator
 }
 
 # Créer une sidebar pour la navigation
