@@ -22,3 +22,4 @@ google-auth-httplib2
 google-api-python-client
 numpy
 scikit-learn
+trafilatura
