@@ -25,16 +25,13 @@ def scrape_text_from_url(url):
         # Extraction de tous les <h1>, <h2>, <h3>, <h4>, <h5>, <h6> de la page entière
         soup = BeautifulSoup(response.text, 'lxml')
         headers = soup.find_all(re.compile('^h[1-6]$'))
-        header_tags = [header.name for header in headers]
-        header_texts = [header.get_text(strip=True) for header in headers]
+        header_structure = [f"<{header.name}>{header.get_text(strip=True)}</{header.name}>" for header in headers]
         
-        # Ajout des balises h1 au début du contenu
-        h1_tags = [text for tag, text in zip(header_tags, header_texts) if tag == 'h1']
-        for h1 in h1_tags:
-            main_content = f"<h1>{h1}</h1>\n" + main_content
+        # Suppression des balises html et body
+        main_content = re.sub(r'</?html>|</?body>', '', main_content)
         
         gc.collect()
-        return url, main_content, header_tags
+        return url, main_content, header_structure
     except Exception as e:
         return url, f"<p>Error: {str(e)}</p>", []
 
@@ -46,8 +43,8 @@ def scrape_all_urls(urls):
         future_to_url = {executor.submit(scrape_text_from_url, url): url for url in urls}
         for future in as_completed(future_to_url):
             try:
-                url, data, header_tags = future.result()
-                scraped_results.append((url, data, header_tags))
+                url, data, header_structure = future.result()
+                scraped_results.append((url, data, header_structure))
             except Exception as e:
                 scraped_results.append((future_to_url[future], f"<p>Error: {str(e)}</p>", []))
 
@@ -58,12 +55,11 @@ def scrape_all_urls(urls):
 
 def create_output_df(urls, scraped_data_list):
     output_data = []
-    for url, scraped_data, header_tags in scraped_data_list:
+    for url, scraped_data, header_structure in scraped_data_list:
         output_data.append({
             'URL': url,
             'Contenu Scrapé': scraped_data,
-            'Structure': ', '.join(header_tags),
-            'Structure Hn': ' '.join(f'<{tag}>' for tag in header_tags)
+            'Structure Hn': ' '.join(header_structure)
         })
     return pd.DataFrame(output_data)
 
