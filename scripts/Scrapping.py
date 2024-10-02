@@ -20,23 +20,23 @@ def scrape_text_from_url(url):
         main_content = trafilatura.extract(downloaded, output_format='html', include_comments=False, include_tables=False)
         
         if main_content is None:
-            return url, "<p>Aucun contenu extrait</p>"
+            return url, "<p>Aucun contenu extrait</p>", []
         
-        # Extraction des balises h1 du header
+        # Extraction de tous les <h1>, <h2>, <h3>, <h4>, <h5>, <h6> de la page entière
         soup = BeautifulSoup(response.text, 'lxml')
-        header = soup.find('header')
-        h1_tags = []
-        if header:
-            h1_tags = [h1.get_text(strip=True) for h1 in header.find_all('h1')]
+        headers = soup.find_all(re.compile('^h[1-6]$'))
+        header_tags = [header.name for header in headers]
+        header_texts = [header.get_text(strip=True) for header in headers]
         
-        # Ajout des balises h1 du header au début du contenu
+        # Ajout des balises h1 au début du contenu
+        h1_tags = [text for tag, text in zip(header_tags, header_texts) if tag == 'h1']
         for h1 in h1_tags:
             main_content = f"<h1>{h1}</h1>\n" + main_content
         
         gc.collect()
-        return url, main_content
+        return url, main_content, header_tags
     except Exception as e:
-        return url, f"<p>Error: {str(e)}</p>"
+        return url, f"<p>Error: {str(e)}</p>", []
 
 def scrape_all_urls(urls):
     scraped_results = []
@@ -46,10 +46,10 @@ def scrape_all_urls(urls):
         future_to_url = {executor.submit(scrape_text_from_url, url): url for url in urls}
         for future in as_completed(future_to_url):
             try:
-                url, data = future.result()
-                scraped_results.append((url, data))
+                url, data, header_tags = future.result()
+                scraped_results.append((url, data, header_tags))
             except Exception as e:
-                scraped_results.append((future_to_url[future], f"<p>Error: {str(e)}</p>"))
+                scraped_results.append((future_to_url[future], f"<p>Error: {str(e)}</p>", []))
 
             if len(scraped_results) % 1000 == 0:
                 gc.collect()
@@ -58,10 +58,12 @@ def scrape_all_urls(urls):
 
 def create_output_df(urls, scraped_data_list):
     output_data = []
-    for url, scraped_data in scraped_data_list:
+    for url, scraped_data, header_tags in scraped_data_list:
         output_data.append({
             'URL': url,
-            'Contenu Scrapé': scraped_data
+            'Contenu Scrapé': scraped_data,
+            'Structure': ', '.join(header_tags),
+            'Structure Hn': ' '.join(f'<{tag}>' for tag in header_tags)
         })
     return pd.DataFrame(output_data)
 
