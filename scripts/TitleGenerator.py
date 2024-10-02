@@ -29,7 +29,7 @@ def generate_title_with_gpt(product_info, embedding):
         .fr/products/ = français
         """
         
-        response = openai.ChatCompletion.create(
+        response = openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "Vous êtes un expert en SEO qui génère des balises title pour un site français, anglais, espagnol et italien."},
