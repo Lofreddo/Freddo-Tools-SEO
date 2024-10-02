@@ -1,17 +1,17 @@
 import streamlit as st
 import pandas as pd
 import openai
-from openai import OpenAI
 from io import BytesIO
 
-# Initialisation du client OpenAI avec la clé API stockée dans les secrets de Streamlit Cloud
+# Initialisation de la clé API OpenAI
 openai.api_key = st.secrets["openai_api_key"]
 
 def create_embedding(text):
     """Crée un embedding pour le texte donné."""
     try:
-        response = openai.embedding.create(input=text, model="text-embedding-3-small")
-        return response.data[0].embedding
+        # Utilisation de la nouvelle méthode embeddings
+        response = openai.embeddings.create(input=text, model="text-embedding-3-small")
+        return response['data'][0]['embedding']
     except Exception as e:
         st.error(f"Erreur lors de la création de l'embedding : {str(e)}")
         return None
@@ -36,7 +36,7 @@ def generate_title_with_gpt(product_info, embedding):
                 {"role": "user", "content": prompt}
             ]
         )
-        return response.choices[0].message.content.strip()
+        return response.choices[0].message['content'].strip()
     except Exception as e:
         st.error(f"Erreur lors de la génération du titre : {str(e)}")
         return None
