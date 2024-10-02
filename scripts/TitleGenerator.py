@@ -10,7 +10,7 @@ openai.api_key = st.secrets["openai_api_key"]
 def create_embedding(text):
     """Crée un embedding pour le texte donné."""
     try:
-        response = openai.Embedding.create(input=text, model="text-embedding-3-small")
+        response = openai.embedding.create(input=text, model="text-embedding-3-small")
         return response.data[0].embedding
     except Exception as e:
         st.error(f"Erreur lors de la création de l'embedding : {str(e)}")
