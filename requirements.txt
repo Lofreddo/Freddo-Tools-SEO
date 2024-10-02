@@ -23,6 +23,7 @@ google-api-python-client
 numpy
 scikit-learn
 trafilatura
+torch
 product-category
 polyglot
 spacy
