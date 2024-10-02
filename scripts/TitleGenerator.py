@@ -1,38 +1,42 @@
 import streamlit as st
 import pandas as pd
-import re
 from io import BytesIO
+from product_category import ProductCategoryClassifier
+from polyglot.detect import Detector
+import spacy
+
+# Charger les modèles
+product_classifier = ProductCategoryClassifier()
+nlp = spacy.load("en_core_web_sm")  # Modèle anglais de spaCy
+
+# Dictionnaire étendu pour les genres
+GENDERS = {
+    'en': ['men', 'women', 'children', 'kids', 'unisex'],
+    'es': ['hombre', 'mujer', 'niños', 'unisex'],
+    'it': ['uomo', 'donna', 'bambini', 'unisex'],
+    'fr': ['homme', 'femme', 'enfants', 'unisexe']
+}
 
 def main():
-    st.title("Générateur de balises title")
+    st.title("Générateur de balises title multilingue et multi-catégories")
 
-    # Upload du fichier Excel
     uploaded_file = st.file_uploader("Choisissez un fichier XLSX", type="xlsx")
     
     if uploaded_file is not None:
-        # Lecture du fichier Excel
         df = pd.read_excel(uploaded_file)
         
-        # Vérification des colonnes requises
         required_columns = ['URL', 'Titre actuel', 'H1', 'Description']
         if not all(col in df.columns for col in required_columns):
             st.error("Le fichier Excel doit contenir les colonnes : URL, Titre actuel, H1, Description")
             return
 
-        # Sélection de la langue
-        language = st.selectbox("Langue", ["en", "es", "it"])
-        
-        # Bouton pour générer les titres
         if st.button("Générer les titres"):
-            df['Nouveau Titre'] = df.apply(generate_title, axis=1, language=language)
+            df['Nouveau Titre'] = df.apply(generate_title, axis=1)
             
-            # Création d'un nouveau DataFrame avec seulement URL et Nouveau Titre
             result_df = df[['URL', 'Nouveau Titre']]
             
-            # Affichage des résultats
             st.dataframe(result_df)
             
-            # Bouton pour télécharger les résultats
             output = BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 result_df.to_excel(writer, index=False)
@@ -44,57 +48,45 @@ def main():
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
-def generate_title(row, language):
-    # Structure du titre
-    structure = {
-        'en': "{Product Kind} {Gender} {Product Name} {Color}",
-        'es': "{Tipo de Producto} {Género} {Nombre del Producto} {Color}",
-        'it': "{Tipo di Prodotto} {Genere} {Nome del Prodotto} {Colore}"
-    }
+def generate_title(row):
+    all_text = f"{row['Titre actuel']} {row['H1']} {row['Description']}"
     
-    # Extraction des informations
-    product_kind = extract_product_kind(row['Description'])
-    gender = extract_gender(row['Description'])
-    product_name = extract_product_name(row['H1'])
-    color = extract_color(row['Description'])
+    # Détection de la langue
+    detector = Detector(all_text)
+    language = detector.language.code
+    
+    # Classification du produit
+    product_categories = product_classifier.predict(all_text)
+    product_kind = product_categories[0] if product_categories else ''
+    
+    # Extraction du genre
+    gender = extract_gender(all_text, language)
+    
+    # Extraction du nom du produit et de la couleur
+    doc = nlp(row['H1'])
+    product_name = ' '.join([token.text for token in doc if not token.is_stop and not token.is_punct])
+    color = extract_color(all_text)
     
     # Génération du titre
-    return structure[language].format(
-        **{'Product Kind': product_kind, 'Gender': gender, 'Product Name': product_name, 'Color': color}
+    title_structure = "{Product Kind} {Gender} {Product Name} {Color}"
+    return title_structure.format(
+        Product_Kind=product_kind,
+        Gender=gender,
+        Product_Name=product_name,
+        Color=color
     )
 
-def extract_product_kind(description):
-    # Implémentez la logique d'extraction du type de produit
-    product_types = ['shirt', 'pants', 'shoes', 'jacket', 'dress']
-    for product in product_types:
-        if product in description.lower():
-            return product
+def extract_gender(text, language):
+    lower_text = text.lower()
+    for gender in GENDERS.get(language, GENDERS['en']):
+        if gender in lower_text:
+            return gender
     return ''
 
-def extract_gender(description):
-    # Implémentez la logique d'extraction du genre
-    if 'men' in description.lower():
-        return 'Men'
-    elif 'women' in description.lower():
-        return 'Women'
-    return ''
-
-def extract_product_name(h1):
-    # Implémentez la logique d'extraction du nom du produit
-    # Exemple : prendre les mots après le type de produit et le genre
-    words = h1.split()
-    for i, word in enumerate(words):
-        if word.lower() in ['men', 'women', 'shirt', 'pants', 'shoes', 'jacket', 'dress']:
-            return ' '.join(words[i+1:i+4])  # Prend les 3 mots suivants
-    return ' '.join(words[:3])  # Si rien n'est trouvé, prend les 3 premiers mots
-
-def extract_color(description):
-    # Implémentez la logique d'extraction de la couleur
-    colors = ['red', 'blue', 'green', 'black', 'white', 'yellow', 'purple', 'pink', 'orange', 'brown']
-    for color in colors:
-        if color in description.lower():
-            return color
-    return ''
+def extract_color(text):
+    doc = nlp(text)
+    colors = [ent.text for ent in doc.ents if ent.label_ == 'COLOR']
+    return colors[0] if colors else ''
 
 if __name__ == "__main__":
     main()
