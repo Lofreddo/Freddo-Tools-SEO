@@ -24,3 +24,5 @@ numpy
 scikit-learn
 trafilatura
 product-category
+polyglot
+spacy
