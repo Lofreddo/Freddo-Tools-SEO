@@ -5,39 +5,55 @@ from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 import gc
+import trafilatura
+import re
 
-# Initialisation d'une session pour réutiliser les connexions
 session = requests.Session()
 
 def scrape_text_from_url(url):
     try:
-        response = session.get(url, timeout=5)
+        response = session.get(url, timeout=10)
         response.raise_for_status()
+        
+        # Extraction du contenu principal avec Trafilatura
+        downloaded = trafilatura.fetch_url(url)
+        main_content = trafilatura.extract(downloaded, output_format='md', include_comments=False, include_tables=False)
+        
+        # Extraction des balises h1 du header
         soup = BeautifulSoup(response.text, 'lxml')
+        header = soup.find('header')
+        h1_tags = []
+        if header:
+            h1_tags = [h1.get_text(strip=True) for h1 in header.find_all('h1')]
         
-        # Remove unwanted sections
-        for unwanted in soup(['header', 'nav', 'footer']):
-            unwanted.decompose()
+        # Conversion du markdown en HTML
+        html_content = convert_md_to_html(main_content)
         
-        scraped_data = []
-        tags_to_extract = ['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'li', 'ul', 'ol']
+        # Ajout des balises h1 du header au début du contenu
+        for h1 in h1_tags:
+            html_content = f"<h1>{h1}</h1>\n" + html_content
         
-        for tag in tags_to_extract:
-            elements = soup.find_all(tag)
-            for element in elements:
-                scraped_data.append({
-                    'structure': f"<{tag}>",
-                    'content': element.get_text(strip=True)
-                })
-        
-        gc.collect()  # Libération de la mémoire
-        return url, scraped_data
-    except requests.exceptions.RequestException as e:
-        return url, [{"structure": "Error", "content": f"Request failed: {str(e)}"}]
+        gc.collect()
+        return url, html_content
+    except Exception as e:
+        return url, f"<p>Error: {str(e)}</p>"
+
+def convert_md_to_html(md_content):
+    if not md_content:
+        return ""
+    
+    # Conversion des titres
+    for i in range(6, 0, -1):
+        md_content = re.sub(f"^{'#' * i} (.+)$", f"<h{i}>\\1</h{i}>", md_content, flags=re.MULTILINE)
+    
+    # Conversion des paragraphes
+    md_content = re.sub(r"^(?!<h\d>)(.+)$", "<p>\\1</p>", md_content, flags=re.MULTILINE)
+    
+    return md_content
 
 def scrape_all_urls(urls):
     scraped_results = []
-    max_workers = min(100, len(urls) // 100 + 1)  # Ajuste dynamiquement le nombre de threads
+    max_workers = min(100, len(urls) // 100 + 1)
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_url = {executor.submit(scrape_text_from_url, url): url for url in urls}
@@ -46,9 +62,9 @@ def scrape_all_urls(urls):
                 url, data = future.result()
                 scraped_results.append((url, data))
             except Exception as e:
-                scraped_results.append((future_to_url[future], [{"structure": "Error", "content": str(e)}]))
+                scraped_results.append((future_to_url[future], f"<p>Error: {str(e)}</p>"))
 
-            if len(scraped_results) % 1000 == 0:  # Collecte de la mémoire périodiquement
+            if len(scraped_results) % 1000 == 0:
                 gc.collect()
 
     return scraped_results
@@ -56,12 +72,10 @@ def scrape_all_urls(urls):
 def create_output_df(urls, scraped_data_list):
     output_data = []
     for url, scraped_data in scraped_data_list:
-        for data in scraped_data:
-            output_data.append({
-                'URL': url,
-                'Structure': data['structure'],
-                'Contenu Scrapé': data['content']
-            })
+        output_data.append({
+            'URL': url,
+            'Contenu Scrapé': scraped_data
+        })
     return pd.DataFrame(output_data)
 
 def create_excel_file(df):
@@ -72,7 +86,7 @@ def create_excel_file(df):
     return output.getvalue()
 
 def main():
-    st.title("Scraper de contenu HTML")
+    st.title("Scraper de contenu HTML avec Trafilatura")
 
     option = st.selectbox(
         "Comment souhaitez-vous fournir les URLs ?",
@@ -84,7 +98,7 @@ def main():
     if option == "Zone de texte":
         url_input = st.text_area("Entrez les URLs à scraper (une par ligne)")
         if url_input:
-            urls = list(filter(None, url_input.splitlines()))  # Supprime les lignes vides
+            urls = list(filter(None, url_input.splitlines()))
 
     elif option == "Fichier Excel":
         uploaded_file = st.file_uploader("Choisissez un fichier Excel", type=["xlsx", "xls"])
@@ -95,8 +109,7 @@ def main():
 
     if st.button("Scraper"):
         if urls:
-            # Traiter les URLs par lots pour éviter les dépassements de mémoire
-            batch_size = 10000  # Taille du lot pour traiter par parties
+            batch_size = 10000
             total_batches = len(urls) // batch_size + 1
             all_scraped_data = []
 
@@ -105,14 +118,9 @@ def main():
                 scraped_data_list = scrape_all_urls(batch_urls)
                 all_scraped_data.extend(scraped_data_list)
 
-                # Libérer la mémoire entre les lots
                 gc.collect()
 
-            if option == "Fichier Excel":
-                df['Structure'] = df[column_name].apply(lambda url: [data['structure'] for data in dict(all_scraped_data).get(url, [])])
-                df['Contenu Scrapé'] = df[column_name].apply(lambda url: "\n".join([data['content'] for data in dict(all_scraped_data).get(url, [])]))
-            else:
-                df = create_output_df(urls, all_scraped_data)
+            df = create_output_df(urls, all_scraped_data)
             
             excel_data = create_excel_file(df)
             
