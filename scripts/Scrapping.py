@@ -17,7 +17,10 @@ def scrape_text_from_url(url):
         
         # Extraction du contenu principal avec Trafilatura
         downloaded = trafilatura.fetch_url(url)
-        main_content = trafilatura.extract(downloaded, output_format='md', include_comments=False, include_tables=False)
+        main_content = trafilatura.extract(downloaded, output_format='html', include_comments=False, include_tables=False)
+        
+        if main_content is None:
+            return url, "<p>Aucun contenu extrait</p>"
         
         # Extraction des balises h1 du header
         soup = BeautifulSoup(response.text, 'lxml')
@@ -26,30 +29,14 @@ def scrape_text_from_url(url):
         if header:
             h1_tags = [h1.get_text(strip=True) for h1 in header.find_all('h1')]
         
-        # Conversion du markdown en HTML
-        html_content = convert_md_to_html(main_content)
-        
         # Ajout des balises h1 du header au début du contenu
         for h1 in h1_tags:
-            html_content = f"<h1>{h1}</h1>\n" + html_content
+            main_content = f"<h1>{h1}</h1>\n" + main_content
         
         gc.collect()
-        return url, html_content
+        return url, main_content
     except Exception as e:
         return url, f"<p>Error: {str(e)}</p>"
-
-def convert_md_to_html(md_content):
-    if not md_content:
-        return ""
-    
-    # Conversion des titres
-    for i in range(6, 0, -1):
-        md_content = re.sub(f"^{'#' * i} (.+)$", f"<h{i}>\\1</h{i}>", md_content, flags=re.MULTILINE)
-    
-    # Conversion des paragraphes
-    md_content = re.sub(r"^(?!<h\d>)(.+)$", "<p>\\1</p>", md_content, flags=re.MULTILINE)
-    
-    return md_content
 
 def scrape_all_urls(urls):
     scraped_results = []
@@ -88,28 +75,6 @@ def create_excel_file(df):
     except Exception as e:
         st.error(f"Erreur lors de la création du fichier Excel : {str(e)}")
         return None
-
-# Modification de la partie principale du script où cette fonction est appelée
-if st.button("Scraper"):
-    if urls:
-        # ... (le code existant pour le scraping)
-
-        df = create_output_df(urls, all_scraped_data)
-        
-        excel_data = create_excel_file(df)
-        
-        if excel_data:
-            st.success("Scraping terminé avec succès ! Téléchargez le fichier ci-dessous.")
-            st.download_button(
-                label="Télécharger le fichier Excel",
-                data=excel_data,
-                file_name="scraped_data.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-        else:
-            st.error("Impossible de créer le fichier Excel. Veuillez vérifier les logs pour plus de détails.")
-    else:
-        st.error("Aucune URL fournie.")
 
 def main():
     st.title("Scraper de contenu HTML avec Trafilatura")
@@ -150,13 +115,16 @@ def main():
             
             excel_data = create_excel_file(df)
             
-            st.success("Scraping terminé avec succès ! Téléchargez le fichier ci-dessous.")
-            st.download_button(
-                label="Télécharger le fichier Excel",
-                data=excel_data,
-                file_name="scraped_data.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            if excel_data:
+                st.success("Scraping terminé avec succès ! Téléchargez le fichier ci-dessous.")
+                st.download_button(
+                    label="Télécharger le fichier Excel",
+                    data=excel_data,
+                    file_name="scraped_data.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            else:
+                st.error("Impossible de créer le fichier Excel. Veuillez vérifier les logs pour plus de détails.")
         else:
             st.error("Aucune URL fournie.")
 
