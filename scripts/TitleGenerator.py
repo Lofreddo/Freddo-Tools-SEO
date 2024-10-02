@@ -9,9 +9,9 @@ openai.api_key = st.secrets["openai_api_key"]
 def create_embedding(text):
     """Crée un embedding pour le texte donné."""
     try:
-        # Utilisation de la nouvelle méthode embeddings
-        response = openai.embeddings.create(input=text, model="text-embedding-3-small")
-        return response['data'][0]['embedding']
+        # Utilisation de la bonne méthode pour les embeddings
+        response = openai.Embedding.create(input=text, model="text-embedding-3-small")
+        return response['data'][0]['embedding']  # Accès correct à l'embedding
     except Exception as e:
         st.error(f"Erreur lors de la création de l'embedding : {str(e)}")
         return None
@@ -29,14 +29,14 @@ def generate_title_with_gpt(product_info, embedding):
         .fr/products/ = français
         """
         
-        response = openai.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "Vous êtes un expert en SEO qui génère des balises title pour un site français, anglais, espagnol et italien."},
                 {"role": "user", "content": prompt}
             ]
         )
-        return response.choices[0].message['content'].strip()
+        return response['choices'][0]['message']['content'].strip()  # Accès correct à la réponse
     except Exception as e:
         st.error(f"Erreur lors de la génération du titre : {str(e)}")
         return None
