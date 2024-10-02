@@ -17,7 +17,18 @@ def scrape_text_from_url(url):
         
         # Extraction du contenu principal avec Trafilatura
         downloaded = trafilatura.fetch_url(url)
-        main_content = trafilatura.extract(downloaded, output_format='html', include_comments=False, include_tables=False)
+        main_content = trafilatura.extract(
+            downloaded,
+            output_format='html',
+            include_comments=False,
+            include_tables=True,
+            include_images=False,
+            include_links=False,
+            favor_precision=False,
+            favor_recall=True,
+            no_fallback=False,
+            include_formatting=True
+        )
         
         if main_content is None:
             return url, "<p>Aucun contenu extrait</p>", []
