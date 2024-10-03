@@ -19,21 +19,19 @@ def generate_title_with_gpt(product_info, embedding):
     """Génère un titre SEO en utilisant GPT-3.5-turbo."""
     try:
         prompt = f"""
-        Utilise les éléments trouvés dans {product_info} pour créer une balise title structurée comme ceci : "Product type" "Gender" "Product Name" "Color"
-        Voici un exemple en anglais : Jacket Woman Le Vrai Claude 3.0 Red
-        La balise title doit être générée dans la langue identifiée dans l'URL dans {product_info}.
-        .com/products/ = anglais
-        .com/it/products/ = italien
-        .com/es/products/ = espagnol
-        .fr/products/ = français
-
-        Ta réponse doit contenir une seule balise title, dans la bonne langue, et aucun autre élément. 
+        Utilise les éléments trouvés dans {product_info} pour créer une balise title structurée comme ceci : Product type Gender Product Name Color
+        Voici un exemple : Jacket Woman Le Vrai Claude 3.0 Red
+        Une seule balise title doit être générée dans la langue identifiée dans l'URL dans {product_info}.
+       https://www.k-way.com/products/ = anglais
+       https://www.k-way.com/it/products/ = italien
+       https://www.k-way.com/es/products/ = espagnol
+        Ta réponse doit contenir une seule balise title, dans la bonne langue.
         """
         
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "Vous êtes un expert en SEO qui génère des balises title pour un site français, anglais, espagnol et italien."},
+                {"role": "system", "content": "Vous êtes un générateur de balise title qui contient les règles données en prompt. Votre seule réponse possible est la balise title générée pour la page et aucun autre texte."},
                 {"role": "user", "content": prompt}
             ]
         )
