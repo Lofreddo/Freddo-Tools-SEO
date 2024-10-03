@@ -26,6 +26,8 @@ def generate_title_with_gpt(product_info, embedding):
         .com/it/products/ = italien
         .com/es/products/ = espagnol
         .fr/products/ = français
+
+        Ta réponse doit contenir une seule balise title, dans la bonne langue, et aucun autre élément. 
         """
         
         response = client.chat.completions.create(
