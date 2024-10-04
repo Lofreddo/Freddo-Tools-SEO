@@ -30,12 +30,32 @@ def get_representative_keywords(keywords, cluster_labels, n=5):
     return representative_keywords
 
 def generate_category_name(keywords):
-    prompt = f"Génère un nom de catégorie court et descriptif pour ces mots-clés : {', '.join(keywords)}"
+    prompt = f"""Génère une catégorie générique unique et courte (1 à 2 mots maximum) pour ces mots-clés. 
+    La catégorie doit être le terme le plus général possible qui englobe tous les mots-clés.
+    N'inclus pas de chiffres ou de détails spécifiques.
+    Mots-clés : {', '.join(keywords)}
+    Catégorie :"""
+    
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "user", "content": prompt}]
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=10,
+        temperature=0.5
     )
-    return response.choices[0].message.content.strip()
+    return response.choices[0].message.content.strip().lower()
+
+def post_process_category(category):
+    # Supprimer les articles et les pluriels
+    articles = ['le', 'la', 'les', 'un', 'une', 'des']
+    for article in articles:
+        if category.startswith(article + ' '):
+            category = category[len(article)+1:]
+    
+    # Mettre au singulier
+    if category.endswith('s') and not category.endswith('ss'):
+        category = category[:-1]
+    
+    return category.strip()
 
 def categorize_keywords(keywords):
     # Obtenir les embeddings
@@ -49,10 +69,11 @@ def categorize_keywords(keywords):
     # Obtenir les mots-clés représentatifs
     representative_keywords = get_representative_keywords(keywords, cluster_labels)
     
-    # Générer des noms de catégories
+    # Générer et post-traiter les noms de catégories
     category_names = {}
     for label, rep_keywords in representative_keywords.items():
-        category_names[label] = generate_category_name(rep_keywords)
+        category = generate_category_name(rep_keywords)
+        category_names[label] = post_process_category(category)
     
     # Créer le dictionnaire final de catégorisation
     categorized = {kw: category_names[label] for kw, label in zip(keywords, cluster_labels)}
