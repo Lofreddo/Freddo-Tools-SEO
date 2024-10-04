@@ -13,7 +13,7 @@ client = OpenAI(api_key=st.secrets["openai_api_key"])
 result_queue = queue.Queue()
 
 # Limiter le nombre de threads simultanés pour ne pas surcharger l'API
-MAX_THREADS = 80
+MAX_THREADS = 5
 thread_semaphore = threading.Semaphore(MAX_THREADS)
 
 def create_embedding(text):
@@ -29,17 +29,17 @@ def title_case(s):
     """Met en majuscule la première lettre de chaque mot."""
     return ' '.join(word.capitalize() for word in s.split())
 
-def generate_title_with_gpt(product_info, embedding, language):
+def generate_title_with_gpt(product_info, embedding, language, title_structure, exemple_title):
     """Génère un titre SEO en utilisant GPT-3.5-turbo sans balises HTML."""
     try:
         prompt = f"""
-        Utilise les éléments trouvés dans {product_info} pour créer une balise title structurée comme ceci : "Product type" "Gender" "Product Name" "Color"
-        Voici un exemple en anglais : Jacket Woman Le Vrai Claude 3.0 Red
+        Utilise les éléments trouvés dans {product_info} pour créer une balise title structurée comme ceci : "{title_structure}"
+        Voici un exemple en anglais : {exemple_title}
         La balise title doit être générée en {language}.
         """
         
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": f"Vous êtes un expert en SEO qui génère des balises title en {language}."},
                 {"role": "user", "content": prompt}
@@ -53,20 +53,22 @@ def generate_title_with_gpt(product_info, embedding, language):
         st.error(f"Erreur lors de la génération du titre : {str(e)}")
         return None
 
-def threaded_title_generation(row, language):
+def threaded_title_generation(row, language, title_structure, exemple_title):
     with thread_semaphore:
         embedding = create_embedding(f"{row['Titre actuel']} {row['H1']} {row['Description']}")
         title = generate_title_with_gpt(
             f"URL: {row['URL']}, Produit: {row['H1']}, Description: {row['Description']}", 
             embedding,
-            language
+            language,
+            title_structure,
+            exemple_title
         )
         result_queue.put((row['URL'], title))
 
-def process_dataframe_multithreading(df, language):
+def process_dataframe_multithreading(df, language, title_structure, exemple_title):
     threads = []
     for index, row in df.iterrows():
-        thread = threading.Thread(target=threaded_title_generation, args=(row, language))
+        thread = threading.Thread(target=threaded_title_generation, args=(row, language, title_structure, exemple_title))
         threads.append(thread)
         thread.start()
     
@@ -105,6 +107,16 @@ def main():
         ["Anglais", "Français", "Espagnol", "Italien"]
     )
 
+    title_structure = st.text_input(
+        "Définissez la structure du titre",
+        '"Product type" "Gender" "Product Name" "Color"'
+    )
+
+    exemple_title = st.text_input(
+        "Donnez un exemple de titre",
+        "Jacket Woman Le Vrai Claude 3.0 Red"
+    )
+
     uploaded_file = st.file_uploader("Choisissez un fichier XLSX", type="xlsx")
     
     if uploaded_file is not None:
@@ -123,7 +135,7 @@ def main():
             progress_thread.start()
             
             # Traitement du DataFrame avec multithreading
-            result_df = process_dataframe_multithreading(df, language)
+            result_df = process_dataframe_multithreading(df, language, title_structure, exemple_title)
             
             # Attendre que le thread de progression se termine
             progress_thread.join()
