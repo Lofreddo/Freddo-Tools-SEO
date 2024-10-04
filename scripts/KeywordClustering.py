@@ -30,7 +30,7 @@ def extract_main_keywords(keywords):
             frequency[word] += 1
     return frequency
 
-def define_categories(frequencies, min_occurrence=20):
+def define_categories(frequencies, min_occurrence=10):
     categories = [word for word, count in frequencies.items() if count >= min_occurrence]
     if not categories:
         categories = sorted(frequencies, key=frequencies.get, reverse=True)[:5]  # Prendre les 5 plus fréquents
