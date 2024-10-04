@@ -3,10 +3,15 @@ import pandas as pd
 import numpy as np
 from openai import OpenAI
 from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_score
-import spacy
-from collections import defaultdict
+from nltk.stem import WordNetLemmatizer
+from nltk.tokenize import word_tokenize
+import nltk
 import os
+
+# Téléchargement des ressources NLTK nécessaires
+nltk.download('punkt')
+nltk.download('wordnet')
+nltk.download('omw-1.4')
 
 def main():
     st.title("Catégorisation de mots-clés multilingue")
@@ -16,16 +21,7 @@ def main():
 
     # Sélection de la langue
     language = st.selectbox("Sélectionnez la langue des mots-clés :", ["Français", "Italien", "Espagnol", "Anglais"])
-    language_models = {
-        "Français": "fr_core_news_sm",
-        "Italien": "it_core_news_sm",
-        "Espagnol": "es_core_news_sm",
-        "Anglais": "en_core_web_sm"
-    }
-    model_name = language_models[language]
-
-    # Charger le modèle spaCy, le télécharger s'il n'est pas disponible
-    nlp = load_spacy_model(model_name)
+    lang_code = {"Français": "fra", "Italien": "ita", "Espagnol": "spa", "Anglais": "eng"}[language]
 
     # Interface utilisateur Streamlit
     input_method = st.radio("Choisissez la méthode d'entrée :", ("Fichier (XLSX/CSV)", "Texte libre"))
@@ -50,7 +46,7 @@ def main():
     if st.button("Catégoriser"):
         with st.spinner("Catégorisation en cours..."):
             # Lemmatisation et catégorisation
-            categorized_keywords = categorize_keywords(client, keywords, nlp)
+            categorized_keywords = categorize_keywords(client, keywords, lang_code)
             
             # Créer le DataFrame de sortie
             if input_method == "Fichier (XLSX/CSV)":
@@ -77,26 +73,19 @@ def get_embedding(client, text, model="text-embedding-3-small"):
     text = text.replace("\n", " ")
     return client.embeddings.create(input=[text], model=model).data[0].embedding
 
-@st.cache_resource
-def load_spacy_model(model_name):
-    try:
-        return spacy.load(model_name)
-    except OSError:
-        st.info(f"Téléchargement du modèle {model_name}...")
-        spacy.cli.download(model_name)
-        return spacy.load(model_name)
-
-def lemmatize_keywords(keywords, nlp):
+def lemmatize_keywords(keywords, lang_code):
+    lemmatizer = WordNetLemmatizer()
     lemmatized = {}
     for kw in keywords:
-        doc = nlp(kw)
-        main_word = doc[0].lemma_  # Prend le lemme du premier mot comme terme principal
+        tokens = word_tokenize(kw.lower(), language=lang_code)
+        lemmas = [lemmatizer.lemmatize(token, lang=lang_code) for token in tokens]
+        main_word = lemmas[0]  # Prend le lemme du premier mot comme terme principal
         lemmatized[kw] = main_word
     return lemmatized
 
-def categorize_keywords(client, keywords, nlp):
+def categorize_keywords(client, keywords, lang_code):
     # Lemmatisation
-    lemmatized = lemmatize_keywords(keywords, nlp)
+    lemmatized = lemmatize_keywords(keywords, lang_code)
     
     # Regroupement initial par lemme
     groups = defaultdict(list)
