@@ -3,6 +3,7 @@ import pandas as pd
 from openai import OpenAI
 from sklearn.cluster import KMeans
 import numpy as np
+import re
 
 # Initialiser le client OpenAI
 @st.cache_resource
@@ -15,6 +16,18 @@ client = get_openai_client()
 def get_embedding(text, model="text-embedding-3-small"):
     text = text.replace("\n", " ")
     return client.embeddings.create(input=[text], model=model).data[0].embedding
+
+def extract_main_keyword(keyword):
+    common_words = ['de', 'd', 'du', 'des', 'le', 'la', 'les', 'un', 'une']
+    words = keyword.lower().split()
+    main_words = [word for word in words if word not in common_words]
+    
+    if main_words:
+        main_keyword = main_words[0]
+        if main_keyword.endswith('s') and not main_keyword.endswith('ss'):
+            main_keyword = main_keyword[:-1]
+        return main_keyword
+    return keyword
 
 def get_representative_keywords(keywords, cluster_labels, n=5):
     clusters = {}
@@ -30,52 +43,56 @@ def get_representative_keywords(keywords, cluster_labels, n=5):
     return representative_keywords
 
 def generate_category_name(keywords):
+    main_keywords = [extract_main_keyword(kw) for kw in keywords]
+    unique_main_keywords = list(set(main_keywords))
+    
+    if len(unique_main_keywords) == 1:
+        return unique_main_keywords[0]
+    
     prompt = f"""Génère une catégorie générique unique et courte (1 à 2 mots maximum) pour ces mots-clés. 
-    La catégorie doit être le terme le plus général possible qui englobe tous les mots-clés.
-    N'inclus pas de chiffres ou de détails spécifiques.
+    La catégorie doit contenir le mot-clé principal le plus fréquent parmi : {', '.join(unique_main_keywords)}.
     Mots-clés : {', '.join(keywords)}
     Catégorie :"""
     
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-3.5-turbo",
         messages=[{"role": "user", "content": prompt}],
         max_tokens=10,
-        temperature=0.5
+        temperature=0.3
     )
     return response.choices[0].message.content.strip().lower()
 
 def post_process_category(category):
-    # Supprimer les articles et les pluriels
     articles = ['le', 'la', 'les', 'un', 'une', 'des']
     for article in articles:
         if category.startswith(article + ' '):
             category = category[len(article)+1:]
     
-    # Mettre au singulier
+    words = category.split()
+    if len(words) > 2:
+        category = ' '.join(words[:2])
+    
     if category.endswith('s') and not category.endswith('ss'):
         category = category[:-1]
     
     return category.strip()
 
 def categorize_keywords(keywords):
-    # Obtenir les embeddings
     embeddings = [get_embedding(kw) for kw in keywords]
     
-    # Clustering
-    n_clusters = max(1, min(len(keywords) // 10, 20))
+    unique_keywords = list(set(keywords))
+    n_clusters = len(unique_keywords)
+    
     kmeans = KMeans(n_clusters=n_clusters, random_state=42)
     cluster_labels = kmeans.fit_predict(embeddings)
     
-    # Obtenir les mots-clés représentatifs
     representative_keywords = get_representative_keywords(keywords, cluster_labels)
     
-    # Générer et post-traiter les noms de catégories
     category_names = {}
     for label, rep_keywords in representative_keywords.items():
         category = generate_category_name(rep_keywords)
         category_names[label] = post_process_category(category)
     
-    # Créer le dictionnaire final de catégorisation
     categorized = {kw: category_names[label] for kw, label in zip(keywords, cluster_labels)}
     
     return categorized
@@ -83,7 +100,6 @@ def categorize_keywords(keywords):
 def main():
     st.title("Catégorisation de mots-clés")
 
-    # Interface utilisateur Streamlit
     input_method = st.radio("Choisissez la méthode d'entrée :", ("Fichier (XLSX/CSV)", "Texte libre"))
 
     if input_method == "Fichier (XLSX/CSV)":
@@ -105,10 +121,8 @@ def main():
 
     if st.button("Catégoriser"):
         with st.spinner("Catégorisation en cours..."):
-            # Catégorisation
             categorized_keywords = categorize_keywords(keywords)
             
-            # Créer le DataFrame de sortie
             if input_method == "Fichier (XLSX/CSV)":
                 output_df = df.copy()
                 output_df["Catégorie"] = [categorized_keywords[kw] for kw in keywords]
@@ -118,7 +132,6 @@ def main():
             st.write("Résultats de la catégorisation :")
             st.dataframe(output_df)
             
-            # Téléchargement du fichier de sortie
             output_file = "mots_cles_categorises.xlsx"
             output_df.to_excel(output_file, index=False)
             with open(output_file, "rb") as file:
