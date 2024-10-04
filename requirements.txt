@@ -27,3 +27,4 @@ polyglot
 openai
 scikit-learn
 spacy
+thinc
