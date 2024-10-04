@@ -39,7 +39,7 @@ def generate_title_with_gpt(product_info, embedding, language, title_structure, 
         """
         
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": f"Vous êtes un expert en SEO qui génère des balises title en {language}."},
                 {"role": "user", "content": prompt}
