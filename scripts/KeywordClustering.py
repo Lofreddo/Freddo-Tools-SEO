@@ -3,13 +3,20 @@ import pandas as pd
 import numpy as np
 from openai import OpenAI
 from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+import spacy
+from collections import defaultdict
 import os
 
 def main():
-    st.title("Catégorisation de mots-clés")
+    st.title("Catégorisation de mots-clés multilingue")
 
     # Initialiser le client OpenAI
-    client = OpenAI(api_key=st.secrets["openai_api_key"])
+    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+
+    # Sélection de la langue
+    language = st.selectbox("Sélectionnez la langue des mots-clés :", ["Français", "Italien", "Espagnol", "Anglais"])
+    lang_code = {"Français": "fr", "Italien": "it", "Espagnol": "es", "Anglais": "en"}[language]
 
     # Interface utilisateur Streamlit
     input_method = st.radio("Choisissez la méthode d'entrée :", ("Fichier (XLSX/CSV)", "Texte libre"))
@@ -31,19 +38,17 @@ def main():
         keywords_text = st.text_area("Entrez les mots-clés (un par ligne) :")
         keywords = [kw.strip() for kw in keywords_text.split("\n") if kw.strip()]
 
-    n_clusters = st.slider("Nombre de catégories :", min_value=2, max_value=20, value=5)
-
     if st.button("Catégoriser"):
         with st.spinner("Catégorisation en cours..."):
-            # Obtenir les embeddings et clusteriser
-            clusters = cluster_keywords(client, keywords, n_clusters)
+            # Lemmatisation et catégorisation
+            categorized_keywords = categorize_keywords(client, keywords, lang_code)
             
             # Créer le DataFrame de sortie
             if input_method == "Fichier (XLSX/CSV)":
                 output_df = df.copy()
-                output_df["Catégorie"] = clusters
+                output_df["Catégorie"] = [categorized_keywords[kw] for kw in keywords]
             else:
-                output_df = pd.DataFrame({"Mot-clé": keywords, "Catégorie": clusters})
+                output_df = pd.DataFrame({"Mot-clé": keywords, "Catégorie": [categorized_keywords[kw] for kw in keywords]})
             
             st.write("Résultats de la catégorisation :")
             st.dataframe(output_df)
@@ -63,10 +68,58 @@ def get_embedding(client, text, model="text-embedding-3-small"):
     text = text.replace("\n", " ")
     return client.embeddings.create(input=[text], model=model).data[0].embedding
 
-def cluster_keywords(client, keywords, n_clusters):
-    embeddings = [get_embedding(client, kw) for kw in keywords]
-    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-    return kmeans.fit_predict(embeddings)
+def load_spacy_model(lang_code):
+    if lang_code == "fr":
+        return spacy.load("fr_core_news_sm")
+    elif lang_code == "it":
+        return spacy.load("it_core_news_sm")
+    elif lang_code == "es":
+        return spacy.load("es_core_news_sm")
+    elif lang_code == "en":
+        return spacy.load("en_core_web_sm")
+    else:
+        raise ValueError("Langue non supportée")
+
+def lemmatize_keywords(keywords, lang_code):
+    nlp = load_spacy_model(lang_code)
+    lemmatized = {}
+    for kw in keywords:
+        doc = nlp(kw)
+        main_word = doc[0].lemma_  # Prend le lemme du premier mot comme terme principal
+        lemmatized[kw] = main_word
+    return lemmatized
+
+def categorize_keywords(client, keywords, lang_code):
+    # Lemmatisation
+    lemmatized = lemmatize_keywords(keywords, lang_code)
+    
+    # Regroupement initial par lemme
+    groups = defaultdict(list)
+    for kw, lemma in lemmatized.items():
+        groups[lemma].append(kw)
+    
+    # Pour les groupes avec un seul mot-clé, utiliser l'embedding pour le regroupement final
+    single_keywords = [group[0] for group in groups.values() if len(group) == 1]
+    if single_keywords:
+        embeddings = [get_embedding(client, kw) for kw in single_keywords]
+        
+        # Déterminer le nombre optimal de clusters
+        n_clusters = max(1, min(len(single_keywords) // 10, 20))  # Entre 1 et 20 clusters
+        
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+        cluster_labels = kmeans.fit_predict(embeddings)
+        
+        # Regrouper les mots-clés restants basés sur leur cluster
+        for kw, label in zip(single_keywords, cluster_labels):
+            groups[f"groupe_{label}"].append(kw)
+    
+    # Créer le dictionnaire final de catégorisation
+    categorized = {}
+    for category, kws in groups.items():
+        for kw in kws:
+            categorized[kw] = category
+    
+    return categorized
 
 if __name__ == "__main__":
     main()
