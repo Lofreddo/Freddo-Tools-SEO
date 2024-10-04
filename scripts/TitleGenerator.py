@@ -2,9 +2,19 @@ import streamlit as st
 import pandas as pd
 from openai import OpenAI
 from io import BytesIO
+import threading
+import queue
+import time
 
 # Initialisation du client OpenAI
 client = OpenAI(api_key=st.secrets["openai_api_key"])
+
+# Définir une file d'attente thread-safe pour stocker les résultats
+result_queue = queue.Queue()
+
+# Limiter le nombre de threads simultanés pour ne pas surcharger l'API
+MAX_THREADS = 5
+thread_semaphore = threading.Semaphore(MAX_THREADS)
 
 def create_embedding(text):
     """Crée un embedding pour le texte donné."""
@@ -43,24 +53,53 @@ def generate_title_with_gpt(product_info, embedding, language):
         st.error(f"Erreur lors de la génération du titre : {str(e)}")
         return None
 
-def process_dataframe(df, language):
-    """Traite le DataFrame pour créer les embeddings et générer les titres."""
-    # Création des embeddings
-    df['embedding'] = df.apply(lambda row: create_embedding(f"{row['Titre actuel']} {row['H1']} {row['Description']}"), axis=1)
+def threaded_title_generation(row, language):
+    with thread_semaphore:
+        embedding = create_embedding(f"{row['Titre actuel']} {row['H1']} {row['Description']}")
+        title = generate_title_with_gpt(
+            f"URL: {row['URL']}, Produit: {row['H1']}, Description: {row['Description']}", 
+            embedding,
+            language
+        )
+        result_queue.put((row['URL'], title))
+
+def process_dataframe_multithreading(df, language):
+    threads = []
+    for index, row in df.iterrows():
+        thread = threading.Thread(target=threaded_title_generation, args=(row, language))
+        threads.append(thread)
+        thread.start()
     
-    # Génération des nouveaux titres
-    df['Nouveau Titre'] = df.apply(lambda row: generate_title_with_gpt(
-        f"URL: {row['URL']}, Produit: {row['H1']}, Description: {row['Description']}", 
-        row['embedding'],
-        language
-    ), axis=1)
+    # Attendre que tous les threads se terminent
+    for thread in threads:
+        thread.join()
+
+    # Collecter les résultats de la file d'attente
+    results = []
+    while not result_queue.empty():
+        results.append(result_queue.get())
+
+    return pd.DataFrame(results, columns=['URL', 'Nouveau Titre'])
+
+def update_progress_and_count():
+    count = 0
+    total = st.session_state['total_titles']
+    progress_bar = st.progress(0)
+    status_text = st.empty()
     
-    return df[['URL', 'Nouveau Titre']]
+    while count < total:
+        time.sleep(1)  # Attendre 1 seconde
+        count = result_queue.qsize()
+        progress = count / total
+        progress_bar.progress(progress)
+        status_text.text(f"Titres générés : {count}/{total}")
+        
+    progress_bar.progress(1.0)
+    status_text.text(f"Génération terminée ! {total}/{total} titres générés.")
 
 def main():
     st.title("Générateur de balises title optimisées avec OpenAI")
 
-    # Liste déroulante pour choisir la langue
     language = st.selectbox(
         "Choisissez la langue pour les balises title",
         ["Anglais", "Français", "Espagnol", "Italien"]
@@ -77,8 +116,17 @@ def main():
             return
 
         if st.button("Générer les titres"):
-            with st.spinner('Génération des titres en cours...'):
-                result_df = process_dataframe(df, language)
+            st.session_state['total_titles'] = len(df)
+            
+            # Créer un thread pour mettre à jour la progression
+            progress_thread = threading.Thread(target=update_progress_and_count)
+            progress_thread.start()
+            
+            # Traitement du DataFrame avec multithreading
+            result_df = process_dataframe_multithreading(df, language)
+            
+            # Attendre que le thread de progression se termine
+            progress_thread.join()
             
             st.success("Génération terminée !")
             st.dataframe(result_df)
