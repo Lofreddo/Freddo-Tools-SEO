@@ -9,18 +9,34 @@ from nltk.tokenize import word_tokenize
 import nltk
 import os
 from collections import defaultdict
+import ssl
 
-# Téléchargement des ressources NLTK nécessaires
-@st.cache_resource
+try:
+    _create_unverified_https_context = ssl._create_unverified_context
+except AttributeError:
+    pass
+else:
+    ssl._create_default_https_context = _create_unverified_https_context
+
 def download_nltk_resources():
-    nltk.download('punkt')
-    nltk.download('wordnet')
-    nltk.download('omw-1.4')
-
-download_nltk_resources()
+    try:
+        nltk.data.find('tokenizers/punkt')
+    except LookupError:
+        nltk.download('punkt')
+    try:
+        nltk.data.find('corpora/wordnet')
+    except LookupError:
+        nltk.download('wordnet')
+    try:
+        nltk.data.find('corpora/omw-1.4')
+    except LookupError:
+        nltk.download('omw-1.4')
 
 def main():
     st.title("Catégorisation de mots-clés multilingue")
+
+    # Télécharger les ressources NLTK nécessaires
+    download_nltk_resources()
 
     # Initialiser le client OpenAI
     client = OpenAI(api_key=st.secrets["openai_api_key"])
