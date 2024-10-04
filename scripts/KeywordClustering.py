@@ -9,7 +9,7 @@ def main():
     st.title("Catégorisation de mots-clés")
 
     # Initialiser le client OpenAI
-    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    client = OpenAI(api_key=st.secrets["openai_api_key"])
 
     # Interface utilisateur Streamlit
     input_method = st.radio("Choisissez la méthode d'entrée :", ("Fichier (XLSX/CSV)", "Texte libre"))
