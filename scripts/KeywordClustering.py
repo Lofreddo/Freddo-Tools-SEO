@@ -32,7 +32,7 @@ def get_representative_keywords(keywords, cluster_labels, n=5):
 def generate_category_name(keywords):
     prompt = f"Génère un nom de catégorie court et descriptif pour ces mots-clés : {', '.join(keywords)}"
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-3.5-turbo",
         messages=[{"role": "user", "content": prompt}]
     )
     return response.choices[0].message.content.strip()
