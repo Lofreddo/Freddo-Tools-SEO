@@ -55,7 +55,7 @@ def generate_category_name(keywords):
     Catégorie :"""
     
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
         max_tokens=10,
         temperature=0.3
