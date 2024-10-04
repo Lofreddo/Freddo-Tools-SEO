@@ -7,14 +7,20 @@ from io import BytesIO
 client = OpenAI(api_key=st.secrets["openai_api_key"])
 
 def create_embedding(text):
-    # Cette fonction reste inchangée
+    """Crée un embedding pour le texte donné."""
+    try:
+        response = client.embeddings.create(input=text, model="text-embedding-3-small")
+        return response.data[0].embedding
+    except Exception as e:
+        st.error(f"Erreur lors de la création de l'embedding : {str(e)}")
+        return None
 
 def title_case(s):
     """Met en majuscule la première lettre de chaque mot."""
     return ' '.join(word.capitalize() for word in s.split())
 
 def generate_title_with_gpt(product_info, embedding, language):
-    """Génère un titre SEO en utilisant gpt-4o-mini sans balises HTML."""
+    """Génère un titre SEO en utilisant GPT-3.5-turbo sans balises HTML."""
     try:
         prompt = f"""
         Utilise les éléments trouvés dans {product_info} pour créer une balise title structurée comme ceci : "Product type" "Gender" "Product Name" "Color"
@@ -23,7 +29,7 @@ def generate_title_with_gpt(product_info, embedding, language):
         """
         
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": f"Vous êtes un expert en SEO qui génère des balises title en {language}."},
                 {"role": "user", "content": prompt}
