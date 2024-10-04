@@ -53,22 +53,18 @@ def generate_title_with_gpt(product_info, embedding, language, title_structure, 
         st.error(f"Erreur lors de la génération du titre : {str(e)}")
         return None
 
-def threaded_title_generation(row, language, title_structure, exemple_title):
+def threaded_title_generation(row, language, title_structure, exemple_title, url_column, criteria_columns):
     with thread_semaphore:
-        embedding = create_embedding(f"{row['Titre actuel']} {row['H1']} {row['Description']}")
-        title = generate_title_with_gpt(
-            f"URL: {row['URL']}, Produit: {row['H1']}, Description: {row['Description']}", 
-            embedding,
-            language,
-            title_structure,
-            exemple_title
-        )
-        result_queue.put((row['URL'], title))
+        product_info = f"URL: {row[url_column]}, "
+        product_info += ", ".join([f"{col}: {row[col]}" for col in criteria_columns if col])
+        embedding = create_embedding(product_info)
+        title = generate_title_with_gpt(product_info, embedding, language, title_structure, exemple_title)
+        result_queue.put((row[url_column], title))
 
-def process_dataframe_multithreading(df, language, title_structure, exemple_title):
+def process_dataframe_multithreading(df, language, title_structure, exemple_title, url_column, criteria_columns):
     threads = []
     for index, row in df.iterrows():
-        thread = threading.Thread(target=threaded_title_generation, args=(row, language, title_structure, exemple_title))
+        thread = threading.Thread(target=threaded_title_generation, args=(row, language, title_structure, exemple_title, url_column, criteria_columns))
         threads.append(thread)
         thread.start()
     
@@ -122,9 +118,18 @@ def main():
     if uploaded_file is not None:
         df = pd.read_excel(uploaded_file)
         
-        required_columns = ['URL', 'Titre actuel', 'H1', 'Description']
-        if not all(col in df.columns for col in required_columns):
-            st.error("Le fichier Excel doit contenir les colonnes : URL, Titre actuel, H1, Description")
+        # Sélection de la colonne URL
+        url_column = st.selectbox("Sélectionnez la colonne URL", df.columns)
+
+        # Sélection des critères
+        criteria_columns = []
+        for i in range(1, 6):
+            col = st.selectbox(f"Critère {i}", [""] + list(df.columns), key=f"criteria_{i}")
+            if col:
+                criteria_columns.append(col)
+
+        if not criteria_columns:
+            st.error("Veuillez sélectionner au moins un critère.")
             return
 
         if st.button("Générer les titres"):
@@ -135,7 +140,7 @@ def main():
             progress_thread.start()
             
             # Traitement du DataFrame avec multithreading
-            result_df = process_dataframe_multithreading(df, language, title_structure, exemple_title)
+            result_df = process_dataframe_multithreading(df, language, title_structure, exemple_title, url_column, criteria_columns)
             
             # Attendre que le thread de progression se termine
             progress_thread.join()
