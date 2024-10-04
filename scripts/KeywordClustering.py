@@ -17,7 +17,7 @@ def main():
     st.title("Catégorisation de mots-clés multilingue")
 
     # Initialiser le client OpenAI
-    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    client = OpenAI(api_key=st.secrets["openai_api_key"])
 
     # Sélection de la langue
     language = st.selectbox("Sélectionnez la langue des mots-clés :", ["Français", "Italien", "Espagnol", "Anglais"])
