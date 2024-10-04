@@ -13,7 +13,7 @@ client = OpenAI(api_key=st.secrets["openai_api_key"])
 result_queue = queue.Queue()
 
 # Limiter le nombre de threads simultanés pour ne pas surcharger l'API
-MAX_THREADS = 40
+MAX_THREADS = 80
 thread_semaphore = threading.Semaphore(MAX_THREADS)
 
 def create_embedding(text):
