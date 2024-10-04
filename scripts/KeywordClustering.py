@@ -3,15 +3,21 @@ import pandas as pd
 import numpy as np
 from openai import OpenAI
 from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import word_tokenize
 import nltk
 import os
+from collections import defaultdict
 
 # Téléchargement des ressources NLTK nécessaires
-nltk.download('punkt')
-nltk.download('wordnet')
-nltk.download('omw-1.4')
+@st.cache_resource
+def download_nltk_resources():
+    nltk.download('punkt')
+    nltk.download('wordnet')
+    nltk.download('omw-1.4')
+
+download_nltk_resources()
 
 def main():
     st.title("Catégorisation de mots-clés multilingue")
@@ -69,6 +75,7 @@ def main():
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
 
+@st.cache_data
 def get_embedding(client, text, model="text-embedding-3-small"):
     text = text.replace("\n", " ")
     return client.embeddings.create(input=[text], model=model).data[0].embedding
@@ -77,8 +84,16 @@ def lemmatize_keywords(keywords, lang_code):
     lemmatizer = WordNetLemmatizer()
     lemmatized = {}
     for kw in keywords:
-        tokens = word_tokenize(kw.lower(), language=lang_code)
-        lemmas = [lemmatizer.lemmatize(token, lang=lang_code) for token in tokens]
+        try:
+            tokens = word_tokenize(kw.lower(), language=lang_code)
+        except LookupError:
+            tokens = word_tokenize(kw.lower())
+        
+        try:
+            lemmas = [lemmatizer.lemmatize(token, lang=lang_code) for token in tokens]
+        except KeyError:
+            lemmas = [lemmatizer.lemmatize(token) for token in tokens]
+        
         main_word = lemmas[0]  # Prend le lemme du premier mot comme terme principal
         lemmatized[kw] = main_word
     return lemmatized
@@ -98,9 +113,18 @@ def categorize_keywords(client, keywords, lang_code):
         embeddings = [get_embedding(client, kw) for kw in single_keywords]
         
         # Déterminer le nombre optimal de clusters
-        n_clusters = max(1, min(len(single_keywords) // 10, 20))  # Entre 1 et 20 clusters
+        max_clusters = min(len(single_keywords), 20)
+        silhouette_scores = []
         
-        kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+        for n_clusters in range(2, max_clusters + 1):
+            kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+            cluster_labels = kmeans.fit_predict(embeddings)
+            score = silhouette_score(embeddings, cluster_labels)
+            silhouette_scores.append(score)
+        
+        optimal_clusters = silhouette_scores.index(max(silhouette_scores)) + 2
+        
+        kmeans = KMeans(n_clusters=optimal_clusters, random_state=42, n_init=10)
         cluster_labels = kmeans.fit_predict(embeddings)
         
         # Regrouper les mots-clés restants basés sur leur cluster
