@@ -20,7 +20,7 @@ def get_embedding(text, model="text-embedding-3-small"):
 
 def extract_main_keywords(keywords):
     frequency = defaultdict(int)
-    common_words = ['de', 'd', 'du', 'des', 'le', 'la', 'les', 'un', 'une']
+    common_words = ['de', 'd', 'du', 'des', 'le', 'la', 'les', 'un', 'une', 'homme', 'femme', 'enfant', 'garçon', 'fille']
     for keyword in keywords:
         words = keyword.lower().split()
         main_words = [word for word in words if word not in common_words]
