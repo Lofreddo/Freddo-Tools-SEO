@@ -7,40 +7,37 @@ from io import BytesIO
 client = OpenAI(api_key=st.secrets["openai_api_key"])
 
 def create_embedding(text):
-    """Crée un embedding pour le texte donné."""
-    try:
-        response = client.embeddings.create(input=text, model="text-embedding-3-small")
-        return response.data[0].embedding
-    except Exception as e:
-        st.error(f"Erreur lors de la création de l'embedding : {str(e)}")
-        return None
+    # Cette fonction reste inchangée
 
-def generate_title_with_gpt(product_info, embedding):
-    """Génère un titre SEO en utilisant GPT-3.5-turbo."""
+def title_case(s):
+    """Met en majuscule la première lettre de chaque mot."""
+    return ' '.join(word.capitalize() for word in s.split())
+
+def generate_title_with_gpt(product_info, embedding, language):
+    """Génère un titre SEO en utilisant gpt-4o-mini sans balises HTML."""
     try:
         prompt = f"""
         Utilise les éléments trouvés dans {product_info} pour créer une balise title structurée comme ceci : "Product type" "Gender" "Product Name" "Color"
         Voici un exemple en anglais : Jacket Woman Le Vrai Claude 3.0 Red
-        La balise title doit être générée dans la langue identifiée dans l'URL dans {product_info}.
-        .com/products/ = anglais
-        .com/it/products/ = italien
-        .com/es/products/ = espagnol
-        .fr/products/ = français
+        La balise title doit être générée en {language}.
         """
         
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "Vous êtes un expert en SEO qui génère des balises title pour un site français, anglais, espagnol et italien."},
+                {"role": "system", "content": f"Vous êtes un expert en SEO qui génère des balises title en {language}."},
                 {"role": "user", "content": prompt}
             ]
         )
-        return response.choices[0].message.content.strip()
+        title = response.choices[0].message.content.strip()
+        # Exclure les balises HTML <title> et appliquer le title case
+        title = title_case(title.replace('<title>', '').replace('</title>', '').strip())
+        return title
     except Exception as e:
         st.error(f"Erreur lors de la génération du titre : {str(e)}")
         return None
 
-def process_dataframe(df):
+def process_dataframe(df, language):
     """Traite le DataFrame pour créer les embeddings et générer les titres."""
     # Création des embeddings
     df['embedding'] = df.apply(lambda row: create_embedding(f"{row['Titre actuel']} {row['H1']} {row['Description']}"), axis=1)
@@ -48,13 +45,20 @@ def process_dataframe(df):
     # Génération des nouveaux titres
     df['Nouveau Titre'] = df.apply(lambda row: generate_title_with_gpt(
         f"URL: {row['URL']}, Produit: {row['H1']}, Description: {row['Description']}", 
-        row['embedding']
+        row['embedding'],
+        language
     ), axis=1)
     
     return df[['URL', 'Nouveau Titre']]
 
 def main():
     st.title("Générateur de balises title optimisées avec OpenAI")
+
+    # Liste déroulante pour choisir la langue
+    language = st.selectbox(
+        "Choisissez la langue pour les balises title",
+        ["Anglais", "Français", "Espagnol", "Italien"]
+    )
 
     uploaded_file = st.file_uploader("Choisissez un fichier XLSX", type="xlsx")
     
@@ -68,7 +72,7 @@ def main():
 
         if st.button("Générer les titres"):
             with st.spinner('Génération des titres en cours...'):
-                result_df = process_dataframe(df)
+                result_df = process_dataframe(df, language)
             
             st.success("Génération terminée !")
             st.dataframe(result_df)
