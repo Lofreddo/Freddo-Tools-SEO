@@ -1,31 +1,66 @@
 import streamlit as st
 import pandas as pd
-import nltk
-from nltk.tokenize import word_tokenize
-from nltk.stem import WordNetLemmatizer
-from collections import defaultdict
 from openai import OpenAI
 from sklearn.cluster import KMeans
-import os
+import numpy as np
 
-# Téléchargement des ressources NLTK nécessaires
+# Initialiser le client OpenAI
 @st.cache_resource
-def download_nltk_resources():
-    nltk.download('punkt', quiet=True)
-    nltk.download('wordnet', quiet=True)
-    nltk.download('omw-1.4', quiet=True)
+def get_openai_client():
+    return OpenAI(api_key=st.secrets["openai_api_key"])
 
-download_nltk_resources()
+client = get_openai_client()
+
+@st.cache_data
+def get_embedding(text, model="text-embedding-3-small"):
+    text = text.replace("\n", " ")
+    return client.embeddings.create(input=[text], model=model).data[0].embedding
+
+def get_representative_keywords(keywords, cluster_labels, n=5):
+    clusters = {}
+    for keyword, label in zip(keywords, cluster_labels):
+        if label not in clusters:
+            clusters[label] = []
+        clusters[label].append(keyword)
+    
+    representative_keywords = {}
+    for label, cluster_keywords in clusters.items():
+        representative_keywords[label] = cluster_keywords[:n]
+    
+    return representative_keywords
+
+def generate_category_name(keywords):
+    prompt = f"Génère un nom de catégorie court et descriptif pour ces mots-clés : {', '.join(keywords)}"
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return response.choices[0].message.content.strip()
+
+def categorize_keywords(keywords):
+    # Obtenir les embeddings
+    embeddings = [get_embedding(kw) for kw in keywords]
+    
+    # Clustering
+    n_clusters = max(1, min(len(keywords) // 10, 20))
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    cluster_labels = kmeans.fit_predict(embeddings)
+    
+    # Obtenir les mots-clés représentatifs
+    representative_keywords = get_representative_keywords(keywords, cluster_labels)
+    
+    # Générer des noms de catégories
+    category_names = {}
+    for label, rep_keywords in representative_keywords.items():
+        category_names[label] = generate_category_name(rep_keywords)
+    
+    # Créer le dictionnaire final de catégorisation
+    categorized = {kw: category_names[label] for kw, label in zip(keywords, cluster_labels)}
+    
+    return categorized
 
 def main():
-    st.title("Catégorisation de mots-clés multilingue")
-
-    # Initialiser le client OpenAI
-    client = OpenAI(api_key=st.secrets["openai_api_key"])
-
-    # Sélection de la langue
-    language = st.selectbox("Sélectionnez la langue des mots-clés :", ["Français", "Italien", "Espagnol", "Anglais"])
-    lang_code = {"Français": "fra", "Italien": "ita", "Espagnol": "spa", "Anglais": "eng"}[language]
+    st.title("Catégorisation de mots-clés")
 
     # Interface utilisateur Streamlit
     input_method = st.radio("Choisissez la méthode d'entrée :", ("Fichier (XLSX/CSV)", "Texte libre"))
@@ -49,8 +84,8 @@ def main():
 
     if st.button("Catégoriser"):
         with st.spinner("Catégorisation en cours..."):
-            # Lemmatisation et catégorisation
-            categorized_keywords = categorize_keywords(client, keywords, lang_code)
+            # Catégorisation
+            categorized_keywords = categorize_keywords(keywords)
             
             # Créer le DataFrame de sortie
             if input_method == "Fichier (XLSX/CSV)":
@@ -72,53 +107,6 @@ def main():
                     file_name=output_file,
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
-
-@st.cache_data
-def get_embedding(client, text, model="text-embedding-3-small"):
-    text = text.replace("\n", " ")
-    return client.embeddings.create(input=[text], model=model).data[0].embedding
-
-def lemmatize_keywords(keywords, lang_code):
-    lemmatizer = WordNetLemmatizer()
-    lemmatized = {}
-    for kw in keywords:
-        tokens = word_tokenize(kw.lower(), language=lang_code)
-        lemmas = [lemmatizer.lemmatize(token, lang=lang_code) for token in tokens]
-        main_word = lemmas[0]  # Prend le lemme du premier mot comme terme principal
-        lemmatized[kw] = main_word
-    return lemmatized
-
-def categorize_keywords(client, keywords, lang_code):
-    # Lemmatisation
-    lemmatized = lemmatize_keywords(keywords, lang_code)
-    
-    # Regroupement initial par lemme
-    groups = defaultdict(list)
-    for kw, lemma in lemmatized.items():
-        groups[lemma].append(kw)
-    
-    # Pour les groupes avec un seul mot-clé, utiliser l'embedding pour le regroupement final
-    single_keywords = [group[0] for group in groups.values() if len(group) == 1]
-    if single_keywords:
-        embeddings = [get_embedding(client, kw) for kw in single_keywords]
-        
-        # Déterminer le nombre optimal de clusters
-        n_clusters = max(1, min(len(single_keywords) // 10, 20))  # Entre 1 et 20 clusters
-        
-        kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-        cluster_labels = kmeans.fit_predict(embeddings)
-        
-        # Regrouper les mots-clés restants basés sur leur cluster
-        for kw, label in zip(single_keywords, cluster_labels):
-            groups[f"groupe_{label}"].append(kw)
-    
-    # Créer le dictionnaire final de catégorisation
-    categorized = {}
-    for category, kws in groups.items():
-        for kw in kws:
-            categorized[kw] = category
-    
-    return categorized
 
 if __name__ == "__main__":
     main()
