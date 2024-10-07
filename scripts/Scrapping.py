@@ -1,65 +1,75 @@
 import streamlit as st
 import pandas as pd
-import aiohttp
-import asyncio
-from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
+import requests
+from bs4 import BeautifulSoup
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 import gc
 import trafilatura
 import re
-import warnings
 
-# Ignorer l'avertissement XMLParsedAsHTMLWarning
-warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+session = requests.Session()
 
-async def scrape_text_from_url(url, session, retries=3):
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:64.0) Gecko/20100101 Firefox/64.0'}
-    for attempt in range(retries):
-        try:
-            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
-                response.raise_for_status()
-                html = await response.text()
-                
-                # Extraction du contenu principal avec Trafilatura
-                main_content = trafilatura.extract(
-                    html,
-                    output_format='html',
-                    include_comments=False,
-                    include_tables=True,
-                    include_images=False,
-                    include_links=False,
-                    favor_precision=False,
-                    favor_recall=True,
-                    no_fallback=False,
-                    include_formatting=True
-                )
-                
-                if main_content is None:
-                    return url, "<p>Aucun contenu extrait</p>", []
-                
-                # Extraction des en-têtes
-                soup = BeautifulSoup(html, 'lxml-xml')
-                headers = soup.find_all(re.compile('^h[1-6]$'))
-                header_structure = [f"<{header.name}>{header.get_text(strip=True)}</{header.name}>" for header in headers]
-                
-                # Nettoyage et ajout du <h1>
-                main_content = re.sub(r'</?html>|</?body>', '', main_content)
-                h1_tags = [h for h in header_structure if h.startswith('<h1>')]
-                if h1_tags and not re.search(r'<h1>', main_content):
-                    main_content = h1_tags[0] + main_content
-                
-                return url, main_content, header_structure
-        except Exception as e:
-            if attempt == retries - 1:
-                return url, f"<p>Error: {str(e)}</p>", []
+def scrape_text_from_url(url):
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        response = session.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        # Extraction du contenu principal avec Trafilatura
+        downloaded = trafilatura.fetch_url(url)
+        main_content = trafilatura.extract(
+            downloaded,
+            output_format='html',
+            include_comments=False,
+            include_tables=True,
+            include_images=False,
+            include_links=False,
+            favor_precision=False,
+            favor_recall=True,
+            no_fallback=False,
+            include_formatting=True
+        )
+        
+        if main_content is None:
+            return url, "<p>Aucun contenu extrait</p>", []
+        
+        # Extraction de tous les <h1>, <h2>, <h3>, <h4>, <h5>, <h6> de la page entière
+        soup = BeautifulSoup(response.text, 'lxml')
+        headers = soup.find_all(re.compile('^h[1-6]$'))
+        header_structure = [f"<{header.name}>{header.get_text(strip=True)}</{header.name}>" for header in headers]
+        
+        # Suppression des balises html et body
+        main_content = re.sub(r'</?html>|</?body>', '', main_content)
+        
+        # Ajout du <h1> au début du contenu s'il n'est pas déjà présent
+        h1_tags = [h for h in header_structure if h.startswith('<h1>')]
+        if h1_tags and not re.search(r'<h1>', main_content):
+            main_content = h1_tags[0] + main_content
+        
+        return url, main_content, header_structure
+    except Exception as e:
+        return url, f"<p>Error: {str(e)}</p>", []
 
-async def scrape_all_urls(urls):
-    connector = aiohttp.TCPConnector(limit=100)
-    async with aiohttp.ClientSession(connector=connector) as session:
-        tasks = [scrape_text_from_url(url, session) for url in urls]
-        return await asyncio.gather(*tasks)
+def scrape_all_urls(urls):
+    scraped_results = []
+    max_workers = min(100, len(urls) // 100 + 1)
 
-def create_output_df(scraped_data_list):
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_url = {executor.submit(scrape_text_from_url, url): url for url in urls}
+        for future in as_completed(future_to_url):
+            try:
+                url, data, header_structure = future.result()
+                scraped_results.append((url, data, header_structure))
+            except Exception as e:
+                scraped_results.append((future_to_url[future], f"<p>Error: {str(e)}</p>", []))
+
+            if len(scraped_results) % 1000 == 0:
+                gc.collect()
+
+    return scraped_results
+
+def create_output_df(urls, scraped_data_list):
     output_data = []
     for url, scraped_data, header_structure in scraped_data_list:
         output_data.append({
@@ -104,14 +114,14 @@ def main():
 
     if st.button("Scraper"):
         if urls:
-            batch_size = 1000  # Réduit pour une meilleure gestion de la mémoire
+            batch_size = 10000
             total_batches = len(urls) // batch_size + 1
             all_scraped_data = []
 
             progress_bar = st.progress(0)
             for batch_num in range(total_batches):
                 batch_urls = urls[batch_num * batch_size: (batch_num + 1) * batch_size]
-                scraped_data_list = asyncio.run(scrape_all_urls(batch_urls))
+                scraped_data_list = scrape_all_urls(batch_urls)
                 all_scraped_data.extend(scraped_data_list)
 
                 progress = (batch_num + 1) / total_batches
@@ -119,7 +129,7 @@ def main():
 
                 gc.collect()
 
-            df = create_output_df(all_scraped_data)
+            df = create_output_df(urls, all_scraped_data)
             
             excel_data = create_excel_file(df)
             
