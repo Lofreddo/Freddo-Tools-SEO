@@ -12,46 +12,50 @@ import warnings
 # Ignorer l'avertissement XMLParsedAsHTMLWarning
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
-async def scrape_text_from_url(url, session):
-    try:
-        async with session.get(url, timeout=10) as response:
-            response.raise_for_status()
-            html = await response.text()
-            
-            # Extraction du contenu principal avec Trafilatura
-            main_content = trafilatura.extract(
-                html,
-                output_format='html',
-                include_comments=False,
-                include_tables=True,
-                include_images=False,
-                include_links=False,
-                favor_precision=False,
-                favor_recall=True,
-                no_fallback=False,
-                include_formatting=True
-            )
-            
-            if main_content is None:
-                return url, "<p>Aucun contenu extrait</p>", []
-            
-            # Extraction des en-têtes
-            soup = BeautifulSoup(html, 'lxml-xml')
-            headers = soup.find_all(re.compile('^h[1-6]$'))
-            header_structure = [f"<{header.name}>{header.get_text(strip=True)}</{header.name}>" for header in headers]
-            
-            # Nettoyage et ajout du <h1>
-            main_content = re.sub(r'</?html>|</?body>', '', main_content)
-            h1_tags = [h for h in header_structure if h.startswith('<h1>')]
-            if h1_tags and not re.search(r'<h1>', main_content):
-                main_content = h1_tags[0] + main_content
-            
-            return url, main_content, header_structure
-    except Exception as e:
-        return url, f"<p>Error: {str(e)}</p>", []
+async def scrape_text_from_url(url, session, retries=3):
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:64.0) Gecko/20100101 Firefox/64.0'}
+    for attempt in range(retries):
+        try:
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                response.raise_for_status()
+                html = await response.text()
+                
+                # Extraction du contenu principal avec Trafilatura
+                main_content = trafilatura.extract(
+                    html,
+                    output_format='html',
+                    include_comments=False,
+                    include_tables=True,
+                    include_images=False,
+                    include_links=False,
+                    favor_precision=False,
+                    favor_recall=True,
+                    no_fallback=False,
+                    include_formatting=True
+                )
+                
+                if main_content is None:
+                    return url, "<p>Aucun contenu extrait</p>", []
+                
+                # Extraction des en-têtes
+                soup = BeautifulSoup(html, 'lxml-xml')
+                headers = soup.find_all(re.compile('^h[1-6]$'))
+                header_structure = [f"<{header.name}>{header.get_text(strip=True)}</{header.name}>" for header in headers]
+                
+                # Nettoyage et ajout du <h1>
+                main_content = re.sub(r'</?html>|</?body>', '', main_content)
+                h1_tags = [h for h in header_structure if h.startswith('<h1>')]
+                if h1_tags and not re.search(r'<h1>', main_content):
+                    main_content = h1_tags[0] + main_content
+                
+                return url, main_content, header_structure
+        except Exception as e:
+            if attempt == retries - 1:
+                return url, f"<p>Error: {str(e)}</p>", []
 
 async def scrape_all_urls(urls):
-    async with aiohttp.ClientSession() as session:
+    connector = aiohttp.TCPConnector(limit=100)
+    async with aiohttp.ClientSession(connector=connector) as session:
         tasks = [scrape_text_from_url(url, session) for url in urls]
         return await asyncio.gather(*tasks)
 
