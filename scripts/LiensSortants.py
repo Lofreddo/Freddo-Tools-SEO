@@ -5,39 +5,36 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import io
 from urllib.parse import urljoin
+import requests
 
 async def analyze_url(session, url, semaphore):
     async with semaphore:
         try:
-            async with session.get(url, timeout=10) as response:
-                if response.status != 200:
-                    return [], 0
-                html = await response.text()
-                soup = BeautifulSoup(html, 'html.parser')
-                links = soup.find_all('a', href=True)
+            # Utiliser requests pour obtenir le HTML brut
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()  # Lève une exception pour les codes d'état HTTP non-200
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            links = soup.find_all('a', href=True)
+            
+            results = []
+            for link in links:
+                href = link['href']
+                # Convertir les URLs relatives en URLs absolues
+                full_url = urljoin(url, href)
                 
-                results = []
-                for link in links:
-                    href = link['href']
-                    if href.startswith('//'):
-                        href = 'https:' + href
-                    elif href.startswith('/'):
-                        href = urljoin(url, href)
-                    elif not href.startswith(('http://', 'https://')):
-                        href = urljoin(url, href)
-                    
-                    zone = get_link_zone(link)
-                    anchor_text = link.text.strip()
-                    results.append({
-                        'URL': url,
-                        'Link': href,
-                        'Zone': zone,
-                        'Occurrences': len(soup.find_all('a', href=link['href'])),
-                        'Anchor': anchor_text,
-                        'Anchor_Occurrences': len(soup.find_all('a', text=anchor_text))
-                    })
-                
-                return results, len(links)
+                zone = get_link_zone(link)
+                anchor_text = link.text.strip()
+                results.append({
+                    'URL': url,
+                    'Link': full_url,
+                    'Zone': zone,
+                    'Occurrences': len(soup.find_all('a', href=href)),
+                    'Anchor': anchor_text,
+                    'Anchor_Occurrences': len(soup.find_all('a', text=anchor_text))
+                })
+            
+            return results, len(links)
         except Exception as e:
             st.error(f"Error analyzing {url}: {str(e)}")
             return [], 0
