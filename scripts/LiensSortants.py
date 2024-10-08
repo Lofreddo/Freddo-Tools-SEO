@@ -29,28 +29,34 @@ async def analyze_url(session, url, semaphore):
                 'Connection': 'keep-alive',
                 'Upgrade-Insecure-Requests': '1',
             }
-            # Utiliser requests pour obtenir le HTML brut
             response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()  # Lève une exception pour les codes d'état HTTP non-200
+            response.raise_for_status()
             
             soup = BeautifulSoup(response.text, 'html.parser')
             links = soup.find_all('a', href=True)
             
             results = []
+            anchor_counts = {}
             for link in links:
                 href = link['href']
-                # Convertir les URLs relatives en URLs absolues
                 full_url = urljoin(url, href)
                 
                 zone = get_link_zone(link)
                 anchor_text = link.text.strip()
+                
+                # Compter les occurrences de l'ancre de lien
+                if anchor_text in anchor_counts:
+                    anchor_counts[anchor_text] += 1
+                else:
+                    anchor_counts[anchor_text] = 1
+                
                 results.append({
                     'URL': url,
                     'Link': full_url,
                     'Zone': zone,
                     'Occurrences': len(soup.find_all('a', href=href)),
                     'Anchor': anchor_text,
-                    'Anchor_Occurrences': len(soup.find_all('a', text=anchor_text))
+                    'Anchor_Occurrences': anchor_counts[anchor_text]
                 })
             
             return results, len(links)
@@ -66,7 +72,7 @@ def get_link_zone(link):
 
 async def process_urls(urls):
     async with aiohttp.ClientSession() as session:
-        semaphore = asyncio.Semaphore(10)  # Limite le nombre de requêtes simultanées
+        semaphore = asyncio.Semaphore(10)
         tasks = [analyze_url(session, url, semaphore) for url in urls]
         results = await asyncio.gather(*tasks)
     return results
@@ -92,17 +98,19 @@ def main():
             results = asyncio.run(process_urls(urls))
             
             all_results = []
-            total_links = 0
+            url_link_counts = {}
             for result, num_links in results:
                 all_results.extend(result)
-                total_links += num_links
+                if result:
+                    url_link_counts[result[0]['URL']] = num_links
             
             df_results = pd.DataFrame(all_results)
+            df_link_counts = pd.DataFrame(list(url_link_counts.items()), columns=['URL', 'Number of Links'])
             
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
                 df_results.to_excel(writer, sheet_name='Link Analysis', index=False)
-                pd.DataFrame({'Total Links': [total_links]}).to_excel(writer, sheet_name='Summary', index=False)
+                df_link_counts.to_excel(writer, sheet_name='Links per URL', index=False)
             
             st.download_button(
                 label="Download Excel file",
