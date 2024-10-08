@@ -1,12 +1,10 @@
 import streamlit as st
-import requests
+import aiohttp
+import asyncio
 from bs4 import BeautifulSoup
 import pandas as pd
 import io
 from urllib.parse import urljoin
-import asyncio
-import aiohttp
-import time
 
 async def analyze_url(session, url, semaphore):
     async with semaphore:
@@ -14,7 +12,6 @@ async def analyze_url(session, url, semaphore):
             async with session.get(url, timeout=10) as response:
                 if response.status != 200:
                     return [], 0
-                
                 html = await response.text()
                 soup = BeautifulSoup(html, 'html.parser')
                 links = soup.find_all('a', href=True)
@@ -76,7 +73,6 @@ def main():
 
     if st.button("Analyze"):
         if urls:
-            start_time = time.time()
             results = asyncio.run(process_urls(urls))
             
             all_results = []
@@ -98,9 +94,6 @@ def main():
                 file_name="link_analysis.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-            
-            end_time = time.time()
-            st.success(f"Analysis completed in {end_time - start_time:.2f} seconds")
         else:
             st.warning("Please enter URLs or upload a file.")
 
