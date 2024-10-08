@@ -20,7 +20,6 @@ user_agents = [
 async def analyze_url(session, url, semaphore):
     async with semaphore:
         try:
-            # Sélection aléatoire d'un User-Agent
             headers = {
                 'User-Agent': random.choice(user_agents),
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -30,7 +29,6 @@ async def analyze_url(session, url, semaphore):
                 'Connection': 'keep-alive',
                 'Upgrade-Insecure-Requests': '1',
             }
-            
             # Utiliser requests pour obtenir le HTML brut
             response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()  # Lève une exception pour les codes d'état HTTP non-200
