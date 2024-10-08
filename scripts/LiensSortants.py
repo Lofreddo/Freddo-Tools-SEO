@@ -77,6 +77,20 @@ async def process_urls(urls):
         results = await asyncio.gather(*tasks)
     return results
 
+def analyze_anchors(all_results):
+    anchor_dict = {}
+    for result in all_results:
+        anchor = result['Anchor']
+        url = result['Link']
+        if anchor not in anchor_dict:
+            anchor_dict[anchor] = {'count': 0, 'urls': set()}
+        if url not in anchor_dict[anchor]['urls']:
+            anchor_dict[anchor]['urls'].add(url)
+            anchor_dict[anchor]['count'] += 1
+    
+    anchor_results = [(anchor, data['count'], ', '.join(data['urls'])) for anchor, data in anchor_dict.items()]
+    return pd.DataFrame(anchor_results, columns=['Anchor', 'Number of Pages', 'URLs'])
+
 def main():
     st.title("URL Link Analyzer")
 
@@ -106,11 +120,13 @@ def main():
             
             df_results = pd.DataFrame(all_results)
             df_link_counts = pd.DataFrame(list(url_link_counts.items()), columns=['URL', 'Number of Links'])
+            df_anchor_analysis = analyze_anchors(all_results)
             
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
                 df_results.to_excel(writer, sheet_name='Link Analysis', index=False)
                 df_link_counts.to_excel(writer, sheet_name='Links per URL', index=False)
+                df_anchor_analysis.to_excel(writer, sheet_name='Anchors Analysis', index=False)
             
             st.download_button(
                 label="Download Excel file",
