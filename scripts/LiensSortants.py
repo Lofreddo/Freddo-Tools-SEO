@@ -7,6 +7,7 @@ import io
 from urllib.parse import urljoin
 import requests
 import random
+import time
 
 # Liste d'User-Agents pour la rotation
 user_agents = [
@@ -16,6 +17,20 @@ user_agents = [
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15',
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.59'
 ]
+
+def retry_request(url, headers, max_retries=3, delay=2):
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(url, headers=headers, timeout=15)
+            response.raise_for_status()
+            return response
+        except requests.RequestException as e:
+            if attempt < max_retries - 1:
+                st.warning(f"Attempt {attempt + 1} failed for {url}: {str(e)}. Retrying in {delay} seconds...")
+                time.sleep(delay)
+            else:
+                st.error(f"All attempts failed for {url}: {str(e)}")
+                raise
 
 async def analyze_url(session, url, semaphore):
     async with semaphore:
@@ -29,8 +44,7 @@ async def analyze_url(session, url, semaphore):
                 'Connection': 'keep-alive',
                 'Upgrade-Insecure-Requests': '1',
             }
-            response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()
+            response = retry_request(url, headers)
             
             soup = BeautifulSoup(response.text, 'html.parser')
             links = soup.find_all('a', href=True)
