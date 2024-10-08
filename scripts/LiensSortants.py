@@ -3,27 +3,37 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import io
+from urllib.parse import urljoin
 
 def analyze_url(url):
     try:
         response = requests.get(url)
+        if response.status_code != 200:
+            return [], 0
         soup = BeautifulSoup(response.content, 'html.parser')
-        links = soup.find_all('a')
+        links = soup.find_all('a', href=True)
         
         results = []
         for link in links:
-            href = link.get('href')
-            if href and href.startswith('http'):
-                zone = get_link_zone(link)
-                anchor_text = link.text.strip()
-                results.append({
-                    'URL': url,
-                    'Link': href,
-                    'Zone': zone,
-                    'Occurrences': len(soup.find_all('a', href=href)),
-                    'Anchor': anchor_text,
-                    'Anchor_Occurrences': len(soup.find_all('a', text=anchor_text))
-                })
+            href = link['href']
+            # Convertir les URLs relatives en URLs absolues
+            if href.startswith('//'):
+                href = 'https:' + href
+            elif href.startswith('/'):
+                href = urljoin(url, href)
+            elif not href.startswith(('http://', 'https://')):
+                href = urljoin(url, href)
+            
+            zone = get_link_zone(link)
+            anchor_text = link.text.strip()
+            results.append({
+                'URL': url,
+                'Link': href,
+                'Zone': zone,
+                'Occurrences': len(soup.find_all('a', href=link['href'])),
+                'Anchor': anchor_text,
+                'Anchor_Occurrences': len(soup.find_all('a', text=anchor_text))
+            })
         
         return results, len(links)
     except Exception as e:
