@@ -37,18 +37,18 @@ async def analyze_url(session, url, semaphore):
             
             results = []
             anchor_counts = {}
+            
+            # Compter d'abord toutes les occurrences d'ancres
+            for link in links:
+                anchor_text = link.text.strip()
+                anchor_counts[anchor_text] = anchor_counts.get(anchor_text, 0) + 1
+            
             for link in links:
                 href = link['href']
                 full_url = urljoin(url, href)
                 
                 zone = get_link_zone(link)
                 anchor_text = link.text.strip()
-                
-                # Compter les occurrences de l'ancre de lien
-                if anchor_text in anchor_counts:
-                    anchor_counts[anchor_text] += 1
-                else:
-                    anchor_counts[anchor_text] = 1
                 
                 results.append({
                     'URL': url,
