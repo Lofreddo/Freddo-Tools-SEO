@@ -26,3 +26,4 @@ polyglot
 openai
 scikit-learn
 numpy
+sqlite3
