@@ -7,6 +7,7 @@ import io
 from tldextract import extract
 import concurrent.futures
 import gc
+from dateutil import parser as date_parser
 
 def check_domain_expiration():
     st.title('Domain Expiration Checker')
@@ -69,7 +70,14 @@ def perform_single_domain_check(domain):
 
         expiration_date = None
         if 'domain' in whois_data and 'expiration_date' in whois_data['domain']:
-            expiration_date = datetime.datetime.strptime(whois_data['domain']['expiration_date'], "%Y-%m-%dT%H:%M:%SZ")
+            date_string = whois_data['domain']['expiration_date']
+            try:
+                # Utiliser dateutil.parser pour une analyse plus flexible des dates
+                expiration_date = date_parser.parse(date_string)
+            except ValueError:
+                # Si le parsing échoue, essayer un format spécifique pour '20241215'
+                if len(date_string) == 8 and date_string.isdigit():
+                    expiration_date = datetime.datetime.strptime(date_string, "%Y%m%d")
 
         if expiration_date:
             now = datetime.datetime.now()
@@ -89,7 +97,7 @@ def perform_single_domain_check(domain):
     except json.JSONDecodeError:
         return (domain, "Error: Unable to decode JSON response")
     except ValueError as e:
-        return (domain, f"Error: {e}")
+        return (domain, f"Error parsing date: {e}")
     except Exception as e:
         return (domain, f"Error: {e}")
 
