@@ -62,18 +62,14 @@ def check_domain_expiration():
 
 def perform_single_domain_check(domain):
     try:
-        # Using WhoDat API endpoint
         server = "https://who-dat.as93.net"
         response = requests.get(f"{server}/{domain}", timeout=10)
         response.raise_for_status()
         whois_data = json.loads(response.content)
 
         expiration_date = None
-        # Adjust parsing based on WhoDat's response structure
-        for event in whois_data.get("events", []):
-            if event["eventAction"] == "expiration":
-                expiration_date = datetime.datetime.strptime(event["eventDate"], "%Y-%m-%dT%H:%M:%SZ")
-                break
+        if 'domain' in whois_data and 'expiration_date' in whois_data['domain']:
+            expiration_date = datetime.datetime.strptime(whois_data['domain']['expiration_date'], "%Y-%m-%dT%H:%M:%SZ")
 
         if expiration_date:
             now = datetime.datetime.now()
