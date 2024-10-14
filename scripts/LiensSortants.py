@@ -8,6 +8,8 @@ from urllib.parse import urljoin
 import requests
 import random
 import time
+import base64
+import streamlit.components.v1 as components
 
 # Liste d'User-Agents pour la rotation
 user_agents = [
@@ -163,14 +165,34 @@ def main():
                 df_link_counts.to_excel(writer, sheet_name='Links per URL', index=False)
                 df_anchor_analysis.to_excel(writer, sheet_name='Anchors Analysis', index=False)
             
-            st.download_button(
-                label="Download Excel file",
-                data=buffer,
-                file_name="link_analysis.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            b64 = base64.b64encode(buffer.getvalue()).decode()
+            
+            download_filename = "link_analysis.xlsx"
+            
+            # Créer le composant HTML pour le téléchargement automatique
+            components.html(
+                f"""
+                <html>
+                <head>
+                <script>
+                var data = new Blob([atob('{b64}')], {{type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}});
+                var a = document.createElement('a');
+                a.href = window.URL.createObjectURL(data);
+                a.download = '{download_filename}';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                </script>
+                </head>
+                </html>
+                """,
+                height=0,
+                width=0
             )
+            
+            st.success("Analyse terminée. Le téléchargement du fichier Excel devrait commencer automatiquement.")
         else:
-            st.warning("Please enter URLs or upload a file.")
+            st.warning("Veuillez entrer des URLs ou télécharger un fichier.")
 
 if __name__ == "__main__":
     main()
