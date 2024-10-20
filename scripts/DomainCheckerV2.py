@@ -8,6 +8,7 @@ from tldextract import extract
 import concurrent.futures
 import gc
 from dateutil import parser as date_parser
+from dateutil import tz
 
 def check_domain_expiration():
     st.title('Domain Expiration Checker')
@@ -80,7 +81,8 @@ def perform_single_domain_check(domain):
                     expiration_date = datetime.datetime.strptime(date_string, "%Y%m%d")
 
         if expiration_date:
-            now = datetime.datetime.now()
+            now = datetime.datetime.now(tz.UTC)
+            expiration_date = expiration_date.replace(tzinfo=tz.UTC)
             days_left = (expiration_date - now).days
             status = f"Expires in {days_left} days ({expiration_date.strftime('%Y-%m-%d')})"
             if days_left < 0:
