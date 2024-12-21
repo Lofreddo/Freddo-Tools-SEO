@@ -5,7 +5,8 @@ from urllib.parse import urlparse
 import io
 
 def load_data(file):
-    data = pd.read_excel(file, sheet_name="Copie de Mots-clés")
+    # Utilise la première feuille de calcul par défaut
+    data = pd.read_excel(file, sheet_name=0)
     data.columns = data.columns.str.strip()
     return data
 
