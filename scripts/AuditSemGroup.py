@@ -5,7 +5,6 @@ from urllib.parse import urlparse
 import io
 
 def load_data(file):
-    # Utilise la première feuille de calcul par défaut
     data = pd.read_excel(file, sheet_name=0)
     data.columns = data.columns.str.strip()
     return data
@@ -16,6 +15,19 @@ def normalize_url(url):
     parsed = urlparse(url)
     return f"{parsed.netloc}{parsed.path}"
 
+def detect_url_position_columns(data):
+    url_cols = [col for col in data.columns if col.endswith("URL")]
+    position_cols = [col for col in data.columns if col.endswith("Position")]
+    
+    matched_cols = []
+    for url_col in url_cols:
+        base_name = url_col[:-3]  # Enlève "URL" de la fin
+        matching_position_col = next((col for col in position_cols if col.startswith(base_name)), None)
+        if matching_position_col:
+            matched_cols.append((url_col, matching_position_col))
+    
+    return matched_cols
+
 def group_keywords(data, position_cols, url_cols, num_competitors):
     grouped_keywords = defaultdict(list)
     
@@ -23,7 +35,7 @@ def group_keywords(data, position_cols, url_cols, num_competitors):
         valid_competitors = []
         for pos_col, url_col in zip(position_cols, url_cols):
             if not pd.isna(row[pos_col]) and not pd.isna(row[url_col]):
-                competitor_name = pos_col
+                competitor_name = pos_col.replace("Position", "").strip()
                 valid_competitors.append((competitor_name, float(row[pos_col]), normalize_url(row[url_col])))
         
         if len(valid_competitors) >= num_competitors:
@@ -71,24 +83,18 @@ def main():
 
         st.write("Colonnes détectées :", data.columns.tolist())
 
-        num_competitors = st.selectbox("Nombre de concurrents à étudier", options=range(1, 11))
+        matched_cols = detect_url_position_columns(data)
+        st.write("Colonnes URL et Position associées :", matched_cols)
 
-        position_cols = []
-        url_cols = []
-        for i in range(1, 11):
-            col1, col2 = st.columns(2)
-            with col1:
-                pos_col = st.selectbox(f"Concurrent {i}", options=[""] + data.columns.tolist(), key=f"pos_{i}")
-            with col2:
-                url_col = st.selectbox(f"URL {i}", options=[""] + data.columns.tolist(), key=f"url_{i}")
-            if pos_col and url_col:
-                position_cols.append(pos_col)
-                url_cols.append(url_col)
+        num_competitors = len(matched_cols)
+        st.write(f"Nombre de concurrents détectés : {num_competitors}")
 
         if st.button("Grouper les mots-clés"):
-            if len(position_cols) < 2 or len(url_cols) < 2:
-                st.error("Veuillez sélectionner au moins 2 concurrents et 2 URLs.")
+            if num_competitors < 2:
+                st.error("Au moins 2 concurrents sont nécessaires pour le groupement.")
             else:
+                url_cols = [col[0] for col in matched_cols]
+                position_cols = [col[1] for col in matched_cols]
                 final_groups = group_keywords(data, position_cols, url_cols, num_competitors)
                 results_excel = create_output_file(final_groups)
                 st.download_button(
