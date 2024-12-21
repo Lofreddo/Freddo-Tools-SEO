@@ -28,7 +28,7 @@ def detect_url_position_columns(data):
     
     return matched_cols
 
-def group_keywords(data, position_cols, url_cols, num_competitors):
+def group_keywords(data, position_cols, url_cols, num_competitors, min_similar_results):
     grouped_keywords = defaultdict(list)
     
     for index, row in data.iterrows():
@@ -51,19 +51,20 @@ def group_keywords(data, position_cols, url_cols, num_competitors):
     
     final_groups = []
     for (competitors, urls), keywords in grouped_keywords.items():
-        primary_keyword = keywords[0]['mot_cle']
-        all_keywords = [kw['mot_cle'] for kw in keywords]
-        positions = {comp: [kw['positions'][comp] for kw in keywords] for comp in competitors}
+        if len(keywords) >= min_similar_results:
+            primary_keyword = keywords[0]['mot_cle']
+            all_keywords = [kw['mot_cle'] for kw in keywords]
+            positions = {comp: [kw['positions'][comp] for kw in keywords] for comp in competitors}
 
-        final_groups.append({
-            'Mot-clé de référence': primary_keyword,
-            'Mots-clés regroupés': ', '.join(all_keywords),
-            'Concurrents concernés': ', '.join(competitors),
-            'URLs concernées': ', '.join(urls),
-            'Positions des URLs concernées': ', '.join(
-                [f"{comp}: {positions[comp]}" for comp in competitors]
-            )
-        })
+            final_groups.append({
+                'Mot-clé de référence': primary_keyword,
+                'Mots-clés regroupés': ', '.join(all_keywords),
+                'Concurrents concernés': ', '.join(competitors),
+                'URLs concernées': ', '.join(urls),
+                'Positions des URLs concernées': ', '.join(
+                    [f"{comp}: {positions[comp]}" for comp in competitors]
+                )
+            })
     
     return final_groups
 
@@ -81,13 +82,10 @@ def main():
     if uploaded_file is not None:
         data = load_data(uploaded_file)
 
-        st.write("Colonnes détectées :", data.columns.tolist())
-
         matched_cols = detect_url_position_columns(data)
-        st.write("Colonnes URL et Position associées :", matched_cols)
-
         num_competitors = len(matched_cols)
-        st.write(f"Nombre de concurrents détectés : {num_competitors}")
+
+        min_similar_results = st.slider("Nombre minimum de résultats similaires pour grouper", min_value=2, max_value=10, value=2)
 
         if st.button("Grouper les mots-clés"):
             if num_competitors < 2:
@@ -95,7 +93,7 @@ def main():
             else:
                 url_cols = [col[0] for col in matched_cols]
                 position_cols = [col[1] for col in matched_cols]
-                final_groups = group_keywords(data, position_cols, url_cols, num_competitors)
+                final_groups = group_keywords(data, position_cols, url_cols, num_competitors, min_similar_results)
                 results_excel = create_output_file(final_groups)
                 st.download_button(
                     label="Télécharger les résultats en Excel",
