@@ -6,8 +6,20 @@ import zipfile
 def resize_image(image, width, height, resize_method):
     img = Image.open(image)
     
-    if resize_method == "Tronquer":
-        # Assurez-vous que l'image est au moins aussi grande que les dimensions cibles
+    if resize_method == "Optimale":
+        # Calculer le ratio pour le redimensionnement
+        ratio = min(width / img.width, height / img.height)
+        new_size = (int(img.width * ratio), int(img.height * ratio))
+        img = img.resize(new_size, Image.LANCZOS)
+        
+        # Tronquer si nécessaire
+        if img.width != width or img.height != height:
+            left = (img.width - width) // 2
+            top = (img.height - height) // 2
+            right = left + width
+            bottom = top + height
+            img = img.crop((left, top, right, bottom))
+    elif resize_method == "Tronquer":
         if img.width >= width and img.height >= height:
             left = (img.width - width) // 2
             top = (img.height - height) // 2
@@ -15,7 +27,6 @@ def resize_image(image, width, height, resize_method):
             bottom = top + height
             img = img.crop((left, top, right, bottom))
         else:
-            # Si l'image est plus petite, redimensionnez-la d'abord
             img = img.resize((width, height), Image.LANCZOS)
     elif resize_method == "Redimensionner":
         img = img.resize((width, height), Image.LANCZOS)
@@ -24,6 +35,8 @@ def resize_image(image, width, height, resize_method):
 
 def save_image(img, output_format):
     if output_format.lower() == 'jpg':
+        output_format = 'jpeg'  # PIL utilise 'jpeg' au lieu de 'jpg'
+    if output_format.lower() == 'jpeg':
         # Convertir en RGB si nécessaire
         if img.mode != 'RGB':
             img = img.convert('RGB')
@@ -40,7 +53,7 @@ def main():
     width = st.number_input("Entrez la nouvelle largeur", min_value=1, value=100)
     height = st.number_input("Entrez la nouvelle hauteur", min_value=1, value=100)
 
-    resize_method = st.selectbox("Méthode de redimensionnement", ["Redimensionner", "Tronquer"])
+    resize_method = st.selectbox("Méthode de redimensionnement", ["Optimale", "Redimensionner", "Tronquer"])
     output_format = st.selectbox("Format de sortie", ["jpg", "png", "webp"])
 
     if uploaded_files and st.button("Redimensionner les images"):
