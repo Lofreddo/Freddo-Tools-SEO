@@ -3,15 +3,34 @@ from PIL import Image
 import io
 import zipfile
 
-def resize_image(image, width, height, resize_method, output_format):
+def resize_image(image, width, height, resize_method):
     img = Image.open(image)
     
-    if resize_method == "Redimensionner":
+    if resize_method == "Tronquer":
+        # Assurez-vous que l'image est au moins aussi grande que les dimensions cibles
+        if img.width >= width and img.height >= height:
+            left = (img.width - width) // 2
+            top = (img.height - height) // 2
+            right = left + width
+            bottom = top + height
+            img = img.crop((left, top, right, bottom))
+        else:
+            # Si l'image est plus petite, redimensionnez-la d'abord
+            img = img.resize((width, height), Image.LANCZOS)
+    elif resize_method == "Redimensionner":
         img = img.resize((width, height), Image.LANCZOS)
-    elif resize_method == "Tronquer":
-        img = img.crop((0, 0, width, height))
     
     return img
+
+def save_image(img, output_format):
+    if output_format.lower() == 'jpg':
+        # Convertir en RGB si nécessaire
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+    
+    img_buffer = io.BytesIO()
+    img.save(img_buffer, format=output_format.upper())
+    return img_buffer.getvalue()
 
 def main():
     st.title("Image Resizer")
@@ -28,10 +47,9 @@ def main():
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w") as zip_file:
             for uploaded_file in uploaded_files:
-                img = resize_image(uploaded_file, width, height, resize_method, output_format)
-                img_buffer = io.BytesIO()
-                img.save(img_buffer, format=output_format.upper())
-                zip_file.writestr(f"{uploaded_file.name.split('.')[0]}.{output_format}", img_buffer.getvalue())
+                img = resize_image(uploaded_file, width, height, resize_method)
+                img_data = save_image(img, output_format)
+                zip_file.writestr(f"{uploaded_file.name.split('.')[0]}.{output_format}", img_data)
 
         st.success("Images redimensionnées avec succès !")
         st.download_button(
