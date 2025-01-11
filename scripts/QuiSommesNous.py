@@ -1,17 +1,15 @@
 import streamlit as st
-from openai import OpenAI
-import random
-import string
+import openai
 import streamlit.components.v1 as components
+from faker import Faker
 
-# On créera la variable client dans main()
-client = None
+# Créer une instance Faker avec la locale française
+fake = Faker('fr_FR')
 
 def random_name():
-    """Génère un nom et un prénom fictifs."""
-    first_name = ''.join(random.choices(string.ascii_uppercase + string.ascii_lowercase, k=5)).capitalize()
-    last_name = ''.join(random.choices(string.ascii_uppercase + string.ascii_lowercase, k=7)).capitalize()
-    return f"{first_name} {last_name}"
+    """Génère un nom complet francophone."""
+    # Faker génère par défaut un 'nom complet' : ex. "Marie Dupont"
+    return fake.name()
 
 def generate_names(num_people: int):
     """Génère un certain nombre de noms/prénoms."""
@@ -33,10 +31,10 @@ def generate_description(names, theme, paragraphs, tone):
     Génère {paragraphs} paragraphes et fais en sorte que le texte soit utilisable directement en HTML.
     """
 
-    # Appel à l'API OpenAI via l'objet client
+    # Appel à l'API OpenAI
     try:
-        response = client.Completion.create(
-            engine="text-davinci-003",  # ou gpt-3.5-turbo / gpt-4 selon tes accès
+        response = openai.Completion.create(
+            engine="text-davinci-003",  # Ou gpt-3.5-turbo / gpt-4 selon tes accès
             prompt=prompt,
             max_tokens=600,
             temperature=0.7
@@ -64,9 +62,13 @@ def copy_to_clipboard(text: str):
 def main():
     st.title("Générateur de page \"Qui sommes-nous ?\"")
 
-    # Au lieu de openai.api_key = ... on instancie un client OpenAI
-    global client
-    client = OpenAI(api_key=st.secrets["openai_api_key"])
+    # Configuration de la clé API OpenAI
+    # => À adapter selon ta gestion des secrets (env, st.secrets, etc.)
+    if "OPENAI_API_KEY" not in st.secrets:
+        st.warning("Veuillez configurer votre clé OPENAI_API_KEY dans Streamlit secrets.")
+        return
+    else:
+        openai.api_key = st.secrets["OPENAI_API_KEY"]
 
     # Instancier/initialiser des variables de session pour stocker noms & description
     if "names" not in st.session_state:
