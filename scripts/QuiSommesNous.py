@@ -61,8 +61,7 @@ def copy_to_clipboard(text: str):
 def main():
     st.title("Générateur de page \"Qui sommes-nous ?\"")
 
-    # Configuration de la clé API OpenAI
-    # => À adapter selon ta gestion des secrets (env, st.secrets, etc.)
+    # Vérification de la clé dans st.secrets et configuration de l'API OpenAI
     if "OPENAI_API_KEY" not in st.secrets:
         st.warning("Veuillez configurer votre clé OPENAI_API_KEY dans Streamlit secrets.")
         return
@@ -97,8 +96,10 @@ def main():
     theme = st.text_input("Thématique du site (ex. cuisine, technologie, mode...)")
 
     # 4) Champ pour le nombre de paragraphes, avec valeur par défaut
-    paragraphs = st.number_input("Nombre de paragraphes (2 par défaut si non renseigné)", 
-                                 min_value=1, max_value=10, value=2)
+    paragraphs = st.number_input(
+        "Nombre de paragraphes (2 par défaut si non renseigné)",
+        min_value=1, max_value=10, value=2
+    )
 
     # 5) Champ optionnel pour préciser la tonalité
     tone = st.text_input("Tonalité du texte (optionnel) (ex. humoristique, formel, sérieux...)")
@@ -129,3 +130,6 @@ def main():
                 paragraphs,
                 tone
             )
+
+if __name__ == "__main__":
+    main()
