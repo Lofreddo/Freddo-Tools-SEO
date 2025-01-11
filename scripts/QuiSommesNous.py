@@ -1,8 +1,11 @@
 import streamlit as st
-import openai
+from openai import OpenAI
 import random
 import string
 import streamlit.components.v1 as components
+
+# On créera la variable client dans main()
+client = None
 
 def random_name():
     """Génère un nom et un prénom fictifs."""
@@ -30,10 +33,10 @@ def generate_description(names, theme, paragraphs, tone):
     Génère {paragraphs} paragraphes et fais en sorte que le texte soit utilisable directement en HTML.
     """
 
-    # Appel à l'API OpenAI
+    # Appel à l'API OpenAI via l'objet client
     try:
-        response = openai.Completion.create(
-            engine="text-davinci-003",  # Ou gpt-3.5-turbo / gpt-4 selon tes accès
+        response = client.Completion.create(
+            engine="text-davinci-003",  # ou gpt-3.5-turbo / gpt-4 selon tes accès
             prompt=prompt,
             max_tokens=600,
             temperature=0.7
@@ -61,12 +64,9 @@ def copy_to_clipboard(text: str):
 def main():
     st.title("Générateur de page \"Qui sommes-nous ?\"")
 
-    # Vérification de la clé dans st.secrets et configuration de l'API OpenAI
-    if "OPENAI_API_KEY" not in st.secrets:
-        st.warning("Veuillez configurer votre clé OPENAI_API_KEY dans Streamlit secrets.")
-        return
-    else:
-        openai.api_key = st.secrets["OPENAI_API_KEY"]
+    # Au lieu de openai.api_key = ... on instancie un client OpenAI
+    global client
+    client = OpenAI(api_key=st.secrets["openai_api_key"])
 
     # Instancier/initialiser des variables de session pour stocker noms & description
     if "names" not in st.session_state:
