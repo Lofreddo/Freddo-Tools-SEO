@@ -27,3 +27,4 @@ openai
 scikit-learn
 numpy
 python-dateutil
+faker
