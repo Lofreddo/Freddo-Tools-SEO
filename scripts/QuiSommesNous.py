@@ -8,7 +8,7 @@ from faker import Faker
 # CONFIGURATION
 # =========================================================================
 
-# Modèle, tokens, temperature, etc. adaptés selon tes besoins
+# Modèle, tokens, température, etc. à adapter
 MODEL = "gpt-4o-mini"
 MAX_TOKENS = 800
 TEMPERATURE = 0.7
@@ -59,21 +59,17 @@ def regenerate_unvalidated(names_list, also_lastname: bool):
 
 def strip_html_tags(text: str) -> str:
     """Supprime toute balise HTML (<...>) du texte."""
-    # Remplace tout ce qui ressemble à <...> par une chaîne vide
     return re.sub(r"<[^>]*>", "", text)
 
 def generate_description(names_list, theme, paragraphs, tone, custom_instructions):
     """
-    Génère un texte "Qui sommes-nous ?" en texte brut.
-    On utilise le client OpenAI (chat.completions.create).
-    
-    On demande explicitement : "pas de balises HTML" + on retire toute balise résiduelle.
+    Génère un texte "Qui sommes-nous ?" en texte brut, sans balises HTML.
+    On précise au modèle de NE PAS générer de HTML et on retire toute balise éventuelle.
     """
     # Extraire la liste des noms
     only_names = [item["name"] for item in names_list]
 
     # Construisons le contenu (prompt) que l'on va passer en "user"
-    # On insiste : "N'utilise aucune balise HTML" (et on reste en texte brut)
     user_content = f"""
     Rédige une présentation pour la page "Qui sommes-nous ?" d'un site,
     au format texte brut (aucune balise HTML, aucune syntaxe Markdown).
@@ -114,7 +110,7 @@ def generate_description(names_list, theme, paragraphs, tone, custom_instruction
 
         generated_text = response.choices[0].message.content.strip()
 
-        # 1. On vire toutes les balises HTML (juste au cas où)
+        # Supprimer toute balise HTML résiduelle
         generated_text = strip_html_tags(generated_text)
 
     except Exception as e:
@@ -123,13 +119,28 @@ def generate_description(names_list, theme, paragraphs, tone, custom_instruction
     return generated_text
 
 def copy_to_clipboard(text: str):
-    """Copie le texte (brut) dans le presse-papiers via le navigateur."""
+    """
+    Copie le texte (brut) dans le presse-papiers via le navigateur,
+    en utilisant un code JavaScript plus robuste pour gérer la Clipboard API.
+    """
     safe_text = text.replace("`", "\\`")
     components.html(
         f"""
         <script>
-            navigator.clipboard.writeText(`{safe_text}`);
-            alert("Description copiée dans le presse-papiers !");
+            const textToCopy = `{safe_text}`;
+            if (navigator && navigator.clipboard && navigator.clipboard.writeText) {{
+                navigator.clipboard.writeText(textToCopy)
+                    .then(() => {{
+                        window.alert("Description copiée dans le presse-papiers !");
+                    }})
+                    .catch(err => {{
+                        console.error("Erreur lors de la copie :", err);
+                        window.alert("Impossible de copier automatiquement. Veuillez copier manuellement.");
+                    }});
+            }} else {{
+                console.error("Clipboard API non disponible sur ce navigateur.");
+                window.alert("Clipboard API non disponible. Veuillez copier manuellement.");
+            }}
         </script>
         """,
         height=0,
@@ -143,50 +154,44 @@ def copy_to_clipboard(text: str):
 def main():
     st.title("Générateur de page \"Qui sommes-nous ?\" (Texte pur, sans HTML)")
 
-    # 1) Initialisation du client OpenAI avec la même structure
     global client
+    # Récupérer la clé API depuis les secrets (adaptation selon ta config)
     client = OpenAI(api_key=st.secrets["openai_api_key"])
 
-    # 2) Variables de session pour stocker les identités et la description
     if "names_list" not in st.session_state:
         st.session_state["names_list"] = []
     if "description" not in st.session_state:
         st.session_state["description"] = ""
 
-    # 3) Saisie du nombre de personnes
+    # Nombre de personnes
     num_people = st.number_input(
         "Nombre de personnes à présenter",
         min_value=1, max_value=20, value=3
     )
 
-    # 4) Case pour générer aussi les noms de famille
+    # Case pour générer aussi le nom de famille
     also_lastname = st.checkbox("Générer aussi des noms (en plus des prénoms)", value=False)
 
-    # 5) Boutons pour générer ou régénérer les identités
+    # Boutons de génération / régénération
     col1, col2 = st.columns([1, 1])
     with col1:
         if st.button("Générer identités"):
             st.session_state["names_list"] = generate_names(num_people, also_lastname)
-            st.session_state["description"] = ""  # Reset description
+            st.session_state["description"] = ""  # reset
     with col2:
         if st.button("Régénérer identités (non validées)"):
             st.session_state["names_list"] = regenerate_unvalidated(st.session_state["names_list"], also_lastname)
-            st.session_state["description"] = ""  # Reset description
+            st.session_state["description"] = ""  # reset
 
-    # 6) Affichage des identités générées, chacune avec une case à cocher
+    # Liste des identités + checkboxes
     if st.session_state["names_list"]:
         st.subheader("Identités générées :")
-        # On va faire un formulaire ou juste des checkboxes
         for index, item in enumerate(st.session_state["names_list"]):
-            # On crée une clé unique pour la checkbox
             checkbox_label = f"Valider ?_{index}"
-            # Afficher la checkbox et le nom
-            cols = st.columns([3, 1])  # nom + checkbox
+            cols = st.columns([3, 1])
             with cols[0]:
                 st.write(f"{index+1}. {item['name']}")
             with cols[1]:
-                # On stocke le statut de validation dans la session
-                # pour chaque item, en fonction de la checkbox
                 is_checked = st.checkbox(
                     label="",
                     value=item["validated"],
@@ -194,25 +199,19 @@ def main():
                 )
                 item["validated"] = is_checked
 
-    # 7) Thématique du site
+    # Inputs : Thématique, paragraphes, ton, instructions
     theme = st.text_input("Thématique du site (ex. cuisine, technologie, mode...)")
-
-    # 8) Nombre de paragraphes
     paragraphs = st.number_input(
         "Nombre de paragraphes (2 par défaut si non renseigné)",
         min_value=1, max_value=10, value=2
     )
-
-    # 9) Ton (optionnel)
     tone = st.text_input("Tonalité du texte (ex. humoristique, formel, sérieux...)")
-
-    # 10) Instructions supplémentaires (optionnelles)
     custom_instructions = st.text_area(
         "Instructions supplémentaires (optionnel)",
-        help="Donnez des consignes précises à OpenAI. Ex: style littéraire, vocabulaire spécifique, etc."
+        help="Donnez des consignes précises, par ex. style littéraire, vocabulaire, etc."
     )
 
-    # 11) Bouton pour générer la description (texte brut, sans HTML)
+    # Génération de la description
     if st.button("Générer la description"):
         st.session_state["description"] = generate_description(
             st.session_state["names_list"],
@@ -222,11 +221,10 @@ def main():
             custom_instructions
         )
 
-    # 12) Affichage du texte en brut
     st.markdown("### Description générée (texte pur)")
     st.text(st.session_state["description"])
 
-    # 13) Boutons : Copier / Régénérer
+    # Boutons : Copier / Régénérer
     col_copy, col_regen = st.columns([1, 1])
     with col_copy:
         if st.button("Copier la description"):
