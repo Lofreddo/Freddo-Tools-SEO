@@ -1,3 +1,4 @@
+import re
 import streamlit as st
 from openai import OpenAI
 import streamlit.components.v1 as components
@@ -56,24 +57,34 @@ def regenerate_unvalidated(names_list, also_lastname: bool):
                 item["name"] = random_first_name()
     return names_list
 
+def strip_html_tags(text: str) -> str:
+    """Supprime toute balise HTML (<...>) du texte."""
+    # Remplace tout ce qui ressemble à <...> par une chaîne vide
+    return re.sub(r"<[^>]*>", "", text)
+
 def generate_description(names_list, theme, paragraphs, tone, custom_instructions):
     """
-    Génère le texte "Qui sommes-nous ?" en texte brut.
-    On utilise le client OpenAI (chat.completions.create) au même format
-    que dans l’exemple fourni.
+    Génère un texte "Qui sommes-nous ?" en texte brut.
+    On utilise le client OpenAI (chat.completions.create).
+    
+    On demande explicitement : "pas de balises HTML" + on retire toute balise résiduelle.
     """
     # Extraire la liste des noms
     only_names = [item["name"] for item in names_list]
 
     # Construisons le contenu (prompt) que l'on va passer en "user"
+    # On insiste : "N'utilise aucune balise HTML" (et on reste en texte brut)
     user_content = f"""
-    Rédige une présentation (texte brut) pour la page "Qui sommes-nous ?" d'un site.
+    Rédige une présentation pour la page "Qui sommes-nous ?" d'un site,
+    au format texte brut (aucune balise HTML, aucune syntaxe Markdown).
+
     Nous avons {len(only_names)} auteur(s) : {', '.join(only_names)}.
     Thématique du site : {theme if theme else "non spécifiée"}.
     Ton : {tone if tone else "non spécifié"}.
     Nombre de paragraphes souhaités : {paragraphs}.
 
-    Génère {paragraphs} paragraphes (séparés par des sauts de ligne).
+    Génère {paragraphs} paragraphes (séparés par des sauts de ligne),
+    et n'inclus AUCUNE balise HTML ou autre code. Juste du texte pur.
 
     ---
 
@@ -102,6 +113,10 @@ def generate_description(names_list, theme, paragraphs, tone, custom_instruction
         )
 
         generated_text = response.choices[0].message.content.strip()
+
+        # 1. On vire toutes les balises HTML (juste au cas où)
+        generated_text = strip_html_tags(generated_text)
+
     except Exception as e:
         generated_text = f"Erreur lors de la génération : {str(e)}"
 
@@ -126,9 +141,9 @@ def copy_to_clipboard(text: str):
 # =========================================================================
 
 def main():
-    st.title("Générateur de page \"Qui sommes-nous ?\"")
+    st.title("Générateur de page \"Qui sommes-nous ?\" (Texte pur, sans HTML)")
 
-    # 1) Initialisation du client OpenAI avec le même format que dans l'autre script
+    # 1) Initialisation du client OpenAI avec la même structure
     global client
     client = OpenAI(api_key=st.secrets["openai_api_key"])
 
@@ -152,11 +167,11 @@ def main():
     with col1:
         if st.button("Générer identités"):
             st.session_state["names_list"] = generate_names(num_people, also_lastname)
-            st.session_state["description"] = ""  # Reset description si on régénère
+            st.session_state["description"] = ""  # Reset description
     with col2:
         if st.button("Régénérer identités (non validées)"):
             st.session_state["names_list"] = regenerate_unvalidated(st.session_state["names_list"], also_lastname)
-            st.session_state["description"] = ""  # Reset description si on régénère
+            st.session_state["description"] = ""  # Reset description
 
     # 6) Affichage des identités générées, chacune avec une case à cocher
     if st.session_state["names_list"]:
@@ -194,10 +209,10 @@ def main():
     # 10) Instructions supplémentaires (optionnelles)
     custom_instructions = st.text_area(
         "Instructions supplémentaires (optionnel)",
-        help="Donnez des consignes précises à OpenAI. Par ex. style littéraire, vocabulaire spécifique, etc."
+        help="Donnez des consignes précises à OpenAI. Ex: style littéraire, vocabulaire spécifique, etc."
     )
 
-    # 11) Bouton pour générer la description (texte brut)
+    # 11) Bouton pour générer la description (texte brut, sans HTML)
     if st.button("Générer la description"):
         st.session_state["description"] = generate_description(
             st.session_state["names_list"],
@@ -208,7 +223,7 @@ def main():
         )
 
     # 12) Affichage du texte en brut
-    st.markdown("### Description générée (texte brut)")
+    st.markdown("### Description générée (texte pur)")
     st.text(st.session_state["description"])
 
     # 13) Boutons : Copier / Régénérer
@@ -226,6 +241,5 @@ def main():
                 custom_instructions
             )
 
-# Point d'entrée
 if __name__ == "__main__":
     main()
