@@ -1,13 +1,9 @@
 import streamlit as st
-from openai import OpenAI
+import openai
 import streamlit.components.v1 as components
 from faker import Faker
 
-# Instancier Faker pour générer des noms francophones
 fake = Faker('fr_FR')
-
-# Déclarer une variable globale "client" qui sera initialisée dans main()
-client = None
 
 def random_name():
     """Génère un nom complet francophone."""
@@ -32,9 +28,9 @@ def generate_description(names, theme, paragraphs, tone):
     Génère {paragraphs} paragraphes et fais en sorte que le texte soit utilisable directement en HTML.
     """
 
-    # Appel à l'API OpenAI via l'objet client
+    # Appel à l'API OpenAI avec la méthode "Completion.create"
     try:
-        response = client.Completion.create(
+        response = openai.Completion.create(
             engine="text-davinci-003",  # ou gpt-3.5-turbo, gpt-4, etc.
             prompt=prompt,
             max_tokens=600,
@@ -63,9 +59,8 @@ def copy_to_clipboard(text: str):
 def main():
     st.title("Générateur de page \"Qui sommes-nous ?\"")
 
-    # Au lieu de openai.api_key = ..., on instancie le client OpenAI
-    global client
-    client = OpenAI(api_key=st.secrets["openai_api_key"])
+    # Définir la clé API OpenAI depuis st.secrets
+    openai.api_key = st.secrets["openai_api_key"]
 
     # Instancier/initialiser des variables de session pour stocker noms & description
     if "names" not in st.session_state:
