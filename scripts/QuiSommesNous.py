@@ -1,9 +1,24 @@
 import streamlit as st
-import openai
 import streamlit.components.v1 as components
+from openai import OpenAI
 from faker import Faker
 
-# Instancier Faker pour générer des noms francophones
+# =========================================================================
+# CONFIGURATION OPENAI
+# =========================================================================
+
+# Modèle, tokens, et temperature : adaptés selon tes besoins
+MODEL = "gpt-4o-mini"
+MAX_TOKENS = 800
+TEMPERATURE = 0.7
+
+# Le client sera initialisé dans main()
+client = None
+
+# =========================================================================
+# FAKER POUR LES NOMS FRANCOPHONES
+# =========================================================================
+
 fake = Faker('fr_FR')
 
 def random_name():
@@ -11,16 +26,20 @@ def random_name():
     return fake.name()
 
 def generate_names(num_people: int):
-    """Génère un certain nombre de noms/prénoms."""
+    """Génère un certain nombre de noms."""
     return [random_name() for _ in range(num_people)]
+
+# =========================================================================
+# GENERATION DE LA DESCRIPTION
+# =========================================================================
 
 def generate_description(names, theme, paragraphs, tone):
     """
-    Génère un texte "Qui sommes-nous ?" au format HTML en utilisant
-    la nouvelle interface openai>=1.0.0 : openai.chat_completions.create().
+    Génère le texte "Qui sommes-nous ?" au format HTML.
+    On utilise le client OpenAI (chat.completions.create) au même format
+    que dans l'exemple fourni.
     """
-
-    # Construisons le contenu (prompt) que l'on va passer en "user"
+    # Création du prompt (contenu "user")
     user_content = f"""
     Rédige une présentation au format HTML pour la page "Qui sommes-nous ?" d'un site.
     Nous avons {len(names)} auteur(s) : {', '.join(names)}.
@@ -33,15 +52,15 @@ def generate_description(names, theme, paragraphs, tone):
     """
 
     try:
-        response = openai.chat_completions.create(
-            model="gpt-3.5-turbo",    # ou "gpt-4" si disponible
+        # Appel du client OpenAI, comme dans ton script de génération
+        response = client.chat.completions.create(
+            model=MODEL,
             messages=[
                 {
                     "role": "system",
                     "content": (
-                        "Tu es un assistant spécialisé en rédaction de texte "
-                        "pour des pages web. Ta mission est de créer un texte "
-                        "\"Qui sommes-nous ?\" selon les informations fournies."
+                        "Tu es un assistant spécialisé en rédaction SEO et structuration HTML. "
+                        "Ta mission est de créer un texte Qui sommes-nous ? selon les informations fournies."
                     )
                 },
                 {
@@ -49,14 +68,20 @@ def generate_description(names, theme, paragraphs, tone):
                     "content": user_content
                 }
             ],
-            temperature=0.7,
-            max_tokens=1000
+            max_tokens=MAX_TOKENS,
+            temperature=TEMPERATURE
         )
+
+        # Récupération du texte
         generated_text = response.choices[0].message.content.strip()
     except Exception as e:
         generated_text = f"<p style='color:red;'>Erreur lors de la génération : {str(e)}</p>"
 
     return generated_text
+
+# =========================================================================
+# FONCTION DE COPIE
+# =========================================================================
 
 def copy_to_clipboard(text: str):
     """Copie le texte dans le presse-papiers via le navigateur."""
@@ -72,26 +97,32 @@ def copy_to_clipboard(text: str):
         width=0
     )
 
+# =========================================================================
+# APPLICATION STREAMLIT
+# =========================================================================
+
 def main():
-    st.title("Générateur de page \"Qui sommes-nous ?\" - Nouvelle API OpenAI")
+    st.title("Générateur de page \"Qui sommes-nous ?\"")
 
-    # Récupération de la clé OpenAI depuis les secrets Streamlit
-    openai.api_key = st.secrets["openai_api_key"]
+    # 1) Initialisation du client OpenAI avec le même format que dans l'autre script
+    #    On récupère la clé depuis st.secrets (adaptation selon ta config).
+    global client
+    client = OpenAI(api_key=st.secrets["openai_api_key"])
 
-    # Variables de session pour stocker les noms et la description
+    # 2) Variables de session pour stocker les noms et la description
     if "names" not in st.session_state:
         st.session_state["names"] = []
     if "description" not in st.session_state:
         st.session_state["description"] = ""
 
-    # 1) Saisie du nombre de personnes
+    # 3) Nombre de personnes à présenter
     num_people = st.number_input(
         "Nombre de personnes à présenter",
         min_value=1, max_value=20, value=3
     )
 
-    # 2) Boutons pour générer ou régénérer les identités
-    col1, col2 = st.columns([1, 1])
+    # 4) Boutons pour générer ou régénérer les identités
+    col1, col2 = st.columns(2)
     with col1:
         if st.button("Générer noms"):
             st.session_state["names"] = generate_names(num_people)
@@ -99,25 +130,25 @@ def main():
         if st.button("Régénérer noms"):
             st.session_state["names"] = generate_names(num_people)
 
-    # 3) Affichage des noms générés
+    # 5) Affichage des noms générés
     st.subheader("Identités générées :")
     if st.session_state["names"]:
         for i, name in enumerate(st.session_state["names"], start=1):
             st.write(f"{i}. {name}")
 
-    # 4) Saisie de la thématique
+    # 6) Thématique du site
     theme = st.text_input("Thématique du site (ex. cuisine, technologie, mode...)")
 
-    # 5) Saisie du nombre de paragraphes
+    # 7) Nombre de paragraphes
     paragraphs = st.number_input(
         "Nombre de paragraphes (2 par défaut si non renseigné)",
         min_value=1, max_value=10, value=2
     )
 
-    # 6) Saisie du ton (optionnel)
-    tone = st.text_input("Tonalité du texte (optionnel) (ex. humoristique, formel, sérieux...)")
+    # 8) Ton (optionnel)
+    tone = st.text_input("Tonalité du texte (ex. humoristique, formel, sérieux...)")
 
-    # 7) Bouton pour générer la description
+    # 9) Bouton pour générer la description
     if st.button("Générer la description"):
         st.session_state["description"] = generate_description(
             st.session_state["names"],
@@ -126,12 +157,12 @@ def main():
             tone
         )
 
-    # 8) Affichage du texte généré
+    # 10) Affichage de la description
     st.markdown("### Description générée")
     st.markdown(st.session_state["description"], unsafe_allow_html=True)
 
-    # 9) Boutons : Copier / Régénérer
-    col_copy, col_regen = st.columns([1, 1])
+    # 11) Boutons : Copier / Régénérer
+    col_copy, col_regen = st.columns(2)
     with col_copy:
         if st.button("Copier la description"):
             copy_to_clipboard(st.session_state["description"])
@@ -144,5 +175,6 @@ def main():
                 tone
             )
 
+# Point d'entrée
 if __name__ == "__main__":
     main()
