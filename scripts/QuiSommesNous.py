@@ -8,7 +8,7 @@ from faker import Faker
 # CONFIGURATION
 # =========================================================================
 
-# Modèle, tokens, température, etc. à adapter
+# Modèle, tokens, température, etc.
 MODEL = "gpt-4o-mini"
 MAX_TOKENS = 800
 TEMPERATURE = 0.7
@@ -18,6 +18,7 @@ client = None
 
 # Instancier Faker pour générer noms/prénoms francophones
 fake = Faker('fr_FR')
+
 
 # =========================================================================
 # FONCTIONS
@@ -50,7 +51,7 @@ def generate_names(num_people: int, also_lastname: bool):
 def regenerate_unvalidated(names_list, also_lastname: bool):
     """Régénère uniquement les identités non validées."""
     for item in names_list:
-        if not item["validated"]:  # si pas validé, on régénère
+        if not item["validated"]:
             if also_lastname:
                 item["name"] = random_full_name()
             else:
@@ -123,11 +124,12 @@ def copy_to_clipboard(text: str):
     Copie le texte (brut) dans le presse-papiers via le navigateur,
     en utilisant un code JavaScript plus robuste pour gérer la Clipboard API.
     """
-    safe_text = text.replace("`", "\\`")
+    # Pour éviter que les backticks n'interfèrent, on échappe les simples guillemets
+    safe_text = text.replace("'", "\\'")
     components.html(
         f"""
         <script>
-            const textToCopy = `{safe_text}`;
+            const textToCopy = '{safe_text}';
             if (navigator && navigator.clipboard && navigator.clipboard.writeText) {{
                 navigator.clipboard.writeText(textToCopy)
                     .then(() => {{
@@ -147,6 +149,7 @@ def copy_to_clipboard(text: str):
         width=0
     )
 
+
 # =========================================================================
 # APPLICATION STREAMLIT
 # =========================================================================
@@ -158,34 +161,63 @@ def main():
     # Récupérer la clé API depuis les secrets (adaptation selon ta config)
     client = OpenAI(api_key=st.secrets["openai_api_key"])
 
+    # Variables de session
     if "names_list" not in st.session_state:
         st.session_state["names_list"] = []
     if "description" not in st.session_state:
         st.session_state["description"] = ""
 
-    # Nombre de personnes
+    # Choix du nombre de personnes
     num_people = st.number_input(
         "Nombre de personnes à présenter",
         min_value=1, max_value=20, value=3
     )
 
-    # Case pour générer aussi le nom de famille
-    also_lastname = st.checkbox("Générer aussi des noms (en plus des prénoms)", value=False)
+    # Nouveau : Case pour renseigner manuellement les auteurs
+    renseigner_manuellement = st.checkbox("Renseigner manuellement les auteurs ?", value=False)
 
-    # Boutons de génération / régénération
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        if st.button("Générer identités"):
-            st.session_state["names_list"] = generate_names(num_people, also_lastname)
-            st.session_state["description"] = ""  # reset
-    with col2:
-        if st.button("Régénérer identités (non validées)"):
-            st.session_state["names_list"] = regenerate_unvalidated(st.session_state["names_list"], also_lastname)
-            st.session_state["description"] = ""  # reset
+    if renseigner_manuellement:
+        st.write("Veuillez renseigner ci-dessous chaque auteur :")
+        # On crée un champ par auteur
+        for i in range(num_people):
+            # Utiliser session_state pour mémoriser la saisie
+            key_name = f"manual_author_{i}"
+            if key_name not in st.session_state:
+                st.session_state[key_name] = ""
+            st.session_state[key_name] = st.text_input(
+                f"Auteur {i+1}",
+                value=st.session_state[key_name],
+                key=key_name
+            )
 
-    # Liste des identités + checkboxes
+        if st.button("Valider auteurs manuels"):
+            # On remplace names_list par ces auteurs, marqués comme validés
+            new_list = []
+            for i in range(num_people):
+                name_val = st.session_state[f"manual_author_{i}"]
+                new_list.append({"name": name_val, "validated": True})
+            st.session_state["names_list"] = new_list
+            st.session_state["description"] = ""  # reset la description
+
+        # Si on renseigne manuellement, on n'affiche pas les boutons de génération auto
+    else:
+        # Case pour générer aussi le nom de famille
+        also_lastname = st.checkbox("Générer aussi des noms (en plus des prénoms)", value=False)
+
+        # Boutons de génération / régénération
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.button("Générer identités"):
+                st.session_state["names_list"] = generate_names(num_people, also_lastname)
+                st.session_state["description"] = ""  # reset
+        with col2:
+            if st.button("Régénérer identités (non validées)"):
+                st.session_state["names_list"] = regenerate_unvalidated(st.session_state["names_list"], also_lastname)
+                st.session_state["description"] = ""  # reset
+
+    # Liste des identités + checkboxes (uniquement si on a quelque chose à afficher)
     if st.session_state["names_list"]:
-        st.subheader("Identités générées :")
+        st.subheader("Identités générées / renseignées :")
         for index, item in enumerate(st.session_state["names_list"]):
             checkbox_label = f"Valider ?_{index}"
             cols = st.columns([3, 1])
@@ -208,7 +240,7 @@ def main():
     tone = st.text_input("Tonalité du texte (ex. humoristique, formel, sérieux...)")
     custom_instructions = st.text_area(
         "Instructions supplémentaires (optionnel)",
-        help="Donnez des consignes précises, par ex. style littéraire, vocabulaire, etc."
+        help="Donnez des consignes précises (ex. style littéraire, vocabulaire, etc.)"
     )
 
     # Génération de la description
