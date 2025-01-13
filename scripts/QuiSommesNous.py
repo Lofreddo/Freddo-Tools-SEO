@@ -7,11 +7,11 @@ from faker import Faker
 # CONFIGURATION
 # =========================================================================
 
-MODEL = "gpt-4o-mini"  # ou ton modèle
+MODEL = "gpt-4o-mini"  # Ou ton modèle
 MAX_TOKENS = 800
 TEMPERATURE = 0.7
 
-# Le client OpenAI sera créé dans main()
+# L'objet client OpenAI sera créé dans main()
 client = None
 
 # Instancier Faker pour générer noms/prénoms francophones
@@ -34,7 +34,7 @@ def generate_names(num_people: int, also_lastname: bool):
     Génère un certain nombre d'identités.
     - soit prénoms uniquement (also_lastname=False)
     - soit nom + prénom (also_lastname=True)
-    Retourne une liste de dicos: [{"name": ..., "validated": False}, ...]
+    Retourne une liste de dicos : [{"name": ..., "validated": False}, ...]
     """
     names_list = []
     for _ in range(num_people):
@@ -46,9 +46,7 @@ def generate_names(num_people: int, also_lastname: bool):
     return names_list
 
 def regenerate_unvalidated(names_list, also_lastname: bool):
-    """
-    Régénère uniquement les identités non validées.
-    """
+    """Régénère uniquement les identités non validées."""
     for item in names_list:
         if not item["validated"]:
             if also_lastname:
@@ -142,25 +140,23 @@ def main():
     renseigner_manuellement = st.checkbox("Renseigner manuellement les auteurs ?", value=False)
 
     if renseigner_manuellement:
-        # On affiche un champ text_input pour chaque auteur
         st.write("**Veuillez saisir les auteurs :**")
+
+        # Afficher un champ text_input pour chaque auteur
         for i in range(num_people):
             key_name = f"manual_author_{i}"
-            # Crée le champ si non existant
-            if key_name not in st.session_state:
-                st.session_state[key_name] = ""
-            # Input
-            st.session_state[key_name] = st.text_input(
+            # Streamlit gère tout seul la valeur associée à la clé.
+            st.text_input(
                 label=f"Auteur {i+1}",
-                value=st.session_state[key_name],
-                key=key_name
+                key=key_name  # Aucune affectation manuelle à session_state ici
             )
 
+        # Bouton pour valider la saisie
         if st.button("Valider auteurs manuels"):
-            # On construit la liste "names_list"
             new_list = []
             for i in range(num_people):
                 k = f"manual_author_{i}"
+                # On récupère ce que l'utilisateur a tapé
                 val = st.session_state.get(k, "")
                 new_list.append({"name": val, "validated": True})
             st.session_state["names_list"] = new_list
@@ -181,7 +177,7 @@ def main():
                 st.session_state["names_list"] = regenerate_unvalidated(st.session_state["names_list"], also_lastname)
                 st.session_state["description"] = ""
 
-    # Si on a des identités, on les affiche
+    # Afficher la liste des identités (manuelles ou auto)
     if st.session_state["names_list"]:
         st.subheader("Identités générées / renseignées :")
         for index, item in enumerate(st.session_state["names_list"]):
@@ -189,7 +185,6 @@ def main():
             with cols[0]:
                 st.write(f"{index+1}. {item['name']}")
             with cols[1]:
-                # On crée une checkbox pour valider l'item
                 is_checked = st.checkbox(
                     "Valider",
                     value=item["validated"],
