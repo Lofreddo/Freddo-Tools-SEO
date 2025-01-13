@@ -7,7 +7,7 @@ from faker import Faker
 # CONFIGURATION
 # =========================================================================
 
-MODEL = "gpt-4o-mini"
+MODEL = "gpt-4o-mini"  # ou ton modèle
 MAX_TOKENS = 800
 TEMPERATURE = 0.7
 
@@ -64,7 +64,6 @@ def strip_html_tags(text: str) -> str:
 def generate_description(names_list, theme, paragraphs, tone, custom_instructions):
     """
     Génère un texte "Qui sommes-nous ?" en texte brut, sans balises HTML.
-    On précise au modèle de NE PAS générer de HTML et on retire toute balise éventuelle.
     """
     # Extraire la liste des noms (strings)
     only_names = [item["name"] for item in names_list]
@@ -121,53 +120,51 @@ def generate_description(names_list, theme, paragraphs, tone, custom_instruction
 # =========================================================================
 
 def main():
-    st.title("Générateur de page \"Qui sommes-nous ?\" (Texte pur, sans HTML)")
+    st.title("Générateur de page \"Qui sommes-nous ?\" (Texte brut)")
 
     global client
     # Récupération de la clé API
     client = OpenAI(api_key=st.secrets["openai_api_key"])
 
     # Variables de session
-    # ------------------------------------------------
-    # Pour stocker la liste des identités
     if "names_list" not in st.session_state:
         st.session_state["names_list"] = []
-    # Pour stocker la description
     if "description" not in st.session_state:
         st.session_state["description"] = ""
 
     # Choix du nombre de personnes
-    num_people = st.number_input("Nombre de personnes à présenter",
-                                 min_value=1, max_value=20, value=3)
+    num_people = st.number_input(
+        "Nombre de personnes à présenter",
+        min_value=1, max_value=20, value=3
+    )
 
     # Case : Renseigner manuellement les auteurs, ou non
     renseigner_manuellement = st.checkbox("Renseigner manuellement les auteurs ?", value=False)
 
     if renseigner_manuellement:
         # On affiche un champ text_input pour chaque auteur
-        st.write("**Veuillez saisir le nom (ou prénom) de chaque auteur :**")
-
+        st.write("**Veuillez saisir les auteurs :**")
         for i in range(num_people):
-            # On s'appuie sur un key unique pour chaque input
             key_name = f"manual_author_{i}"
-            # Création ou récupération de la valeur courante
-            # NB : Pas besoin de manipuler st.session_state[key_name] nous-même,
-            #      la key de text_input le fait automatiquement.
-            st.text_input(f"Auteur {i+1}", key=key_name)
+            # Crée le champ si non existant
+            if key_name not in st.session_state:
+                st.session_state[key_name] = ""
+            # Input
+            st.session_state[key_name] = st.text_input(
+                label=f"Auteur {i+1}",
+                value=st.session_state[key_name],
+                key=key_name
+            )
 
         if st.button("Valider auteurs manuels"):
-            # On construit la liste de noms_list
+            # On construit la liste "names_list"
             new_list = []
             for i in range(num_people):
                 k = f"manual_author_{i}"
-                # On récupère la valeur du text_input
                 val = st.session_state.get(k, "")
                 new_list.append({"name": val, "validated": True})
             st.session_state["names_list"] = new_list
             st.session_state["description"] = ""
-
-            # On force la ré-exécution pour afficher immédiatement
-            st.experimental_rerun()
 
     else:
         # Case pour générer aussi le nom de famille
@@ -179,12 +176,10 @@ def main():
             if st.button("Générer identités"):
                 st.session_state["names_list"] = generate_names(num_people, also_lastname)
                 st.session_state["description"] = ""
-                st.experimental_rerun()
         with col2:
             if st.button("Régénérer identités (non validées)"):
                 st.session_state["names_list"] = regenerate_unvalidated(st.session_state["names_list"], also_lastname)
                 st.session_state["description"] = ""
-                st.experimental_rerun()
 
     # Si on a des identités, on les affiche
     if st.session_state["names_list"]:
@@ -195,7 +190,11 @@ def main():
                 st.write(f"{index+1}. {item['name']}")
             with cols[1]:
                 # On crée une checkbox pour valider l'item
-                is_checked = st.checkbox("Valider", value=item["validated"], key=f"validate_{index}")
+                is_checked = st.checkbox(
+                    "Valider",
+                    value=item["validated"],
+                    key=f"validate_{index}"
+                )
                 item["validated"] = is_checked
 
     # Inputs : Thématique, paragraphes, ton, instructions
@@ -203,8 +202,10 @@ def main():
     paragraphs = st.number_input("Nombre de paragraphes (2 par défaut si non renseigné)",
                                  min_value=1, max_value=10, value=2)
     tone = st.text_input("Tonalité du texte (ex. humoristique, formel, sérieux...)")
-    custom_instructions = st.text_area("Instructions supplémentaires (optionnel)",
-                                       help="Donnez des consignes précises : style, vocabulaire, etc.")
+    custom_instructions = st.text_area(
+        "Instructions supplémentaires (optionnel)",
+        help="Donnez des consignes précises : style, vocabulaire, etc."
+    )
 
     # Boutons de génération / régénération de la description
     col_desc_1, col_desc_2 = st.columns([1, 1])
@@ -217,8 +218,6 @@ def main():
                 tone,
                 custom_instructions
             )
-            st.experimental_rerun()
-
     with col_desc_2:
         if st.button("Régénérer la description"):
             st.session_state["description"] = generate_description(
@@ -228,9 +227,8 @@ def main():
                 tone,
                 custom_instructions
             )
-            st.experimental_rerun()
 
-    # Affichage de la description en texte brut (zone modifiable = True ou non)
+    # Affichage de la description en texte brut
     st.markdown("### Description générée (texte brut)")
     st.text_area(label="", value=st.session_state["description"], height=300)
 
