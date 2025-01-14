@@ -139,7 +139,7 @@ def generate_author_description(author_name, main_text, author_note):
 
     Maintenant, rédige un court paragraphe (texte brut) pour présenter l'auteur suivant : {author_name}.
     Assure-toi que ce paragraphe soit cohérent avec le texte principal.
-    Précisions sur l'auteur ou style à adopter : {author_note if author_note else "Aucune précision"}.
+    Précisions ou style à adopter : {author_note if author_note else "Aucune précision"}.
     Ne mets aucune balise HTML ni Markdown.
     """
     try:
@@ -285,9 +285,10 @@ def main():
                     st.text_area(label="", value=author_info["paragraph"], height=150, key=f"desc_{index}")
                 with col_author_btn:
                     if st.button(f"Régénérer pour {author_info['name']}", key=f"regen_{index}"):
+                        # Générer une nouvelle description pour cet auteur sans utiliser st.experimental_rerun()
                         new_paragraph = generate_author_description(author_info["name"], st.session_state["description"], authors_notes)
                         st.session_state["authors_descriptions"][index]["paragraph"] = new_paragraph
-                        st.experimental_rerun()  # Pour rafraîchir l'affichage de cette description
+                        # La modification de la session_state mettra à jour l'affichage dans la zone de texte grâce à la key
     else:
         st.info("Générez d'abord la page 'Qui sommes-nous ?' pour créer des descriptions auteurs.")
 
