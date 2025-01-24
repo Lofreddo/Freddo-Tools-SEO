@@ -8,8 +8,8 @@ from urllib.parse import urljoin
 import requests
 import random
 import time
-import base64
-import streamlit.components.v1 as components
+import base64  # <-- Peut être supprimé si vous n'en avez plus besoin
+import streamlit.components.v1 as components  # <-- Peut être supprimé si vous n'en avez plus besoin
 
 # Liste d'User-Agents pour la rotation
 user_agents = [
@@ -159,38 +159,27 @@ def main():
             ])
             df_anchor_analysis = analyze_anchors(all_results)
             
+            # Génération du fichier Excel en mémoire
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
                 df_results.to_excel(writer, sheet_name='Link Analysis', index=False)
                 df_link_counts.to_excel(writer, sheet_name='Links per URL', index=False)
                 df_anchor_analysis.to_excel(writer, sheet_name='Anchors Analysis', index=False)
-            
-            b64 = base64.b64encode(buffer.getvalue()).decode()
+
+            # Remettre le pointeur au début du buffer
+            buffer.seek(0)
             
             download_filename = "link_analysis.xlsx"
-            
-            # Créer le composant HTML pour le téléchargement automatique
-            components.html(
-                f"""
-                <html>
-                <head>
-                <script>
-                var data = new Blob([atob('{b64}')], {{type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}});
-                var a = document.createElement('a');
-                a.href = window.URL.createObjectURL(data);
-                a.download = '{download_filename}';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                </script>
-                </head>
-                </html>
-                """,
-                height=0,
-                width=0
+
+            # Utilisation de st.download_button pour permettre le téléchargement via un bouton
+            st.download_button(
+                label="Télécharger le fichier Excel",
+                data=buffer,
+                file_name=download_filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-            
-            st.success("Analyse terminée. Le téléchargement du fichier Excel devrait commencer automatiquement.")
+
+            st.success("Analyse terminée. Vous pouvez télécharger le fichier Excel ci-dessus.")
         else:
             st.warning("Veuillez entrer des URLs ou télécharger un fichier.")
 
