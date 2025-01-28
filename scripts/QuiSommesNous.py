@@ -8,7 +8,7 @@ from faker import Faker
 # =========================================================================
 
 MODEL = "gpt-4o-mini"  # Ou ton modèle
-MAX_TOKENS = 800
+MAX_TOKENS = 1000
 TEMPERATURE = 0.7
 
 # L'objet client OpenAI sera créé dans main()
@@ -59,7 +59,7 @@ def generate_description(names_list, theme, paragraphs, tone, custom_instruction
     """
     only_names = [item["name"] for item in names_list]
     user_content = f"""
-    Rédige une présentation pour la page "Qui sommes-nous ?" d'un site,
+    Rédige une présentation pour la page "Qui sommes-nous ?" d'un site internet,
     au format texte brut (sans balises HTML ni Markdown).
 
     Nous avons {len(only_names)} auteur(s) : {', '.join(only_names)}.
@@ -68,7 +68,9 @@ def generate_description(names_list, theme, paragraphs, tone, custom_instruction
     Nombre de paragraphes souhaités : {paragraphs}.
 
     Génère {paragraphs} paragraphes (séparés par des sauts de ligne),
-    et n'inclus AUCUNE balise HTML ou autre code. Juste du texte pur.
+    et n'inclut AUCUNE balise HTML ou autre code. Juste du texte pur. Tu dois UTILISER LA VOIX ACTIVE. La voix passive est interdite. Tu dois inclure une dimension storytelling pour capter l’attention. Les contenus doit parler de l’équipe mais également s’adresser aux visiteurs, notamment en leur expliquant ce qu’ils trouveront sur le site. Le contenu doit être concis, informatif et engageant. Utiliser des éléments qui donnent un aspect singulier au site. le contenu doit sembler authentique et avoir réellement été écrit par les rédacteurs du site.
+
+
 
     ---
 
@@ -79,8 +81,8 @@ def generate_description(names_list, theme, paragraphs, tone, custom_instruction
             model=MODEL,
             messages=[
                 {"role": "system", "content": (
-                    "Tu es un assistant spécialisé en rédaction SEO. "
-                    "Tu dois créer un texte 'Qui sommes-nous ?' "
+                    "Tu es un responsable de site éditorial de style blog, news, informationnel."
+                    "Tu dois créer le texte 'Qui sommes-nous ?' de ton site"
                     "en texte brut (pas de HTML)."
                 )},
                 {"role": "user", "content": user_content}
@@ -99,26 +101,28 @@ def generate_short_summary(full_text, theme, tone):
     Génère une version courte (2-3 phrases) du texte 'Qui sommes-nous ?'.
     """
     prompt_user = f"""
-    Tu as le texte 'Qui sommes-nous ?' suivant :
+    Tu as rédigé le texte 'Qui sommes-nous ?' suivant :
 
     {full_text}
 
     Résume-le en 2 ou 3 phrases maximum, en texte brut, sans balises HTML,
     afin de pouvoir l'afficher sur une page d'accueil.
     Conserve la même tonalité (actuellement : {tone if tone else "non spécifié"}).
-    Thématique : {theme if theme else "non spécifiée"}.
+    Thématique : {theme if theme else "non spécifiée"}. Le contenu ne doit pas utiliser les mêmes termes que dans le texte original. Il doit être incitatif et donner envie au lecteur d’en savoir plus. Il doit sembler authentique et avoir réellement été écrit par les rédacteurs du site.
     """
     try:
         response = client.chat.completions.create(
             model=MODEL,
             messages=[
                 {"role": "system", "content": (
-                    "Tu es un assistant spécialisé en rédaction SEO. "
+                    "Tu es un responsable de site éditorial de style blog, news, informationnel."
+                    "Tu dois résumer le texte 'Qui sommes-nous ?' de ton site pour l’intégrer à ta page d’accueil"
                     "Ta mission est de faire un résumé très court, en texte brut."
+                    "en texte brut (pas de HTML)."
                 )},
                 {"role": "user", "content": prompt_user}
             ],
-            max_tokens=300,
+            max_tokens=700,
             temperature=TEMPERATURE
         )
         short_text = response.choices[0].message.content.strip()
@@ -137,22 +141,23 @@ def generate_author_description(author_name, main_text, author_note):
 
     {main_text}
 
-    Maintenant, rédige un court paragraphe (texte brut) pour présenter l'auteur suivant : {author_name}.
-    Assure-toi que ce paragraphe soit cohérent avec le texte principal.
+    Rédige un court paragraphe (texte brut) pour présenter l'auteur suivant : {author_name}.
+    Assure-toi que ce paragraphe soit cohérent avec le contenu de la page “Qui sommes nous”.
     Précisions ou style à adopter : {author_note if author_note else "Aucune précision"}.
-    Ne mets aucune balise HTML ni Markdown.
+    Ne mets aucune balise HTML ni Markdown. Ta présentation doit utiliser du storytelling. Elle doit sembler réaliste et vraiment ressembler à une présentation d’auteur d’un blog.
     """
     try:
         response = client.chat.completions.create(
             model=MODEL,
             messages=[
                 {"role": "system", "content": (
-                    "Tu es un assistant spécialisé en rédaction SEO. "
-                    "Ta mission est de créer une présentation courte pour un auteur, en texte brut."
+                    "Tu es un auteur de site éditorial de style blog, news, informationnel."
+                    "Tu dois te présenter en texte brut."
+                    "Utilise la troisième personne pour ta présentation."
                 )},
                 {"role": "user", "content": prompt_user}
             ],
-            max_tokens=300,
+            max_tokens=600,
             temperature=TEMPERATURE
         )
         paragraph = response.choices[0].message.content.strip()
