@@ -68,7 +68,7 @@ def generate_description(names_list, theme, paragraphs, tone, custom_instruction
     Nombre de paragraphes souhaités : {paragraphs}.
 
     Génère {paragraphs} paragraphes (séparés par des sauts de ligne),
-    et n'inclut AUCUNE balise HTML ou autre code. Juste du texte pur. Tu dois UTILISER LA VOIX ACTIVE. La voix passive est interdite. Tu dois inclure une dimension storytelling pour capter l’attention. Les contenus doit parler de l’équipe mais également s’adresser aux visiteurs, notamment en leur expliquant ce qu’ils trouveront sur le site. Le contenu doit être concis, informatif et engageant. Utiliser des éléments qui donnent un aspect singulier au site. le contenu doit sembler authentique et avoir réellement été écrit par les rédacteurs du site.
+    et n'inclut AUCUNE balise HTML ou autre code. Juste du texte pur. Les instructions supplémentaires doivent te guider mais tu ne dois pas intégrer ce qui y est écrit directement dans le contenu que tu rédiges.Tu dois UTILISER LA VOIX ACTIVE. La voix passive est interdite. Tu dois inclure une dimension storytelling pour capter l’attention. Les contenus doit parler de l’équipe mais également s’adresser aux visiteurs, notamment en leur expliquant ce qu’ils trouveront sur le site. Le contenu doit être concis, informatif et engageant. Utiliser des éléments qui donnent un aspect singulier au site. le contenu doit sembler authentique et avoir réellement été écrit par les rédacteurs du site. Tu ne dois pas utiliser les termes et expressions suivantes ou leurs formes dérivées : passion, auteur, expérience, aventure, invite, que vous soyez, objectif, souhait, communauté, partager, interagir, explorer.
 
 
 
