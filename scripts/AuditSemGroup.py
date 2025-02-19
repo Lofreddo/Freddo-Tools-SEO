@@ -42,14 +42,23 @@ def group_keywords(data, position_cols, url_cols, num_top_competitors):
             sorted_competitors = sorted(competitors, key=lambda x: x[1])[:num_top_competitors]
             group_key = tuple((comp[0], comp[2]) for comp in sorted_competitors)
             
+            # Récupération du volume si la colonne existe, sinon 0
+            volume_value = float(row["Volume"]) if "Volume" in data.columns and not pd.isna(row["Volume"]) else 0
+            
             grouped_keywords[group_key].append({
                 'mot_cle': row['Mot-clé'],
+                'volume': volume_value,
                 'positions': {comp[0]: comp[1] for comp in sorted_competitors}
             })
     
     final_groups = []
     for competitors_urls, keywords in grouped_keywords.items():
-        primary_keyword = keywords[0]['mot_cle']
+        # Choisir le mot-clé principal basé sur le volume le plus élevé
+        main_entry = max(keywords, key=lambda x: x.get('volume', 0))
+        primary_keyword = main_entry['mot_cle']
+        primary_volume = main_entry['volume']
+        total_volume = sum(kw.get('volume', 0) for kw in keywords)
+        
         all_keywords = [kw['mot_cle'] for kw in keywords]
         competitors = [comp for comp, _ in competitors_urls]
         urls = [url for _, url in competitors_urls]
@@ -58,6 +67,8 @@ def group_keywords(data, position_cols, url_cols, num_top_competitors):
         final_groups.append({
             'Mot-clé de référence': primary_keyword,
             'Mots-clés regroupés': ', '.join(all_keywords),
+            'Volume du mot-clé principal': primary_volume,
+            'Volume total': total_volume,
             'Concurrents concernés': ', '.join(competitors),
             'URLs concernées': ', '.join(urls),
             'Positions des URLs concernées': ', '.join(
