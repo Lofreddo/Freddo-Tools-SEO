@@ -4,9 +4,9 @@ import requests
 import json
 import datetime
 import io
-from tldextract import extract
 import concurrent.futures
 import gc
+from dateutil import parser  # Permet de détecter automatiquement le format de date
 
 def check_domain_expiration():
     st.title('Domain Expiration Checker')
@@ -31,9 +31,21 @@ def check_domain_expiration():
             clean_domains = []
 
             for domain in domains:
-                domain = domain.lstrip('www.')
-                extracted_domain = extract(domain)
-                domain = f"{extracted_domain.domain}.{extracted_domain.suffix}"
+                domain = domain.strip()
+                # Suppression du préfixe "www." si présent
+                if domain.startswith("www."):
+                    domain = domain[4:]
+                # Extraction personnalisée :
+                # Pour un domaine se terminant par ".co.uk", on conserve les trois derniers éléments
+                if domain.endswith(".co.uk"):
+                    parts = domain.split('.')
+                    if len(parts) >= 3:
+                        domain = '.'.join(parts[-3:])
+                # Pour tous les autres domaines, on conserve les deux derniers éléments
+                else:
+                    parts = domain.split('.')
+                    if len(parts) >= 2:
+                        domain = '.'.join(parts[-2:])
                 clean_domains.append(domain)
 
             unique_domains = list(set(clean_domains))
@@ -69,14 +81,16 @@ def perform_single_domain_check(domain):
 
         expiration_date = None
         for event in rdap.get("events", []):
-            if event["eventAction"] == "expiration":
-                expiration_date = datetime.datetime.strptime(event["eventDate"], "%Y-%m-%dT%H:%M:%SZ")
+            if event.get("eventAction") == "expiration":
+                # Analyse automatique du format de date
+                expiration_date = parser.parse(event["eventDate"])
                 break
 
         if expiration_date:
             now = datetime.datetime.now()
             days_left = (expiration_date - now).days
-            status = f"Expires in {days_left} days ({expiration_date.strftime('%Y-%m-%d')})"
+            # Affichage de la date au format yyyy/mm/jj
+            status = f"Expires in {days_left} days ({expiration_date.strftime('%Y/%m/%d')})"
             if days_left < 0:
                 status += " (Expired)"
             elif days_left <= 30:
