@@ -4,11 +4,9 @@ import requests
 import json
 import datetime
 import io
-from tldextract import extract
 import concurrent.futures
 import gc
-from dateutil import parser as date_parser
-from dateutil import tz
+import re  # Pour l'extraction de la date
 
 def check_domain_expiration():
     st.title('Domain Expiration Checker')
@@ -33,14 +31,26 @@ def check_domain_expiration():
             clean_domains = []
 
             for domain in domains:
-                domain = domain.lstrip('www.')
-                extracted_domain = extract(domain)
-                domain = f"{extracted_domain.domain}.{extracted_domain.suffix}"
+                domain = domain.strip()
+                # Suppression du préfixe "www." si présent
+                if domain.startswith("www."):
+                    domain = domain[4:]
+                # Extraction personnalisée du domaine :
+                # Pour un domaine se terminant par ".co.uk", on conserve les trois derniers éléments
+                if domain.endswith(".co.uk"):
+                    parts = domain.split('.')
+                    if len(parts) >= 3:
+                        domain = '.'.join(parts[-3:])
+                # Pour tous les autres domaines, on conserve les deux derniers éléments
+                else:
+                    parts = domain.split('.')
+                    if len(parts) >= 2:
+                        domain = '.'.join(parts[-2:])
                 clean_domains.append(domain)
 
             unique_domains = list(set(clean_domains))
 
-            # Dynamic adjustment of the number of threads
+            # Ajustement dynamique du nombre de threads
             max_workers = min(20, len(unique_domains) // 10 + 1)
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                 results = list(executor.map(perform_single_domain_check, unique_domains))
@@ -59,32 +69,51 @@ def check_domain_expiration():
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
-            # Garbage collection to free up memory
+            # Collecte des ordures pour libérer la mémoire
             gc.collect()
 
 def perform_single_domain_check(domain):
     try:
-        server = "https://who-dat.as93.net"
-        response = requests.get(f"{server}/{domain}", timeout=10)
+        server = "https://rdap.org"
+        response = requests.get(f"{server}/domain/{domain}", timeout=10)
         response.raise_for_status()
-        whois_data = json.loads(response.content)
+        rdap = json.loads(response.content)
 
         expiration_date = None
-        if 'domain' in whois_data and 'expiration_date' in whois_data['domain']:
-            date_string = whois_data['domain']['expiration_date']
-            try:
-                # Utiliser dateutil.parser pour une analyse plus flexible des dates
-                expiration_date = date_parser.parse(date_string)
-            except ValueError:
-                # Si le parsing échoue, essayer un format spécifique pour '20241215'
-                if len(date_string) == 8 and date_string.isdigit():
-                    expiration_date = datetime.datetime.strptime(date_string, "%Y%m%d")
+        # Parcours des événements pour trouver la date d'expiration
+        for event in rdap.get("events", []):
+            if event.get("eventAction") == "expiration":
+                event_date = event.get("eventDate", "")
+                # Recherche d'une chaîne de 10 caractères sous forme yyyy-mm-dd ou dd-mm-yyyy/mm-dd-yyyy
+                match = re.search(r'((?:\d{4}-\d{2}-\d{2})|(?:\d{2}-\d{2}-\d{4}))', event_date)
+                if match:
+                    date_str = match.group(1)
+                    parts = date_str.split('-')
+                    # Si le premier segment a 4 chiffres, c'est le format ISO yyyy-mm-dd
+                    if len(parts[0]) == 4:
+                        expiration_date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+                    else:
+                        # Ici on a un format 2-2-4, soit dd-mm-yyyy ou mm-dd-yyyy.
+                        a, b, year = parts
+                        a_int = int(a)
+                        b_int = int(b)
+                        # Si le premier nombre est supérieur à 12, c'est forcément le jour.
+                        if a_int > 12 and b_int <= 12:
+                            expiration_date = datetime.datetime.strptime(date_str, "%d-%m-%Y")
+                        # Si le deuxième nombre est supérieur à 12, c'est le jour dans un format mm-dd-yyyy.
+                        elif b_int > 12 and a_int <= 12:
+                            expiration_date = datetime.datetime.strptime(date_str, "%m-%d-%Y")
+                        else:
+                            # En cas d'ambiguïté (par exemple 05-06-2025), on choisit par défaut dd-mm-yyyy.
+                            expiration_date = datetime.datetime.strptime(date_str, "%d-%m-%Y")
+                break
 
         if expiration_date:
-            now = datetime.datetime.now(tz.UTC)
-            expiration_date = expiration_date.replace(tzinfo=tz.UTC)
+            now = datetime.datetime.now()
             days_left = (expiration_date - now).days
-            status = f"Expires in {days_left} days ({expiration_date.strftime('%Y-%m-%d')})"
+            # Normalisation de la date au format yyyy-mm-dd
+            formatted_date = expiration_date.strftime("%Y-%m-%d")
+            status = f"Expires in {days_left} days ({formatted_date})"
             if days_left < 0:
                 status += " (Expired)"
             elif days_left <= 30:
@@ -99,7 +128,7 @@ def perform_single_domain_check(domain):
     except json.JSONDecodeError:
         return (domain, "Error: Unable to decode JSON response")
     except ValueError as e:
-        return (domain, f"Error parsing date: {e}")
+        return (domain, f"Error: {e}")
     except Exception as e:
         return (domain, f"Error: {e}")
 
