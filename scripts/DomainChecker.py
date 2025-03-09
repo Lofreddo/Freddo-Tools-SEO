@@ -6,7 +6,8 @@ import datetime
 import io
 import concurrent.futures
 import gc
-from dateutil import parser  # Permet de détecter automatiquement le format de date
+import re
+from dateutil import parser  # On l'utilise en fallback
 
 def check_domain_expiration():
     st.title('Domain Expiration Checker')
@@ -35,7 +36,7 @@ def check_domain_expiration():
                 # Suppression du préfixe "www." si présent
                 if domain.startswith("www."):
                     domain = domain[4:]
-                # Extraction personnalisée :
+                # Extraction personnalisée du domaine :
                 # Pour un domaine se terminant par ".co.uk", on conserve les trois derniers éléments
                 if domain.endswith(".co.uk"):
                     parts = domain.split('.')
@@ -80,17 +81,41 @@ def perform_single_domain_check(domain):
         rdap = json.loads(response.content)
 
         expiration_date = None
+        # Parcours des événements pour trouver la date d'expiration
         for event in rdap.get("events", []):
             if event.get("eventAction") == "expiration":
-                # Analyse automatique du format de date
-                expiration_date = parser.parse(event["eventDate"])
+                raw_date = event.get("eventDate", "")
+                # Essayer d'extraire une date via regex (formats possibles : yyyy-mm-dd ou dd-mm-yyyy/mm-dd-yyyy)
+                match = re.search(r'(\d{1,4}-\d{1,2}-\d{1,4})', raw_date)
+                if match:
+                    date_str = match.group(1)
+                    parts = date_str.split('-')
+                    if len(parts[0]) == 4:
+                        expiration_date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+                    else:
+                        a, b, year = parts
+                        a_int, b_int = int(a), int(b)
+                        if a_int > 12 and b_int <= 12:
+                            expiration_date = datetime.datetime.strptime(date_str, "%d-%m-%Y")
+                        elif b_int > 12 and a_int <= 12:
+                            expiration_date = datetime.datetime.strptime(date_str, "%m-%d-%Y")
+                        else:
+                            expiration_date = datetime.datetime.strptime(date_str, "%d-%m-%Y")
+                else:
+                    # Si l'extraction par regex échoue, utiliser dateutil.parser
+                    parsed_date = parser.parse(raw_date)
+                    expiration_date = datetime.datetime(parsed_date.year, parsed_date.month, parsed_date.day)
+                
+                # S'assurer que l'objet datetime est naïf (en supprimant tzinfo s'il est aware)
+                if expiration_date and expiration_date.tzinfo is not None:
+                    expiration_date = expiration_date.replace(tzinfo=None)
                 break
 
         if expiration_date:
             now = datetime.datetime.now()
             days_left = (expiration_date - now).days
-            # Affichage de la date au format yyyy/mm/jj
-            status = f"Expires in {days_left} days ({expiration_date.strftime('%Y/%m/%d')})"
+            formatted_date = expiration_date.strftime("%Y-%m-%d")
+            status = f"Expires in {days_left} days ({formatted_date})"
             if days_left < 0:
                 status += " (Expired)"
             elif days_left <= 30:
