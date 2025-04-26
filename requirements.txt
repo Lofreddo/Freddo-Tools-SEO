@@ -28,3 +28,4 @@ scikit-learn
 numpy
 python-dateutil
 faker
+networkx
