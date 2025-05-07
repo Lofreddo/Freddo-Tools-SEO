@@ -27,23 +27,31 @@ def create_embedding(text):
 
 def clean_filename(s):
     """Nettoie et met en snake_case le nom généré."""
-    # Par exemple on transforme espaces et caractères spéciaux en underscore
+    # Remplace tout caractère non-alphanumérique par un underscore
     safe = ''.join(c if c.isalnum() else '_' for c in s)
-    return '_'.join(part.lower() for part in safe.split('_') if part)
+    # Uniformise en minuscules et retire doublons de underscores
+    parts = [p for p in safe.lower().split('_') if p]
+    return '_'.join(parts)
 
 def generate_image_name(product_info, embedding, structure, exemple_name):
-    """Appelle GPT pour générer un nom de fichier d’image."""
+    """Appelle GPT pour générer un nom de fichier d’image EN FRANÇAIS."""
     try:
         prompt = f"""
         À partir des informations suivantes : {product_info}
-        Construis un nom de fichier d’image sans extension, structuré ainsi : {structure}
-        Exemple de nom : {exemple_name}
-        Utilise uniquement des lettres, chiffres et underscores (_).
+        Génère un nom de fichier d’image **en français**, sans extension, structuré ainsi : {structure}
+        Exemple de nom en français : {exemple_name}
+        Utilise uniquement des lettres minuscules, des chiffres et des underscores (_).
         """
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "Vous êtes un assistant qui génère des noms de fichiers d’image clairs et SEO-friendly."},
+                {
+                  "role": "system",
+                  "content": (
+                    "Vous êtes un assistant expert qui génère des noms de fichiers d’images "
+                    "clairs, optimisés SEO et rédigés en français."
+                  )
+                },
                 {"role": "user", "content": prompt}
             ]
         )
@@ -64,7 +72,10 @@ def worker(row, structure, exemple_name, url_col, crit_cols):
 def process_df(df, structure, exemple_name, url_col, crit_cols):
     threads = []
     for _, row in df.iterrows():
-        t = threading.Thread(target=worker, args=(row, structure, exemple_name, url_col, crit_cols))
+        t = threading.Thread(
+            target=worker,
+            args=(row, structure, exemple_name, url_col, crit_cols)
+        )
         threads.append(t)
         t.start()
     for t in threads:
@@ -73,7 +84,7 @@ def process_df(df, structure, exemple_name, url_col, crit_cols):
     results = []
     while not result_queue.empty():
         results.append(result_queue.get())
-    return pd.DataFrame(results, columns=[url_col, "image_name"])
+    return pd.DataFrame(results, columns=[url_col, "nom_image"])
 
 def show_progress(total):
     """Affiche une barre de progression mise à jour chaque seconde."""
@@ -89,15 +100,16 @@ def show_progress(total):
     status.text(f"Terminé ! {total}/{total} noms générés.")
 
 def main():
-    st.title("Générateur de noms d’images avec OpenAI")
+    st.title("Générateur de noms d’images (EN FRANÇAIS) avec OpenAI")
 
+    # Structure et exemple en français
     structure = st.text_input(
-        "Structure du nom (ex. subject_color_angle)",
-        "subject_color_angle"
+        "Structure du nom (snake_case, ex. sujet_couleur_angle)",
+        "sujet_couleur_angle"
     )
     exemple_name = st.text_input(
-        "Exemple de nom (ex. sunflower_yellow_topview)",
-        "sunflower_yellow_topview"
+        "Exemple de nom (ex. tournesol_jaune_vue_haut)",
+        "tournesol_jaune_vue_haut"
     )
 
     uploaded = st.file_uploader("Chargez votre fichier Excel (.xlsx)", type="xlsx")
@@ -120,12 +132,12 @@ def main():
         total = len(df)
         st.session_state['total'] = total
 
-        # Lancement du thread de progression
+        # Démarre la barre de progression
         prog_thread = threading.Thread(target=show_progress, args=(total,))
         prog_thread.start()
 
         # Génération en multithreading
-        result_df = process_df(df, structure, exemple_name, url_col, crit_cols)
+        result_df = processDf = process_df(df, structure, exemple_name, url_col, crit_cols)
         prog_thread.join()
 
         st.success("Tous les noms sont prêts !")
@@ -139,7 +151,7 @@ def main():
         st.download_button(
             "Télécharger les noms d’images",
             data=out,
-            file_name="noms_images.xlsx",
+            file_name="noms_images_fr.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
