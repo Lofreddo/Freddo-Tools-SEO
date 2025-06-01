@@ -5,7 +5,6 @@ from io import BytesIO
 def main():
     st.title("Analyse de mots-clés")
 
-    # Étape 1: Charger les fichiers CSV ou XLSX
     uploaded_files = st.file_uploader("Importer les fichiers de données", accept_multiple_files=True, type=['csv', 'xlsx'])
 
     if uploaded_files:
@@ -16,196 +15,185 @@ def main():
                     df = pd.read_csv(uploaded_file, encoding='utf-16', sep='\t')
                 else:
                     df = pd.read_excel(uploaded_file)
-                # Utiliser le nom de fichier comme clé pour identifier chaque fichier/site
                 dataframes[uploaded_file.name] = df
             except Exception as e:
                 st.error(f"Erreur lors de la lecture du fichier {uploaded_file.name}: {e}")
-                return # Arrêter si un fichier ne peut être lu
+                return
 
         if dataframes:
             st.write("Fichiers importés :")
-            for name, df_head in dataframes.items(): # Renommé df à df_head pour éviter confusion
+            for name, df_head in dataframes.items():
                 st.write(f"Fichier : {name} (premières lignes)")
                 st.write(df_head.head())
 
-            # Étape 2: Sélectionner les colonnes appropriées pour tous les fichiers
-            # Utiliser les colonnes du premier dataframe comme référence
-            # Il serait préférable de vérifier que toutes les colonnes existent dans tous les dataframes
-            # ou de permettre une sélection par fichier si les colonnes diffèrent.
-            # Pour l'instant, on suppose une structure de colonnes similaire.
-            if not dataframes: # Vérification supplémentaire si dataframes est vide après une erreur de lecture
+            if not dataframes:
                 st.warning("Aucun fichier n'a pu être chargé correctement.")
                 return
 
-            reference_df_columns = list(dataframes.values())[0].columns.tolist()
+            # Utiliser les colonnes du premier dataframe comme référence
+            try:
+                reference_df_columns = list(dataframes.values())[0].columns.tolist()
+            except IndexError:
+                st.error("Aucun fichier n'a été chargé ou les fichiers sont vides.")
+                return
 
-            keyword_column = st.selectbox("Sélectionner la colonne Mot-clé", reference_df_columns)
-            volume_column = st.selectbox("Sélectionner la colonne Volume de recherche", reference_df_columns)
-            position_column = st.selectbox("Sélectionner la colonne Position", reference_df_columns)
-            url_column = st.selectbox("Sélectionner la colonne URL", reference_df_columns)
 
-            # Étape 3: Paramètres de filtrage
-            min_sites = st.number_input("Nombre minimum de sites positionnés sur le mot-clé", min_value=1, value=2)
-            max_position = st.number_input("Position maximum pour le mot-clé (pour être considéré)", min_value=1, value=20)
-            max_site_position = st.number_input("Position maximum pour le site le mieux positionné (pour que le mot-clé soit retenu pour ce site)", min_value=1, value=10)
+            keyword_column = st.selectbox("Sélectionner la colonne Mot-clé", reference_df_columns, key="kw_col")
+            volume_column = st.selectbox("Sélectionner la colonne Volume de recherche", reference_df_columns, key="vol_col")
+            position_column = st.selectbox("Sélectionner la colonne Position", reference_df_columns, key="pos_col")
+            url_column = st.selectbox("Sélectionner la colonne URL", reference_df_columns, key="url_col")
 
-            # Étape 4: Analyse et création du fichier final
+            st.subheader("Paramètres de filtrage avancés")
+            max_site_pos_threshold = st.number_input("Position maximum pour qu'un site soit considéré 'bien positionné' (ex: 10)", min_value=1, value=10, key="max_site_pos_thresh")
+            min_total_sites_with_keyword = st.number_input("Nombre total minimum de sites devant avoir le mot-clé (ex: 3)", min_value=1, value=3, key="min_total_sites")
+            min_sites_in_top_pos = st.number_input(f"Parmi ces sites, nombre minimum devant être 'bien positionnés' (position <= {max_site_pos_threshold}) (ex: 2)", min_value=0, value=2, key="min_sites_top")
+
+            if min_sites_in_top_pos > min_total_sites_with_keyword:
+                st.warning("'Nombre minimum de sites bien positionnés' ne peut pas être supérieur au 'Nombre total minimum de sites'. Ajustez les valeurs.")
+                # On pourrait bloquer le bouton "Lancer l'analyse" ici ou juste laisser l'utilisateur corriger.
+
             if st.button("Lancer l'analyse"):
-                result_rows = []  # Liste pour stocker les résultats finaux
-                keyword_info = {} # Dictionnaire pour stocker les informations par mot-clé
+                result_rows = []
+                # Dictionnaire pour stocker les informations agrégées par mot-clé
+                # keyword_info[keyword] = {
+                # 'Volume': 0,
+                # 'total_sites_having_keyword': 0,
+                # 'sites_in_top_position_count': 0,
+                # 'Site_Data': { site_name: {'Position': pos, 'URL': url, 'Volume_Site': vol}, ... }
+                # }
+                keyword_info = {}
 
-                # Analyser chaque fichier/site
                 for site_name, df_original in dataframes.items():
-                    st.write(f"Analyse du fichier {site_name} avec {len(df_original)} lignes.")
-                    
-                    df = df_original.copy() # Travailler sur une copie
+                    st.write(f"Analyse du fichier {site_name}...")
+                    df = df_original.copy()
 
-                    # Vérifier que les colonnes sélectionnées existent
-                    required_columns = [keyword_column, volume_column, position_column, url_column]
-                    missing_columns = [col for col in required_columns if col not in df.columns]
-                    if missing_columns:
-                        st.error(f"Les colonnes suivantes sont manquantes dans le fichier '{site_name}': {', '.join(missing_columns)}. Veuillez vérifier la sélection des colonnes ou le fichier.")
-                        continue # Passer au fichier suivant
+                    required_cols = [keyword_column, volume_column, position_column, url_column]
+                    missing_cols = [col for col in required_cols if col not in df.columns]
+                    if missing_cols:
+                        st.error(f"Colonnes manquantes dans '{site_name}': {', '.join(missing_cols)}. Ce fichier sera ignoré pour l'analyse.")
+                        continue
 
-                    # --- DÉBUT DES MODIFICATIONS DE TYPE ---
                     try:
-                        # S'assurer que la colonne Mot-clé est de type string
-                        df[keyword_column] = df[keyword_column].astype(str)
-                        
-                        # S'assurer que la colonne URL est de type string
+                        df[keyword_column] = df[keyword_column].astype(str).str.strip() # Nettoyer aussi les espaces
                         df[url_column] = df[url_column].astype(str)
-
-                        # Convertir la colonne Position en numérique, les erreurs deviennent NaN
                         df[position_column] = pd.to_numeric(df[position_column], errors='coerce')
-                        
-                        # Convertir la colonne Volume en numérique, les erreurs deviennent NaN
                         df[volume_column] = pd.to_numeric(df[volume_column], errors='coerce')
-                        df[volume_column] = df[volume_column].fillna(0) # Remplacer les NaN du volume par 0
-
-                        # Supprimer les lignes où la position est NaN (après conversion)
-                        df.dropna(subset=[keyword_column, position_column], inplace=True) # Aussi sur keyword_column au cas où il y aurait des NaN avant astype(str)
-
-                        # Convertir la colonne position en entier après suppression des NaN
-                        # et s'il reste des lignes
+                        
+                        df.dropna(subset=[keyword_column, position_column], inplace=True) # Besoin d'un mot-clé et d'une position valides
                         if not df.empty:
-                             df[position_column] = df[position_column].astype(int)
+                            df[position_column] = df[position_column].astype(int)
                         else:
-                            st.warning(f"Le fichier {site_name} est vide après le nettoyage initial des données (conversion de types, suppression des NaN sur position).")
+                            st.info(f"Le fichier {site_name} est vide après nettoyage initial des données (conversion de types, suppression des NaN sur mot-clé/position).")
+                            continue
+                    except Exception as e:
+                        st.error(f"Erreur lors de la conversion des types de données pour le fichier {site_name}: {e}. Ce fichier sera ignoré.")
+                        continue
+                    
+                    if df.empty:
+                        st.info(f"Aucune donnée valide à analyser pour le fichier {site_name} après conversion.")
+                        continue
+                    
+                    # Grouper par mot-clé pour ce site, pour trouver la meilleure position du site pour chaque mot-clé
+                    grouped_by_keyword_for_site = df.groupby(keyword_column)
+
+                    for keyword_value, group_for_keyword in grouped_by_keyword_for_site:
+                        if not keyword_value: # Ignorer les mots-clés vides après conversion
                             continue
 
-
-                    except Exception as e:
-                        st.error(f"Erreur lors de la conversion des types de données pour le fichier {site_name}: {e}")
-                        continue # Passer au fichier suivant
-                    # --- FIN DES MODIFICATIONS DE TYPE ---
-
-                    if df.empty:
-                        st.info(f"Aucune donnée à analyser pour le fichier {site_name} après conversion et filtrage initial.")
-                        continue
-
-                    # Filtrer les mots-clés par la position maximum globale
-                    filtered_df = df[df[position_column] <= max_position].copy() # .copy() pour éviter SettingWithCopyWarning
-
-                    if filtered_df.empty:
-                        st.info(f"Aucun mot-clé ne correspond au critère 'Position maximum <= {max_position}' dans {site_name}.")
-                        continue
-                    
-                    # Grouper par mot-clé (maintenant de type string)
-                    grouped = filtered_df.groupby(keyword_column)
-
-                    for keyword, group in grouped:
-                        # Pour ce mot-clé et ce site, trouver la meilleure position
-                        # Le groupe 'group' contient toutes les lignes pour 'keyword' DANS CE FICHIER 'site_name'
-                        # qui respectent déjà max_position.
-                        best_row_in_group_for_site = group.loc[group[position_column].idxmin()]
-                        top_position_for_site = best_row_in_group_for_site[position_column]
+                        best_row_for_site_keyword = group_for_keyword.loc[group_for_keyword[position_column].idxmin()]
                         
-                        # Vérifier si la meilleure position de CE SITE pour CE MOT-CLÉ est dans la limite max_site_position
-                        if top_position_for_site <= max_site_position:
-                            if keyword not in keyword_info:
-                                keyword_info[keyword] = {
-                                    'Volume': 0, # Sera mis à jour avec le max des volumes des sites concernés
-                                    'Nombre de sites positionnés': 0,
-                                    'Sites': {}
-                                }
-                            
-                            # Mettre à jour le volume avec le maximum rencontré pour ce mot-clé parmi les sites pertinents
-                            current_keyword_volume = best_row_in_group_for_site[volume_column]
-                            if pd.notna(current_keyword_volume): # S'assurer que le volume n'est pas NaN
-                                keyword_info[keyword]['Volume'] = max(keyword_info[keyword]['Volume'], current_keyword_volume)
-                            
-                            keyword_info[keyword]['Nombre de sites positionnés'] += 1
-                            
-                            keyword_info[keyword]['Sites'][site_name] = {
-                                'Position': top_position_for_site,
-                                'URL': best_row_in_group_for_site[url_column]
-                            }
+                        site_pos_for_kw = best_row_for_site_keyword[position_column]
+                        site_url_for_kw = best_row_for_site_keyword[url_column]
+                        site_vol_for_kw = best_row_for_site_keyword[volume_column] if pd.notna(best_row_for_site_keyword[volume_column]) else 0
 
-                # Étape 5: Créer les lignes du DataFrame final
+                        # Initialiser/mettre à jour les informations pour ce mot-clé
+                        if keyword_value not in keyword_info:
+                            keyword_info[keyword_value] = {
+                                'Volume': 0, # Sera le max des volumes de tous les sites ayant le mot-clé
+                                'total_sites_having_keyword': 0,
+                                'sites_in_top_position_count': 0,
+                                'Site_Data': {} # Stockera {site_name: {Position, URL, Volume_Site}}
+                            }
+                        
+                        # Mettre à jour le volume global du mot-clé avec le max rencontré
+                        keyword_info[keyword_value]['Volume'] = max(keyword_info[keyword_value]['Volume'], site_vol_for_kw)
+                        
+                        # Ce site a ce mot-clé
+                        keyword_info[keyword_value]['total_sites_having_keyword'] += 1
+                        
+                        # Stocker les données de ce site pour ce mot-clé
+                        keyword_info[keyword_value]['Site_Data'][site_name] = {
+                            'Position': site_pos_for_kw,
+                            'URL': site_url_for_kw,
+                            'Volume_Site': site_vol_for_kw # Peut être utile pour des analyses futures
+                        }
+                        
+                        # Vérifier si ce site est "bien positionné" pour ce mot-clé
+                        if site_pos_for_kw <= max_site_pos_threshold:
+                            keyword_info[keyword_value]['sites_in_top_position_count'] += 1
+
+                # Étape finale: Filtrer les mots-clés et construire le DataFrame de résultats
                 for keyword, info in keyword_info.items():
-                    # Ne garder que les mots-clés avec suffisamment de sites positionnés
-                    if info['Nombre de sites positionnés'] >= min_sites:
+                    passes_min_total_sites = info['total_sites_having_keyword'] >= min_total_sites_with_keyword
+                    passes_min_sites_in_top = info['sites_in_top_position_count'] >= min_sites_in_top_pos
+                    
+                    if passes_min_total_sites and passes_min_sites_in_top:
                         row = {
                             'Mot-clé': keyword,
-                            'Volume': info['Volume'],
-                            'Nombre de sites positionnés': info['Nombre de sites positionnés']
+                            'Volume Global Max': info['Volume'], # Volume max trouvé pour ce mot-clé
+                            'Nb total sites avec M-C': info['total_sites_having_keyword'],
+                            f'Nb sites position ≤ {max_site_pos_threshold}': info['sites_in_top_position_count']
                         }
-
-                        # Ajouter la position et l'URL de chaque site qui était positionné pour ce mot-clé
-                        for site_name_key in dataframes.keys(): # Itérer sur tous les noms de sites possibles
-                            if site_name_key in info['Sites']:
-                                site_data = info['Sites'][site_name_key]
-                                row[f'{site_name_key} - Position'] = site_data['Position']
-                                row[f'{site_name_key} - URL'] = site_data['URL']
+                        
+                        # Ajouter les colonnes Position et URL pour chaque site source
+                        for site_name_key in dataframes.keys(): # Pour assurer un ordre cohérent des colonnes de site
+                            if site_name_key in info['Site_Data']:
+                                site_specific_data = info['Site_Data'][site_name_key]
+                                row[f'{site_name_key} - Position'] = site_specific_data['Position']
+                                row[f'{site_name_key} - URL'] = site_specific_data['URL']
                             else:
-                                # Si le site n'est pas dans info['Sites'] pour ce mot-clé,
-                                # c'est qu'il ne répondait pas aux critères ou n'avait pas ce mot-clé.
-                                # On peut mettre des valeurs vides ou NaN.
-                                row[f'{site_name_key} - Position'] = None # ou pd.NA ou ""
-                                row[f'{site_name_key} - URL'] = None     # ou pd.NA ou ""
-
-
+                                # Ce site n'avait pas le mot-clé, ou a été filtré avant
+                                row[f'{site_name_key} - Position'] = None 
+                                row[f'{site_name_key} - URL'] = None
                         result_rows.append(row)
 
-                # Créer le DataFrame final
                 if result_rows:
                     result_df = pd.DataFrame(result_rows)
                     
-                    # S'assurer que les colonnes de site sont dans un ordre cohérent (alphabétique par nom de site)
-                    # et après les colonnes principales.
-                    main_cols = ['Mot-clé', 'Volume', 'Nombre de sites positionnés']
-                    site_cols_sorted = []
-                    for site_name_key in sorted(dataframes.keys()):
-                        site_cols_sorted.append(f'{site_name_key} - Position')
-                        site_cols_sorted.append(f'{site_name_key} - URL')
+                    # Organiser les colonnes
+                    main_cols = ['Mot-clé', 'Volume Global Max', 'Nb total sites avec M-C', f'Nb sites position ≤ {max_site_pos_threshold}']
+                    site_detail_cols_sorted = []
+                    for site_name_key in sorted(dataframes.keys()): # Tri par nom de fichier/site pour la cohérence
+                        if f'{site_name_key} - Position' in result_df.columns : # Vérifier si la colonne existe (au cas où un site n'aurait aucun mot-clé retenu)
+                             site_detail_cols_sorted.append(f'{site_name_key} - Position')
+                        if f'{site_name_key} - URL' in result_df.columns :
+                             site_detail_cols_sorted.append(f'{site_name_key} - URL')
                     
-                    final_columns_order = main_cols + site_cols_sorted
-                    # S'assurer que toutes les colonnes existent dans result_df avant de réordonner
-                    final_columns_order = [col for col in final_columns_order if col in result_df.columns]
-
+                    # S'assurer que seules les colonnes existantes sont demandées
+                    final_columns_order = main_cols + [col for col in site_detail_cols_sorted if col in result_df.columns]
                     result_df = result_df[final_columns_order]
 
-                    # Trier par 'Nombre de sites positionnés' (décroissant) puis par 'Volume' (décroissant)
-                    result_df.sort_values(by=['Nombre de sites positionnés', 'Volume'], ascending=[False, False], inplace=True)
+                    # Trier les résultats
+                    result_df.sort_values(by=[f'Nb sites position ≤ {max_site_pos_threshold}', 'Nb total sites avec M-C', 'Volume Global Max'], 
+                                          ascending=[False, False, False], 
+                                          inplace=True,
+                                          na_position='last')
 
                     st.write("Résultats de l'analyse :")
-                    st.dataframe(result_df) # Utiliser st.dataframe pour une meilleure interactivité
+                    st.dataframe(result_df)
 
-                    # Créer un fichier Excel en mémoire
                     output = BytesIO()
                     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                         result_df.to_excel(writer, index=False, sheet_name='Analyse Mots-clés')
-                    
                     output.seek(0)
                     st.download_button(
                         label="Télécharger le fichier Excel",
                         data=output,
-                        file_name="resultat_analyse_mots_cles.xlsx",
+                        file_name="resultat_analyse_mots_cles_avances.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
                 else:
-                    st.write("Aucun résultat trouvé correspondant à tous les critères. Vérifiez les filtres et les données d'entrée.")
+                    st.write("Aucun mot-clé ne correspond à tous vos critères de filtrage. Essayez d'assouplir les filtres.")
 
-# Assurez-vous que votre script Streamlit appelle cette fonction main
 if __name__ == '__main__':
     main()
