@@ -98,18 +98,13 @@ def get_monthly_breakdown(_df_queries, _df_pages, periode_n_dates, periode_n1_da
 
     monthly_q_n = aggregate_monthly(_df_queries, periode_n_dates[0], periode_n_dates[1], is_queries=True)
     monthly_q_n1 = aggregate_monthly(_df_queries, periode_n1_dates[0], periode_n1_dates[1], is_queries=True)
-
     monthly_p_n, monthly_p_n1 = (aggregate_monthly(_df_pages, d[0], d[1]) if _df_pages is not None else pd.DataFrame() for d in [periode_n_dates, periode_n1_dates])
     
     all_months = pd.period_range(start=periode_n_dates[0], end=periode_n_dates[1], freq='M')
-    final_df = pd.DataFrame(index=all_months)
-    final_df.index.name = 'month'
-    
-    # Données N
+    final_df = pd.DataFrame(index=all_months); final_df.index.name = 'month'
     final_df = final_df.join(monthly_p_n if _df_pages is not None else monthly_q_n[['total_clics_q', 'total_impressions_q']].rename(columns={'total_clics_q': 'total_clics', 'total_impressions_q': 'total_impressions'}), how='left')
     final_df = final_df.join(monthly_q_n[['clics_marque', 'clics_hors_marque', 'impressions_marque']], how='left')
     
-    # Données N-1 (avec décalage temporel)
     if not monthly_q_n1.empty:
         monthly_q_n1.index = monthly_q_n1.index.map(lambda p: p.asfreq('M') + 12)
         final_df = final_df.join(monthly_q_n1.add_suffix('_n1'), how='left')
@@ -117,7 +112,10 @@ def get_monthly_breakdown(_df_queries, _df_pages, periode_n_dates, periode_n1_da
         monthly_p_n1.index = monthly_p_n1.index.map(lambda p: p.asfreq('M') + 12)
         final_df = final_df.join(monthly_p_n1.add_suffix('_n1'), how='left')
     
-    final_df = final_df.fillna(0); final_df['month_label'] = final_df['month'].dt.strftime('%b %Y')
+    # --- CORRECTION ICI ---
+    # On transforme l'index 'month' en colonne AVANT de l'utiliser.
+    final_df = final_df.fillna(0).reset_index()
+    final_df['month_label'] = final_df['month'].dt.strftime('%b %Y')
     return final_df
 
 # --- Fonctions de Création de Graphiques ---
@@ -181,19 +179,15 @@ def main():
     uploaded_file_pages = col2.file_uploader("2. Fichier 'Pages' (Recommandé)", type=['xlsx', 'xls'])
 
     if uploaded_file_queries:
-        df_queries = load_data(uploaded_file_queries)
-        st.success(f"✅ Fichier 'Requêtes' chargé ({len(df_queries):,} lignes).")
-        
+        df_queries = load_data(uploaded_file_queries); st.success(f"✅ Fichier 'Requêtes' chargé ({len(df_queries):,} lignes).")
         df_pages = None
-        if uploaded_file_pages:
-            df_pages = load_data(uploaded_file_pages); st.success(f"✅ Fichier 'Pages' chargé ({len(df_pages):,} lignes).")
-        else:
-            st.warning("⚠️ Fichier 'Pages' non fourni. Les totaux seront moins précis.")
+        if uploaded_file_pages: df_pages = load_data(uploaded_file_pages); st.success(f"✅ Fichier 'Pages' chargé ({len(df_pages):,} lignes).")
+        else: st.warning("⚠️ Fichier 'Pages' non fourni. Les totaux seront moins précis.")
 
         today = datetime.now().date(); anchor_date = today.replace(day=1) - timedelta(days=1)
         st.info(f"💡 L'analyse se base sur les mois terminés. Date de référence: **{anchor_date.strftime('%d/%m/%Y')}**.")
         
-        st.markdown("### 📅 Type de Comparaison"); comparison_mode = st.radio("Mode :", ["Périodes Consécutives", "Année sur Année (YoY)"], horizontal=True)
+        st.markdown("### 📅 Type de Comparaison"); comparison_mode = st.radio("Mode :", ["Périodes Consécutives", "Année sur Année (YoY)"], horizontal=True, key="comparison_mode")
         periode_n_dates = None
         
         if comparison_mode == "Périodes Consécutives":
@@ -213,9 +207,7 @@ def main():
                 periode_n_dates, periode_n1_dates = (n_start, n_end), (n1_start, n1_end)
                 period_type = "3 derniers mois vs N-1 (YoY)"
             else:
-                with st.expander("📅 Définir une période personnalisée (YoY)", expanded=True):
-                    # ... (logique personnalisée)
-                    pass
+                with st.expander("📅 Définir une période personnalisée (YoY)", expanded=True): pass
 
         if periode_n_dates:
             st.markdown("---"); st.markdown("### 🔎 Périodes Sélectionnées")
@@ -228,8 +220,6 @@ def main():
                 st.warning("⚠️ Aucune donnée trouvée pour les périodes sélectionnées.")
             else:
                 st.markdown("---"); st.markdown("### 📈 Analyse Globale sur la Période")
-                
-                # CORRECTION: Définition correcte des clés
                 chart_configs = {
                     "global": {"title": "Trafic SEO Global", "yaxis_title": "Clics", "metric_n": "total_clics_n", "metric_n1": "total_clics_n1", "color": get_colors()['global_seo']},
                     "marque": {"title": "Trafic SEO Marque", "yaxis_title": "Clics", "metric_n": "clics_marque_n", "metric_n1": "clics_marque_n1", "color": get_colors()['marque_clics']},
@@ -238,24 +228,19 @@ def main():
                 }
                 
                 st.plotly_chart(create_evolution_chart(metrics, period_type, get_style_options()), use_container_width=True)
-                pie1, pie2 = create_pie_charts(metrics, get_style_options())
-                col1, col2 = st.columns(2); col1.plotly_chart(pie1, use_container_width=True); col2.plotly_chart(pie2, use_container_width=True)
-                
-                # CORRECTION: Appel simplifié
+                pie1, pie2 = create_pie_charts(metrics, get_style_options()); col1, col2 = st.columns(2); col1.plotly_chart(pie1, use_container_width=True); col2.plotly_chart(pie2, use_container_width=True)
                 for config in chart_configs.values():
                     st.plotly_chart(create_generic_bar_chart(metrics, period_type, get_style_options(), config), use_container_width=True)
 
                 monthly_data = get_monthly_breakdown(df_queries, df_pages, periode_n_dates, periode_n1_dates, regex_pattern)
                 if monthly_data is not None and not monthly_data.empty and len(monthly_data) > 1:
                     st.markdown("---"); st.markdown("### 📊 Évolution Mensuelle Détaillée")
-                    
                     monthly_chart_configs = {
                         "global": {"title": "Trafic SEO Global", "yaxis_title": "Clics", "metric_n": "total_clics", "metric_n1": "total_clics_n1", "color": get_colors()['global_seo']},
                         "marque": {"title": "Trafic SEO Marque", "yaxis_title": "Clics", "metric_n": "clics_marque", "metric_n1": "clics_marque_n1", "color": get_colors()['marque_clics']},
                         "hors_marque": {"title": "Trafic SEO Hors-Marque", "yaxis_title": "Clics", "metric_n": "clics_hors_marque", "metric_n1": "clics_hors_marque_n1", "color": get_colors()['hors_marque']},
                         "impressions": {"title": "Impressions SEO Marque", "yaxis_title": "Impressions", "metric_n": "impressions_marque", "metric_n1": "impressions_marque_n1", "color": get_colors()['impressions_marque']}
                     }
-                    
                     for config in monthly_chart_configs.values():
                         st.plotly_chart(create_monthly_breakdown_chart(monthly_data, get_style_options(), config), use_container_width=True)
 
