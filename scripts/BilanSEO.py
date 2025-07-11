@@ -7,7 +7,7 @@ from dateutil.relativedelta import relativedelta
 
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(
-    page_title="Dashboard SEO - Générateur de Graphiques",
+    page_title="Dashboard SEO - Analyse de Périodes",
     page_icon="📊",
     layout="wide"
 )
@@ -20,8 +20,6 @@ DEFAULT_COLORS = {
 }
 
 # --- FONCTIONS DE TRAITEMENT DES DONNÉES ---
-
-## CORRECTION MAJEURE: Assure la lecture correcte des dates sur chaque ligne
 @st.cache_data
 def load_data(uploaded_file):
     """Charge le fichier GSC et s'assure que la colonne de date est correctement formatée."""
@@ -33,7 +31,6 @@ def load_data(uploaded_file):
             st.error(f"Colonnes requises manquantes dans le fichier : {', '.join(missing)}")
             return None
         
-        # Conversion cruciale et robuste de la colonne 'start_date'
         df['start_date'] = pd.to_datetime(df['start_date'], errors='coerce')
         df.dropna(subset=['start_date'], inplace=True)
         if df.empty:
@@ -41,7 +38,6 @@ def load_data(uploaded_file):
             return None
         df['start_date'] = df['start_date'].dt.date
         
-        # Assurer que les colonnes numériques le sont
         for col in ['clicks', 'impressions']:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
@@ -51,41 +47,62 @@ def load_data(uploaded_file):
         return None
 
 def is_marque_query(query, regex_pattern):
-    """Vérifie si une requête correspond à la regex de marque."""
     if pd.isna(query) or not regex_pattern: return False
     try: return bool(re.search(regex_pattern, str(query), re.IGNORECASE))
     except re.error: return False
 
+# CORRECTION MAJEURE: Fonction de calcul des dates par défaut rendue sûre
+def calculate_safe_default_periods(min_date_in_file, max_date_in_file):
+    """
+    Calcule des dates par défaut qui sont GARANTIES d'être dans les limites du fichier.
+    """
+    # 1. Calculer les dates idéales (deux derniers trimestres pleins avant la date max)
+    ideal_end_n = max_date_in_file
+    ideal_start_n = (ideal_end_n - relativedelta(months=3, days=-1)).replace(day=1)
+    
+    ideal_end_n1 = ideal_start_n - timedelta(days=1)
+    ideal_start_n1 = (ideal_end_n1 - relativedelta(months=3, days=-1)).replace(day=1)
+
+    # 2. "Clamper" les valeurs pour s'assurer qu'elles sont dans les bornes
+    # La valeur par défaut ne peut pas être avant la date min ou après la date max.
+    default_end_n = min(ideal_end_n, max_date_in_file)
+    default_start_n = max(ideal_start_n, min_date_in_file)
+    
+    default_end_n1 = min(ideal_end_n1, max_date_in_file)
+    default_start_n1 = max(ideal_start_n1, min_date_in_file)
+
+    # 3. Assurer que start <= end pour chaque période par défaut
+    if default_start_n > default_end_n:
+        default_start_n = default_end_n
+    if default_start_n1 > default_end_n1:
+        default_start_n1 = default_end_n1
+
+    return default_start_n, default_end_n, default_start_n1, default_end_n1
+
+
 @st.cache_data
 def process_data_for_periods(_df, periode_n_dates, periode_n1_dates, regex_pattern):
-    """Filtre le dataframe pour les deux périodes et calcule toutes les métriques."""
     df = _df.copy()
     df['is_marque'] = df['query'].apply(lambda q: is_marque_query(q, regex_pattern))
     
-    # Filtrage pour la Période N
     periode_n_df = df[(df['start_date'] >= periode_n_dates[0]) & (df['start_date'] <= periode_n_dates[1])]
-    
-    # Filtrage pour la Période N-1
     periode_n1_df = df[(df['start_date'] >= periode_n1_dates[0]) & (df['start_date'] <= periode_n1_dates[1])]
     
-    # Calcul des métriques
     metrics = {
         'total_clics_n': periode_n_df['clicks'].sum(),
         'clics_marque_n': periode_n_df[periode_n_df['is_marque']]['clicks'].sum(),
         'clics_hors_marque_n': periode_n_df[~periode_n_df['is_marque']]['clicks'].sum(),
         'impressions_marque_n': periode_n_df[periode_n_df['is_marque']]['impressions'].sum(),
-        
         'total_clics_n1': periode_n1_df['clicks'].sum(),
         'clics_marque_n1': periode_n1_df[periode_n1_df['is_marque']]['clicks'].sum(),
         'clics_hors_marque_n1': periode_n1_df[~periode_n1_df['is_marque']]['clicks'].sum(),
         'impressions_marque_n1': periode_n1_df[periode_n1_df['is_marque']]['impressions'].sum(),
-        
         'nom_periode_n': f"{periode_n_dates[0].strftime('%d/%m/%Y')} - {periode_n_dates[1].strftime('%d/%m/%Y')}",
         'nom_periode_n1': f"{periode_n1_dates[0].strftime('%d/%m/%Y')} - {periode_n1_dates[1].strftime('%d/%m/%Y')}"
     }
     return metrics
 
-# --- FONCTIONS DE CRÉATION DE GRAPHIQUES (Factorisées et Stables) ---
+# --- FONCTIONS DE CRÉATION DE GRAPHIQUES ---
 def create_evolution_chart(metrics):
     COLORS = DEFAULT_COLORS
     def calc_evo(n, n1): return ((n - n1) / n1 * 100) if n1 > 0 else 0
@@ -129,18 +146,15 @@ def main():
     st.title("📊 Dashboard SEO - Analyse de Périodes")
     st.markdown("Chargez un fichier de données GSC et définissez deux périodes pour les comparer.")
 
-    # --- 1. Configuration ---
     st.markdown("### 1. Configuration de la Marque")
     regex_pattern = st.text_input("Regex pour identifier les requêtes de marque", value="melvita", help="Ex: 'marque1|marque2'")
     
-    # --- 2. Upload du fichier ---
     st.markdown("### 2. Import des Données")
     uploaded_file = st.file_uploader("Chargez votre export Google Search Console (Excel)", type=['xlsx', 'xls'])
 
     if uploaded_file:
         df = load_data(uploaded_file)
-        if df is None:
-            st.stop()
+        if df is None: st.stop()
         
         st.success(f"Fichier chargé avec succès! ({len(df):,} lignes)")
         
@@ -148,14 +162,10 @@ def main():
         max_date = df['start_date'].max()
         st.info(f"Période couverte par le fichier : du **{min_date.strftime('%d/%m/%Y')}** au **{max_date.strftime('%d/%m/%Y')}**.")
         
-        # --- 3. Sélection des dates ---
         st.markdown("### 3. Sélection des Périodes de Comparaison")
         
-        # Proposer des dates par défaut intelligentes (ex: les 2 derniers trimestres)
-        default_end_n = max_date
-        default_start_n = (default_end_n.replace(day=1) - relativedelta(months=2)).replace(day=1)
-        default_end_n1 = default_start_n - timedelta(days=1)
-        default_start_n1 = (default_end_n1.replace(day=1) - relativedelta(months=2)).replace(day=1)
+        # Utilisation de la nouvelle fonction de calcul sûre
+        default_start_n, default_end_n, default_start_n1, default_end_n1 = calculate_safe_default_periods(min_date, max_date)
 
         col1, col2 = st.columns(2)
         with col1:
@@ -171,7 +181,6 @@ def main():
             st.error("La date de début ne peut pas être après la date de fin.")
             st.stop()
         
-        # --- 4. Traitement et Affichage ---
         st.markdown("---")
         st.header("🚀 Résultats de la Comparaison")
 
@@ -181,15 +190,12 @@ def main():
             st.warning("Aucune donnée trouvée pour les périodes sélectionnées. Veuillez ajuster les dates.")
             st.stop()
         
-        # Affichage des graphiques
         st.plotly_chart(create_evolution_chart(metrics), use_container_width=True)
         
         fig_n, fig_n1 = create_pie_charts(metrics)
         pie_col1, pie_col2 = st.columns(2)
-        with pie_col1:
-            st.plotly_chart(fig_n1, use_container_width=True)
-        with pie_col2:
-            st.plotly_chart(fig_n, use_container_width=True)
+        with pie_col1: st.plotly_chart(fig_n1, use_container_width=True)
+        with pie_col2: st.plotly_chart(fig_n, use_container_width=True)
         
         COLORS = DEFAULT_COLORS
         st.plotly_chart(create_bar_chart(metrics, 'total_clics', COLORS['global_seo'], "Trafic SEO Global (Clics)", "Clics"), use_container_width=True)
