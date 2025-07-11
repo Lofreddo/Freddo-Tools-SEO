@@ -99,23 +99,13 @@ def get_monthly_breakdown(_df_queries, _df_pages, periode_n_dates, periode_n1_da
     monthly_q_n = aggregate_monthly(_df_queries, periode_n_dates[0], periode_n_dates[1], is_queries=True)
     monthly_q_n1 = aggregate_monthly(_df_queries, periode_n1_dates[0], periode_n1_dates[1], is_queries=True)
     monthly_p_n, monthly_p_n1 = (aggregate_monthly(_df_pages, d[0], d[1]) if _df_pages is not None else pd.DataFrame() for d in [periode_n_dates, periode_n1_dates])
-    
     all_months = pd.period_range(start=periode_n_dates[0], end=periode_n_dates[1], freq='M')
     final_df = pd.DataFrame(index=all_months); final_df.index.name = 'month'
     final_df = final_df.join(monthly_p_n if _df_pages is not None else monthly_q_n[['total_clics_q', 'total_impressions_q']].rename(columns={'total_clics_q': 'total_clics', 'total_impressions_q': 'total_impressions'}), how='left')
     final_df = final_df.join(monthly_q_n[['clics_marque', 'clics_hors_marque', 'impressions_marque']], how='left')
-    
-    if not monthly_q_n1.empty:
-        monthly_q_n1.index = monthly_q_n1.index.map(lambda p: p.asfreq('M') + 12)
-        final_df = final_df.join(monthly_q_n1.add_suffix('_n1'), how='left')
-    if not monthly_p_n1.empty:
-        monthly_p_n1.index = monthly_p_n1.index.map(lambda p: p.asfreq('M') + 12)
-        final_df = final_df.join(monthly_p_n1.add_suffix('_n1'), how='left')
-    
-    # --- CORRECTION ICI ---
-    # On transforme l'index 'month' en colonne AVANT de l'utiliser.
-    final_df = final_df.fillna(0).reset_index()
-    final_df['month_label'] = final_df['month'].dt.strftime('%b %Y')
+    if not monthly_q_n1.empty: final_df = final_df.join(monthly_q_n1.add_suffix('_n1').set_index(monthly_q_n1.index.map(lambda p: p.asfreq('M') + 12)), how='left')
+    if not monthly_p_n1.empty: final_df = final_df.join(monthly_p_n1.add_suffix('_n1').set_index(monthly_p_n1.index.map(lambda p: p.asfreq('M') + 12)), how='left')
+    final_df = final_df.fillna(0).reset_index(); final_df['month_label'] = final_df['month'].dt.strftime('%b %Y')
     return final_df
 
 # --- Fonctions de Création de Graphiques ---
@@ -159,10 +149,42 @@ def create_monthly_breakdown_chart(monthly_data, style_options, config):
     return fig
 
 def show_chart_customization():
-    with st.expander("🎨 Personnalisation des Graphiques", expanded=False): pass
+    """Affiche l'interface de personnalisation des graphiques."""
+    with st.expander("🎨 Personnalisation des Graphiques", expanded=False):
+        COLORS = get_colors()
+        STYLES = get_style_options()
+        
+        tab1, tab2 = st.tabs(["Couleurs", "Polices & Tailles"])
+        
+        with tab1:
+            st.markdown("**Couleurs des graphiques**")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.session_state.custom_colors['global_seo'] = st.color_picker("Trafic Global et Hors-Marque", COLORS['global_seo'])
+                st.session_state.custom_colors['marque_clics'] = st.color_picker("Trafic Marque", COLORS['marque_clics'])
+                st.session_state.custom_colors['impressions_marque'] = st.color_picker("Impressions Marque", COLORS['impressions_marque'])
+                st.session_state.custom_colors['evolution_positive'] = st.color_picker("Évolution Positive (Vert)", COLORS['evolution_positive'])
+            with col2:
+                st.session_state.custom_colors['pie_marque'] = st.color_picker("Camembert - Marque", COLORS['pie_marque'])
+                st.session_state.custom_colors['pie_hors_marque'] = st.color_picker("Camembert - Hors-Marque", COLORS['pie_hors_marque'])
+                st.session_state.custom_colors['secondary_light'] = st.color_picker("Comparaison N-1 (Clair)", COLORS['secondary_light'])
+                st.session_state.custom_colors['evolution_negative'] = st.color_picker("Évolution Négative (Rouge)", COLORS['evolution_negative'])
+        
+        with tab2:
+            st.markdown("**Police des graphiques**")
+            st.session_state.style_options['font_family'] = st.selectbox("Famille de police", ['Arial', 'Verdana', 'Helvetica', 'Garamond', 'Times New Roman'], index=['Arial', 'Verdana', 'Helvetica', 'Garamond', 'Times New Roman'].index(STYLES['font_family']))
+            
+            st.markdown("**Tailles des textes (en pixels)**")
+            st.session_state.style_options['title_font_size'] = st.slider("Taille du titre", 10, 30, STYLES['title_font_size'])
+            st.session_state.style_options['axis_font_size'] = st.slider("Taille des axes", 8, 20, STYLES['axis_font_size'])
+            st.session_state.style_options['bar_text_font_size'] = st.slider("Texte sur les barres", 8, 20, STYLES['bar_text_font_size'])
+
+        if st.button("🔄 Réinitialiser les styles"):
+            st.session_state.custom_colors = DEFAULT_COLORS.copy()
+            st.session_state.style_options = DEFAULT_STYLE_OPTIONS.copy()
+            st.rerun()
 
 # --- Application Principale ---
-
 def main():
     st.title("📊 Dashboard SEO - Générateur de Graphiques")
     st.markdown("**Analysez vos performances SEO en comparant des périodes de mois complets.**")
