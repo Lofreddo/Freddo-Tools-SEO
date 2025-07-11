@@ -2,322 +2,224 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import re
-from datetime import datetime, timedelta
-from dateutil.relativedelta import relativedelta
-import calendar
+from datetime import datetime
 
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(
-    page_title="Dashboard SEO - Générateur de Graphiques",
+    page_title="Dashboard SEO - Comparateur de Fichiers",
     page_icon="📊",
     layout="wide"
 )
 
-# --- CONFIGURATION DES VALEURS PAR DÉFAUT ---
+# --- CONFIGURATION DES VALEURS PAR DÉFAUT (COULEURS, ETC.) ---
 DEFAULT_COLORS = {
     'global_seo': '#2563EB', 'marque_clics': '#1E40AF', 'impressions_marque': '#3730A3',
     'hors_marque': '#2563EB', 'pie_marque': '#1E40AF', 'pie_hors_marque': '#A5B4FC',
-    'evolution_positive': '#10B981', 'evolution_negative': '#EF4444',
-    'secondary_light': '#A5B4FC', 'secondary_dark': '#2563EB'
+    'evolution_positive': '#10B981', 'evolution_negative': '#EF4444'
 }
-DEFAULT_LAYOUT_OPTIONS = {
-    'font_family': 'Arial, sans-serif', 'chart_height': 500, 'plot_bgcolor': '#FFFFFF',
-    'show_text_on_bars': True, 'legend_orientation': 'h'
-}
-FONT_OPTIONS = [
-    'Arial, sans-serif', 'Verdana, sans-serif', 'Tahoma, sans-serif', 
-    'Trebuchet MS, sans-serif', 'Georgia, serif', 'Times New Roman, serif', 
-    'Courier New, monospace'
-]
 
-# --- GESTION DE L'ÉTAT DE SESSION ---
 def get_colors():
-    if 'custom_colors' not in st.session_state: st.session_state.custom_colors = DEFAULT_COLORS.copy()
+    """Gère les couleurs personnalisées via le session_state."""
+    if 'custom_colors' not in st.session_state:
+        st.session_state.custom_colors = DEFAULT_COLORS.copy()
     return st.session_state.custom_colors
 
-def get_layout_options():
-    if 'custom_layout' not in st.session_state: st.session_state.custom_layout = DEFAULT_LAYOUT_OPTIONS.copy()
-    return st.session_state.custom_layout
-
-# --- FONCTIONS UTILITAIRES ET TRAITEMENT DES DONNÉES ---
-
-# CORRECTION MAJEURE: Lecture des dates plus robuste
-@st.cache_data
-def load_data(uploaded_file):
-    df = pd.read_excel(uploaded_file)
-    required_cols = ['start_date', 'query', 'clicks', 'impressions']
-    if not all(col in df.columns for col in required_cols):
-        missing = [col for col in required_cols if col not in df.columns]
-        st.error(f"Colonnes requises manquantes : {', '.join(missing)}")
-        return None
-    
-    # Conversion forcée en datetime, gérant les erreurs
-    df['start_date'] = pd.to_datetime(df['start_date'], errors='coerce')
-    
-    # Vérification si des dates n'ont pas pu être converties
-    if df['start_date'].isnull().any():
-        st.warning(f"{df['start_date'].isnull().sum()} lignes ont été ignorées car leur date était invalide.")
-        df.dropna(subset=['start_date'], inplace=True)
-    
-    if df.empty:
-        st.error("Aucune ligne avec une date valide n'a été trouvée dans le fichier.")
-        return None
-
-    # Conversion en objet date après le traitement
-    df['start_date'] = df['start_date'].dt.date
-    return df
+# --- FONCTIONS PRINCIPALES DE TRAITEMENT ---
 
 def is_marque_query(query, regex_pattern):
-    if pd.isna(query) or not regex_pattern: return False
-    try: return bool(re.search(regex_pattern, str(query), re.IGNORECASE))
-    except re.error: return False
+    """Vérifie si une requête correspond à la regex de marque."""
+    if pd.isna(query) or not regex_pattern:
+        return False
+    try:
+        return bool(re.search(regex_pattern, str(query), re.IGNORECASE))
+    except re.error:
+        return False
 
-# CORRECTION MAJEURE: Périodes prédéfinies basées sur les données du fichier
-def get_predefined_periods(base_date):
-    """Calcule les périodes prédéfinies par rapport à la date la plus récente du fichier."""
-    return {
-        "7_derniers_jours": ("7 derniers jours", (base_date - timedelta(days=6), base_date), (base_date - timedelta(days=13), base_date - timedelta(days=7))),
-        "28_derniers_jours": ("28 derniers jours", (base_date - timedelta(days=27), base_date), (base_date - timedelta(days=55), base_date - timedelta(days=28))),
-        "3_derniers_mois": ("3 derniers mois", (base_date - timedelta(days=89), base_date), (base_date - timedelta(days=179), base_date - timedelta(days=90))),
-        "6_derniers_mois": ("6 derniers mois", (base_date - timedelta(days=179), base_date), (base_date - timedelta(days=359), base_date - timedelta(days=180))),
-    }
+def process_gsc_file(uploaded_file, regex_pattern):
+    """
+    Fonction centrale conçue spécifiquement pour votre format de fichier.
+    - Lit les dates en A1 et A2.
+    - Utilise la ligne 3 comme en-têtes.
+    - Calcule les métriques pour l'ensemble du fichier.
+    """
+    if uploaded_file is None:
+        return None
 
-def format_period_name(start, end):
-    return f"{start.strftime('%d/%m/%Y')} - {end.strftime('%d/%m/%Y')}"
-
-def calculate_default_periods(max_date_in_file):
-    last_day = max_date_in_file
-    if max_date_in_file.day < 28:
-        last_day = max_date_in_file.replace(day=1) - timedelta(days=1)
-    end_n = last_day
-    start_n = (end_n.replace(day=1) - relativedelta(months=2)).replace(day=1)
-    end_n1 = start_n - timedelta(days=1)
-    start_n1 = (end_n1.replace(day=1) - relativedelta(months=2)).replace(day=1)
-    return start_n, end_n, start_n1, end_n1
-
-@st.cache_data
-def process_data_for_periods(_df, periode_n_dates, periode_n1_dates, regex_pattern):
-    df = _df.copy()
-    df['is_marque'] = df['query'].apply(lambda q: is_marque_query(q, regex_pattern))
-    periode_n = df[(df['start_date'] >= periode_n_dates[0]) & (df['start_date'] <= periode_n_dates[1])]
-    periode_n1 = df[(df['start_date'] >= periode_n1_dates[0]) & (df['start_date'] <= periode_n1_dates[1])]
-    metrics = {
-        'total_clics_n1': periode_n1['clicks'].sum(), 'total_clics_n': periode_n['clicks'].sum(),
-        'clics_marque_n1': periode_n1[periode_n1['is_marque']]['clicks'].sum(),
-        'clics_marque_n': periode_n[periode_n['is_marque']]['clicks'].sum(),
-        'clics_hors_marque_n1': periode_n1[~periode_n1['is_marque']]['clicks'].sum(),
-        'clics_hors_marque_n': periode_n[~periode_n['is_marque']]['clicks'].sum(),
-        'impressions_marque_n1': periode_n1[periode_n1['is_marque']]['impressions'].sum(),
-        'impressions_marque_n': periode_n[periode_n['is_marque']]['impressions'].sum(),
-        'nom_periode_n1': format_period_name(*periode_n1_dates),
-        'nom_periode_n': format_period_name(*periode_n_dates)
-    }
-    return metrics
-
-@st.cache_data
-def process_monthly_data(_df, year_n, year_n1, regex_pattern):
-    df = _df.copy()
-    if 'year' not in df.columns: df['year'] = pd.to_datetime(df['start_date']).dt.year
-    if 'month' not in df.columns: df['month'] = pd.to_datetime(df['start_date']).dt.month
-    df['is_marque'] = df['query'].apply(lambda q: is_marque_query(q, regex_pattern))
-    data_n = df[df['year'] == year_n]
-    data_n1 = df[df['year'] == year_n1]
-    comparable_months = sorted(list(set(data_n['month'].unique()) & set(data_n1['month'].unique())))
-    if not comparable_months: return None
+    try:
+        # Lire le fichier sans en-tête pour accéder aux premières lignes
+        df = pd.read_excel(uploaded_file, header=None)
         
-    month_names = {i: n for i, n in enumerate(['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'], 1)}
-    monthly_data = {
-        'months': [month_names[m] for m in comparable_months], 'year_n': year_n, 'year_n1': year_n1, 
-        'months_count': len(comparable_months), 'total_clics_n': [], 'total_clics_n1': [], 
-        'clics_marque_n': [], 'clics_marque_n1': [], 'clics_hors_marque_n': [], 'clics_hors_marque_n1': [], 
-        'impressions_marque_n': [], 'impressions_marque_n1': [],
-    }
-    
-    for month in comparable_months:
-        month_data_n = data_n[data_n['month'] == month]
-        monthly_data['total_clics_n'].append(month_data_n['clicks'].sum())
-        monthly_data['clics_marque_n'].append(month_data_n[month_data_n['is_marque']]['clicks'].sum())
-        monthly_data['clics_hors_marque_n'].append(month_data_n[~month_data_n['is_marque']]['clicks'].sum())
-        monthly_data['impressions_marque_n'].append(month_data_n[month_data_n['is_marque']]['impressions'].sum())
+        # 1. Extraire les dates des deux premières lignes (cellules A1 et A2)
+        start_date = pd.to_datetime(df.iloc[0, 0]).date()
+        end_date = pd.to_datetime(df.iloc[1, 0]).date()
+        period_name = f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}"
+
+        # 2. Définir les en-têtes de colonnes à partir de la troisième ligne (index 2)
+        df.columns = df.iloc[2]
         
-        month_data_n1 = data_n1[data_n1['month'] == month]
-        monthly_data['total_clics_n1'].append(month_data_n1['clicks'].sum())
-        monthly_data['clics_marque_n1'].append(month_data_n1[month_data_n1['is_marque']]['clicks'].sum())
-        monthly_data['clics_hors_marque_n1'].append(month_data_n1[~month_data_n1['is_marque']]['clicks'].sum())
-        monthly_data['impressions_marque_n1'].append(month_data_n1[month_data_n1['is_marque']]['impressions'].sum())
-    return monthly_data
+        # 3. Supprimer les 3 premières lignes (dates et en-tête) pour ne garder que les données
+        data_df = df.iloc[3:].reset_index(drop=True)
+        
+        # 4. Vérifier que les colonnes nécessaires sont présentes
+        required_cols = ['query', 'clicks', 'impressions']
+        if not all(col in data_df.columns for col in required_cols):
+            missing = [col for col in required_cols if col not in data_df.columns]
+            st.error(f"Colonnes requises manquantes dans le fichier '{uploaded_file.name}': {', '.join(missing)}")
+            return None
+            
+        # 5. S'assurer que les clics et impressions sont des nombres
+        data_df['clicks'] = pd.to_numeric(data_df['clicks'], errors='coerce').fillna(0)
+        data_df['impressions'] = pd.to_numeric(data_df['impressions'], errors='coerce').fillna(0)
+        
+        # 6. Calculer les métriques
+        data_df['is_marque'] = data_df['query'].apply(lambda q: is_marque_query(q, regex_pattern))
+        
+        metrics = {
+            'period_name': period_name,
+            'total_clics': data_df['clicks'].sum(),
+            'total_impressions': data_df['impressions'].sum(),
+            'clics_marque': data_df[data_df['is_marque']]['clicks'].sum(),
+            'clics_hors_marque': data_df[~data_df['is_marque']]['clicks'].sum(),
+            'impressions_marque': data_df[data_df['is_marque']]['impressions'].sum()
+        }
+        
+        return metrics
+
+    except Exception as e:
+        st.error(f"Erreur lors du traitement du fichier '{uploaded_file.name}': {e}")
+        st.info("Veuillez vérifier que le fichier a bien les dates en A1 et A2 et les données à partir de la ligne 4.")
+        return None
+
 
 # --- FONCTIONS DE CRÉATION DE GRAPHIQUES ---
-def create_base_layout(title, yaxis_title, period_type=""):
-    opts = get_layout_options()
-    return go.Layout(
-        title=f"{title} - {period_type}", xaxis_title="Période", yaxis_title=yaxis_title,
-        font=dict(size=12, family=opts['font_family']), height=opts['chart_height'],
-        plot_bgcolor=opts['plot_bgcolor'], showlegend=False
-    )
-def create_comparison_bar_chart(metrics, y_key, color, title, period_type, yaxis_title="Clics"):
-    opts = get_layout_options()
-    fig = go.Figure()
-    y_vals = [metrics[f'{y_key}_n1'], metrics[f'{y_key}_n']]
-    text = [f"{v:,}" for v in y_vals] if opts['show_text_on_bars'] else None
-    fig.add_trace(go.Bar(
-        x=[f"Période N-1<br>{metrics['nom_periode_n1']}", f"Période N<br>{metrics['nom_periode_n']}"],
-        y=y_vals, marker_color=color, text=text, textposition='auto', textfont=dict(size=14, color='white')
-    ))
-    fig.update_layout(create_base_layout(title, yaxis_title, period_type))
-    return fig
-def create_monthly_bar_chart(data, y_key, color_n, color_n1, title, yaxis_title="Clics"):
-    opts = get_layout_options()
-    fig = go.Figure()
-    text_n1 = [f"{v:,}" for v in data[f'{y_key}_n1']] if opts['show_text_on_bars'] else None
-    text_n = [f"{v:,}" for v in data[f'{y_key}_n']] if opts['show_text_on_bars'] else None
-    fig.add_trace(go.Bar(
-        x=data['months'], y=data[f'{y_key}_n1'], name=f"{data['year_n1']}",
-        marker_color=color_n1, text=text_n1, textposition='auto', textfont=dict(size=11)
-    ))
-    fig.add_trace(go.Bar(
-        x=data['months'], y=data[f'{y_key}_n'], name=f"{data['year_n']}",
-        marker_color=color_n, text=text_n, textposition='auto', textfont=dict(size=11)
-    ))
-    fig.update_layout(
-        create_base_layout(f"{title} - {data['year_n1']} vs {data['year_n']}", yaxis_title, f"{data['months_count']} mois"),
-        barmode='group', showlegend=True,
-        legend=dict(orientation=opts['legend_orientation'], yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
-    return fig
-def create_evolution_chart(metrics, period_type=""):
-    COLORS, opts = get_colors(), get_layout_options()
-    def calc_evo(n, n1): return ((n - n1) / n1 * 100) if n1 > 0 else 0
+
+def create_evolution_chart(metrics_n, metrics_n1):
+    """Crée le graphique de synthèse des évolutions."""
+    COLORS = get_colors()
+    
+    def calc_evo(n, n1):
+        return ((n - n1) / n1 * 100) if n1 > 0 else 0
+        
     evolutions = [
-        {'Métrique': 'Total Clics', 'Évolution': calc_evo(metrics['total_clics_n'], metrics['total_clics_n1'])},
-        {'Métrique': 'Clics Marque', 'Évolution': calc_evo(metrics['clics_marque_n'], metrics['clics_marque_n1'])},
-        {'Métrique': 'Clics Hors-Marque', 'Évolution': calc_evo(metrics['clics_hors_marque_n'], metrics['clics_hors_marque_n1'])},
-        {'Métrique': 'Impressions Marque', 'Évolution': calc_evo(metrics['impressions_marque_n1'], metrics['impressions_marque_n1'])}]
+        {'Métrique': 'Total Clics', 'Évolution': calc_evo(metrics_n['total_clics'], metrics_n1['total_clics'])},
+        {'Métrique': 'Clics Marque', 'Évolution': calc_evo(metrics_n['clics_marque'], metrics_n1['clics_marque'])},
+        {'Métrique': 'Clics Hors-Marque', 'Évolution': calc_evo(metrics_n['clics_hors_marque'], metrics_n1['clics_hors_marque'])},
+        {'Métrique': 'Impressions Marque', 'Évolution': calc_evo(metrics_n['impressions_marque'], metrics_n1['impressions_marque'])}
+    ]
     df_evo = pd.DataFrame(evolutions)
-    colors = [COLORS['evolution_positive'] if x >= 0 else COLORS['evolution_negative'] for x in df_evo['Évolution']]
-    fig = go.Figure(data=[go.Bar(x=df_evo['Métrique'], y=df_evo['Évolution'], marker_color=colors, text=[f"{x:+.1f}%" for x in df_evo['Évolution']], textposition='auto', textfont=dict(size=14, color='white'))])
-    fig.update_layout(create_base_layout("Synthèse des Évolutions (%)", "Évolution (%)", f"N vs N-1 - {period_type}"), yaxis=dict(zeroline=True, zerolinewidth=2, zerolinecolor='black'))
+    bar_colors = [COLORS['evolution_positive'] if x >= 0 else COLORS['evolution_negative'] for x in df_evo['Évolution']]
+    
+    fig = go.Figure(data=[go.Bar(
+        x=df_evo['Métrique'], y=df_evo['Évolution'], marker_color=bar_colors,
+        text=[f"{x:+.1f}%" for x in df_evo['Évolution']], textposition='auto', textfont=dict(size=14, color='white')
+    )])
+    fig.update_layout(
+        title="Synthèse des Évolutions (%)",
+        yaxis=dict(zeroline=True, zerolinewidth=2, zerolinecolor='black'),
+        height=500
+    )
     return fig
-def create_pie_charts(metrics, period_type=""):
-    COLORS, opts = get_colors(), get_layout_options()
-    def create_single_pie(clics_m, clics_hm, title):
-        total = clics_m + clics_hm
-        pct_m = (clics_m / total * 100) if total > 0 else 0
-        pct_hm = (clics_hm / total * 100) if total > 0 else 0
-        fig = go.Figure(data=[go.Pie(labels=[f'Hors-Marque<br>{clics_hm:,} ({pct_hm:.1f}%)', f'Marque<br>{clics_m:,} ({pct_m:.1f}%)'], values=[clics_hm, clics_m], marker_colors=[COLORS['pie_hors_marque'], COLORS['pie_marque']], hole=0.4, textinfo='label', textposition='auto', textfont=dict(size=12, family=opts['font_family']))])
-        fig.update_layout(title=title, height=opts['chart_height'] - 50, font=dict(size=10, family=opts['font_family']))
+
+def create_pie_charts(metrics_n, metrics_n1):
+    """Crée les deux graphiques camemberts."""
+    COLORS = get_colors()
+    
+    def create_single_pie(metrics, title):
+        total = metrics['total_clics']
+        pct_marque = (metrics['clics_marque'] / total * 100) if total > 0 else 0
+        pct_hors_marque = (metrics['clics_hors_marque'] / total * 100) if total > 0 else 0
+        
+        fig = go.Figure(data=[go.Pie(
+            labels=[f'Hors-Marque<br>{metrics["clics_hors_marque"]:,} ({pct_hors_marque:.1f}%)', 
+                    f'Marque<br>{metrics["clics_marque"]:,} ({pct_marque:.1f}%)'],
+            values=[metrics['clics_hors_marque'], metrics['clics_marque']],
+            marker_colors=[COLORS['pie_hors_marque'], COLORS['pie_marque']],
+            hole=0.4, textinfo='label', textposition='auto'
+        )])
+        fig.update_layout(title=title, height=450)
         return fig
-    fig1 = create_single_pie(metrics['clics_marque_n1'], metrics['clics_hors_marque_n1'], f"Répartition N-1: {metrics['nom_periode_n1']}")
-    fig2 = create_single_pie(metrics['clics_marque_n'], metrics['clics_hors_marque_n'], f"Répartition N: {metrics['nom_periode_n']}")
-    return fig1, fig2
+
+    fig_n1 = create_single_pie(metrics_n1, f"Répartition N-1: {metrics_n1['period_name']}")
+    fig_n = create_single_pie(metrics_n, f"Répartition N: {metrics_n['period_name']}")
+    return fig_n, fig_n1
+
+def create_bar_chart(metrics_n, metrics_n1, data_key, color, title, yaxis_title):
+    """Crée un graphique en barres de comparaison générique."""
+    fig = go.Figure(data=[
+        go.Bar(
+            x=[f"Période N-1<br>{metrics_n1['period_name']}", f"Période N<br>{metrics_n['period_name']}"],
+            y=[metrics_n1[data_key], metrics_n[data_key]],
+            marker_color=color,
+            text=[f"{metrics_n1[data_key]:,}", f"{metrics_n[data_key]:,}"],
+            textposition='auto',
+            textfont=dict(size=14, color='white')
+        )
+    ])
+    fig.update_layout(title=title, yaxis_title=yaxis_title, height=500)
+    return fig
 
 # --- INTERFACE UTILISATEUR (UI) ---
-def show_customization_options():
-    st.sidebar.title("🎨 Options de Personnalisation")
-    with st.sidebar.expander("Mise en page", expanded=True):
-        opts = get_layout_options()
-        opts['font_family'] = st.selectbox("Police", FONT_OPTIONS, index=FONT_OPTIONS.index(opts['font_family']))
-        opts['chart_height'] = st.slider("Hauteur (px)", 400, 1000, opts['chart_height'])
-        opts['plot_bgcolor'] = st.color_picker("Couleur de fond", opts['plot_bgcolor'])
-        opts['show_text_on_bars'] = st.toggle("Afficher valeurs sur barres", value=opts['show_text_on_bars'])
-        opts['legend_orientation'] = 'h' if st.radio("Légende (mensuel)", ["Horizontale", "Verticale"], index=0 if opts['legend_orientation'] == 'h' else 1) == "Horizontale" else 'v'
-        st.session_state.custom_layout = opts
-
-    with st.sidebar.expander("Couleurs", expanded=False):
-        colors = get_colors()
-        for key in DEFAULT_COLORS.keys():
-            colors[key] = st.color_picker(key.replace('_', ' ').title(), colors[key])
-        st.session_state.custom_colors = colors
-        if st.button("Réinitialiser les couleurs"): st.session_state.custom_colors = DEFAULT_COLORS.copy(); st.rerun()
 
 def main():
-    st.title("📊 Dashboard SEO - Générateur de Graphiques")
-    st.markdown("**Analysez vos performances SEO avec des visualisations personnalisées.**")
-    show_customization_options()
+    st.title("📊 Dashboard SEO - Comparateur de Périodes")
+    st.markdown("Cette application compare deux périodes de données SEO en se basant sur deux fichiers distincts.")
+    st.info("**Mode d'emploi :** Téléchargez un fichier pour la période actuelle (N) et un autre pour la période précédente (N-1).")
+
+    # --- 1. Configuration de la Regex ---
+    st.markdown("### 1. Configuration de la Marque")
+    regex_pattern = st.text_input(
+        "Regex pour identifier les requêtes de marque",
+        value="weefin|wee fin",
+        help="Utilisez `|` pour séparer les termes. Ex: 'ma_marque|ma marque|mon_autre_produit'"
+    )
+    if not regex_pattern:
+        st.warning("Veuillez saisir une regex pour continuer.")
+        st.stop()
+    try:
+        re.compile(regex_pattern)
+    except re.error:
+        st.error("Regex invalide. Veuillez la corriger.")
+        st.stop()
     
-    st.markdown("### 🏷️ 1. Configuration de la Marque")
-    regex_pattern = st.text_input("Regex pour requêtes de marque", "weefin|wee fin", help="Ex: 'ma_marque|ma marque'")
-    if not regex_pattern: st.warning("Veuillez saisir une regex."); st.stop()
+    # --- 2. Téléchargement des Fichiers ---
+    st.markdown("### 2. Téléchargement des Fichiers de Périodes")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("#### Période N (actuelle)")
+        uploaded_file_n = st.file_uploader("Télécharger le fichier pour la période N", type=['xlsx', 'xls'], key="file_n")
 
-    st.markdown("### 📂 2. Import des Données")
-    uploaded_file = st.file_uploader("Fichier Google Search Console (Excel)", type=['xlsx', 'xls'])
-    
-    if uploaded_file:
-        df = load_data(uploaded_file)
-        if df is None or df.empty: st.stop()
+    with col2:
+        st.markdown("#### Période N-1 (précédente)")
+        uploaded_file_n1 = st.file_uploader("Télécharger le fichier pour la période N-1", type=['xlsx', 'xls'], key="file_n1")
         
-        st.success(f"Fichier chargé avec succès! ({len(df):,} lignes)")
-        
-        min_date_in_file = df['start_date'].min()
-        max_date_in_file = df['start_date'].max()
-        st.info(f"Période couverte par le fichier : du **{format_period_name(min_date_in_file, max_date_in_file)}**.")
-        
-        df['year'] = pd.to_datetime(df['start_date']).dt.year
-        available_years = sorted(df['year'].unique(), reverse=True)
+    # --- 3. Traitement et Affichage ---
+    if uploaded_file_n and uploaded_file_n1:
+        st.markdown("---")
+        st.header("🚀 Résultats de la Comparaison")
 
-        st.markdown("### 📊 3. Type d'Analyse")
-        analysis_type = st.radio("Type de comparaison :", ["Comparaison par Blocs/Périodes", "Comparaison Mensuelle (Année N vs N-1)"], horizontal=True)
-        
-        st.markdown("### 📅 4. Sélection des Périodes")
-        
-        if analysis_type == "Comparaison par Blocs/Périodes":
-            # CORRECTION: Les options sont maintenant basées sur la date max du fichier
-            period_options = get_predefined_periods(max_date_in_file)
-            selected_key = st.selectbox("Choix période", list(period_options.keys()) + ["Personnalisée"], format_func=lambda k: period_options[k][0] if k != "Personnalisée" else "Personnalisée", index=1)
-            
-            if selected_key == "Personnalisée":
-                default_start_n, default_end_n, default_start_n1, default_end_n1 = calculate_default_periods(max_date_in_file)
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.markdown("##### Période N (actuelle)")
-                    start_n = st.date_input("Début N", default_start_n, min_value=min_date_in_file, max_value=max_date_in_file)
-                    end_n = st.date_input("Fin N", default_end_n, min_value=min_date_in_file, max_value=max_date_in_file)
-                with col2:
-                    st.markdown("##### Période N-1 (précédente)")
-                    start_n1 = st.date_input("Début N-1", default_start_n1, min_value=min_date_in_file, max_value=max_date_in_file)
-                    end_n1 = st.date_input("Fin N-1", default_end_n1, min_value=min_date_in_file, max_value=max_date_in_file)
-                periode_n_dates, periode_n1_dates = (start_n, end_n), (start_n1, end_n1)
-                period_type = "Personnalisée"
-            else:
-                period_type, periode_n_dates, periode_n1_dates = period_options[selected_key]
-                st.info(f"**Période N**: {format_period_name(*periode_n_dates)} | **Période N-1**: {format_period_name(*periode_n1_dates)}")
+        # Traitement des deux fichiers
+        metrics_n = process_gsc_file(uploaded_file_n, regex_pattern)
+        metrics_n1 = process_gsc_file(uploaded_file_n1, regex_pattern)
 
-            metrics = process_data_for_periods(df, periode_n_dates, periode_n1_dates, regex_pattern)
-            if metrics['total_clics_n'] == 0 and metrics['total_clics_n1'] == 0:
-                st.warning("Aucune donnée trouvée pour les périodes sélectionnées. Vérifiez vos dates."); st.stop()
-            
-            st.header("🚀 Résultats de l'Analyse par Blocs")
+        if metrics_n and metrics_n1:
             COLORS = get_colors()
-            st.plotly_chart(create_evolution_chart(metrics, period_type), use_container_width=True)
-            pie1, pie2 = create_pie_charts(metrics, period_type)
-            col1, col2 = st.columns(2)
-            with col1: st.plotly_chart(pie1, use_container_width=True)
-            with col2: st.plotly_chart(pie2, use_container_width=True)
-            st.plotly_chart(create_comparison_bar_chart(metrics, 'total_clics', COLORS['global_seo'], "Trafic SEO Global", period_type), use_container_width=True)
-            st.plotly_chart(create_comparison_bar_chart(metrics, 'clics_marque', COLORS['marque_clics'], "Trafic SEO Marque", period_type), use_container_width=True)
-            st.plotly_chart(create_comparison_bar_chart(metrics, 'clics_hors_marque', COLORS['hors_marque'], "Trafic SEO Hors-Marque", period_type), use_container_width=True)
-            st.plotly_chart(create_comparison_bar_chart(metrics, 'impressions_marque', COLORS['impressions_marque'], "Impressions SEO Marque", period_type, yaxis_title="Impressions"), use_container_width=True)
-        
-        else: # Analyse Mensuelle
-            selected_year = st.selectbox("Choisissez l'année N :", available_years, index=0 if len(available_years) > 1 else 0)
-            previous_year = selected_year - 1
-            if previous_year not in available_years:
-                st.warning(f"L'année précédente ({previous_year}) n'existe pas dans vos données. Impossible de comparer."); st.stop()
             
-            st.info(f"Comparaison de chaque mois de **{selected_year}** avec le même mois de **{previous_year}**.")
-            monthly_data = process_monthly_data(df, selected_year, previous_year, regex_pattern)
-
-            if not monthly_data or monthly_data['months_count'] == 0:
-                st.warning(f"Aucun mois comparable trouvé entre {previous_year} et {selected_year}."); st.stop()
+            # Affichage des graphiques
+            st.plotly_chart(create_evolution_chart(metrics_n, metrics_n1), use_container_width=True)
             
-            st.success(f"Analyse sur **{monthly_data['months_count']} mois comparable(s)** : {', '.join(monthly_data['months'])}")
+            fig_n, fig_n1 = create_pie_charts(metrics_n, metrics_n1)
+            pie_col1, pie_col2 = st.columns(2)
+            with pie_col1:
+                st.plotly_chart(fig_n1, use_container_width=True)
+            with pie_col2:
+                st.plotly_chart(fig_n, use_container_width=True)
             
-            st.header("🚀 Résultats de l'Analyse Mensuelle")
-            COLORS = get_colors()
-            st.plotly_chart(create_monthly_bar_chart(monthly_data, 'total_clics', COLORS['secondary_dark'], COLORS['secondary_light'], "Trafic SEO Global par Mois"), use_container_width=True)
-            st.plotly_chart(create_monthly_bar_chart(monthly_data, 'clics_marque', COLORS['marque_clics'], COLORS['secondary_light'], "Trafic SEO Marque par Mois"), use_container_width=True)
-            st.plotly_chart(create_monthly_bar_chart(monthly_data, 'clics_hors_marque', COLORS['hors_marque'], COLORS['secondary_light'], "Trafic SEO Hors-Marque par Mois"), use_container_width=True)
-            st.plotly_chart(create_monthly_bar_chart(monthly_data, 'impressions_marque', COLORS['impressions_marque'], COLORS['secondary_light'], "Impressions SEO Marque par Mois", yaxis_title="Impressions"), use_container_width=True)
+            st.plotly_chart(create_bar_chart(metrics_n, metrics_n1, 'total_clics', COLORS['global_seo'], "Trafic SEO Global (Clics)", "Clics"), use_container_width=True)
+            st.plotly_chart(create_bar_chart(metrics_n, metrics_n1, 'clics_marque', COLORS['marque_clics'], "Trafic SEO Marque (Clics)", "Clics"), use_container_width=True)
+            st.plotly_chart(create_bar_chart(metrics_n, metrics_n1, 'clics_hors_marque', COLORS['hors_marque'], "Trafic SEO Hors-Marque (Clics)", "Clics"), use_container_width=True)
+            st.plotly_chart(create_bar_chart(metrics_n, metrics_n1, 'impressions_marque', COLORS['impressions_marque'], "Impressions SEO Marque", "Impressions"), use_container_width=True)
+        else:
+            st.error("Un ou deux fichiers n'ont pas pu être traités. Veuillez vérifier leur format.")
 
 if __name__ == "__main__":
     main()
