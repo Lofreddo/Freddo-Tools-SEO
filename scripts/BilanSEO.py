@@ -92,8 +92,8 @@ def create_pie_charts(metrics, style_options, custom_title_n1, custom_title_n):
         else: figs.append(go.Figure().update_layout(title=f"Pas de données pour la période {period.upper()}", height=450))
     return figs[0], figs[1]
 
-def create_generic_bar_chart(metrics, style_options, config, custom_title):
-    fig = go.Figure(data=[go.Bar(x=[f"Période N-1<br>{metrics['nom_periode_n1']}", f"Période N<br>{metrics['nom_periode_n']}"], y=[metrics[config['metric_n1']], metrics[config['metric_n']]], marker_color=config['color'], text=[f"{metrics[config['metric_n1']]:,}", f"{metrics[config['metric_n']]:,}"], textposition='auto', textfont=dict(size=style_options['bar_text_font_size'], color='white'))])
+def create_generic_bar_chart(metrics, style_options, config, custom_title, custom_label_n1, custom_label_n):
+    fig = go.Figure(data=[go.Bar(x=[custom_label_n1, custom_label_n], y=[metrics[config['metric_n1']], metrics[config['metric_n']]], marker_color=config['color'], text=[f"{metrics[config['metric_n1']]:,}", f"{metrics[config['metric_n']]:,}"], textposition='auto', textfont=dict(size=style_options['bar_text_font_size'], color='white'))])
     fig.update_layout(title=custom_title, xaxis_title="Période", yaxis_title=config['yaxis_title'], font=dict(family=style_options['font_family'], size=style_options['axis_font_size']), title_font_size=style_options['title_font_size'], height=500, showlegend=False, plot_bgcolor='white')
     return fig
 
@@ -106,32 +106,22 @@ def create_monthly_breakdown_chart(monthly_data, style_options, config, custom_t
     return fig
 
 def show_chart_customization():
-    """Affiche l'interface de personnalisation des graphiques."""
     with st.expander("🎨 Personnalisation Globale", expanded=False):
-        COLORS = get_colors()
-        STYLES = get_style_options()
+        COLORS, STYLES = get_colors(), get_style_options()
         tab1, tab2 = st.tabs(["Couleurs", "Polices & Tailles"])
         with tab1:
             st.markdown("**Couleurs des graphiques**"); col1, col2 = st.columns(2)
-            with col1:
-                st.session_state.custom_colors['global_seo'] = st.color_picker("Trafic Global", COLORS['global_seo'], key="c1")
-                st.session_state.custom_colors['marque_clics'] = st.color_picker("Trafic Marque", COLORS['marque_clics'], key="c2")
-                st.session_state.custom_colors['evolution_positive'] = st.color_picker("Évolution Positive", COLORS['evolution_positive'], key="c3")
-            with col2:
-                st.session_state.custom_colors['secondary_light'] = st.color_picker("Comparaison N-1", COLORS['secondary_light'], key="c4")
-                st.session_state.custom_colors['pie_marque'] = st.color_picker("Camembert Marque", COLORS['pie_marque'], key="c5")
-                st.session_state.custom_colors['evolution_negative'] = st.color_picker("Évolution Négative", COLORS['evolution_negative'], key="c6")
+            with col1: st.session_state.custom_colors['global_seo'] = st.color_picker("Trafic Global", COLORS['global_seo'], key="c1"); st.session_state.custom_colors['marque_clics'] = st.color_picker("Trafic Marque", COLORS['marque_clics'], key="c2"); st.session_state.custom_colors['evolution_positive'] = st.color_picker("Évolution Positive", COLORS['evolution_positive'], key="c3")
+            with col2: st.session_state.custom_colors['secondary_light'] = st.color_picker("Comparaison N-1", COLORS['secondary_light'], key="c4"); st.session_state.custom_colors['pie_marque'] = st.color_picker("Camembert Marque", COLORS['pie_marque'], key="c5"); st.session_state.custom_colors['evolution_negative'] = st.color_picker("Évolution Négative", COLORS['evolution_negative'], key="c6")
         with tab2:
             st.markdown("**Police des graphiques**"); st.session_state.style_options['font_family'] = st.selectbox("Famille de police", ['Arial', 'Verdana', 'Helvetica', 'Garamond'], index=['Arial', 'Verdana', 'Helvetica', 'Garamond'].index(STYLES.get('font_family', 'Arial')))
-            st.markdown("**Tailles des textes (px)**"); st.session_state.style_options['title_font_size'] = st.slider("Taille du titre", 10, 30, STYLES.get('title_font_size', 18))
-            st.session_state.style_options['axis_font_size'] = st.slider("Taille des axes", 8, 20, STYLES.get('axis_font_size', 12))
-            st.session_state.style_options['bar_text_font_size'] = st.slider("Texte sur les barres", 8, 20, STYLES.get('bar_text_font_size', 12))
+            st.markdown("**Tailles des textes (px)**"); st.session_state.style_options['title_font_size'] = st.slider("Taille du titre", 10, 30, STYLES.get('title_font_size', 18)); st.session_state.style_options['axis_font_size'] = st.slider("Taille des axes", 8, 20, STYLES.get('axis_font_size', 12)); st.session_state.style_options['bar_text_font_size'] = st.slider("Texte sur les barres", 8, 20, STYLES.get('bar_text_font_size', 12))
         
         col1, col2 = st.columns(2)
         if col1.button("🔄 Réinitialiser Styles & Couleurs"):
             st.session_state.custom_colors = DEFAULT_COLORS.copy(); st.session_state.style_options = DEFAULT_STYLE_OPTIONS.copy(); st.rerun()
         if col2.button("✍️ Réinitialiser les titres"):
-            if 'chart_titles' in st.session_state: del st.session_state['chart_titles']
+            if 'chart_titles' in st.session_state: del st.session_state.chart_titles
             st.rerun()
 
 # --- Application Principale ---
@@ -171,8 +161,7 @@ def main():
             selection_yoy = st.radio("Période (YoY) :", options_yoy, horizontal=True, key="yoy_period")
             if selection_yoy == "3 derniers mois complets":
                 n_end = anchor_date; n_start = get_start_of_month(anchor_date, 2)
-                # Correction de la AttributeError
-                if n_start:
+                if n_start and n_end:
                     n1_start = n_start.replace(year=n_start.year - 1); n1_end = n_end.replace(year=n_end.year - 1)
                     periode_n_dates, periode_n1_dates = (n_start, n_end), (n1_start, n1_end); period_type = "3 derniers mois vs N-1 (YoY)"
             else:
@@ -202,10 +191,12 @@ def main():
                 pie1, pie2 = create_pie_charts(metrics, get_style_options(), st.session_state.chart_titles['pie_n1'], st.session_state.chart_titles['pie_n']); col1, col2 = st.columns(2); col1.plotly_chart(pie1, use_container_width=True); col2.plotly_chart(pie2, use_container_width=True)
                 
                 for key, config in chart_configs.items():
-                    with st.expander(f"✏️ Personnaliser le titre du graphique '{config['title']}'"):
-                        default_title = f"{config['title']} - {period_type}"; st.session_state.chart_titles[key] = st.text_input("Titre:", value=st.session_state.chart_titles.get(key, default_title), key=f"title_{key}")
-                    config_full = {**config, "color": get_colors().get(f"{key}_clics", get_colors()['global_seo']), "yaxis_title": "Clics"}
-                    st.plotly_chart(create_generic_bar_chart(metrics, get_style_options(), config_full, st.session_state.chart_titles[key]), use_container_width=True)
+                    with st.expander(f"✏️ Personnaliser le graphique '{config['title']}'"):
+                        default_title = f"{config['title']} - {period_type}"; st.session_state.chart_titles[f'title_{key}'] = st.text_input("Titre:", value=st.session_state.chart_titles.get(f'title_{key}', default_title), key=f"title_{key}")
+                        default_label_n1 = f"Période N-1<br>{metrics['nom_periode_n1']}"; st.session_state.chart_titles[f'label_n1_{key}'] = st.text_input("Libellé Colonne N-1:", value=st.session_state.chart_titles.get(f'label_n1_{key}', default_label_n1), key=f"label_n1_{key}")
+                        default_label_n = f"Période N<br>{metrics['nom_periode_n']}"; st.session_state.chart_titles[f'label_n_{key}'] = st.text_input("Libellé Colonne N:", value=st.session_state.chart_titles.get(f'label_n_{key}', default_label_n), key=f"label_n_{key}")
+                    config_full = {**config, "color": get_colors().get(key, get_colors()['global_seo']), "yaxis_title": "Clics"}
+                    st.plotly_chart(create_generic_bar_chart(metrics, get_style_options(), config_full, st.session_state.chart_titles[f'title_{key}'], st.session_state.chart_titles[f'label_n1_{key}'], st.session_state.chart_titles[f'label_n_{key}']), use_container_width=True)
 
                 monthly_data = get_monthly_breakdown(df_queries, df_pages, periode_n_dates, periode_n1_dates, regex_pattern)
                 if monthly_data is not None and len(monthly_data) > 1:
@@ -214,7 +205,7 @@ def main():
                     for key, config in monthly_chart_configs.items():
                         with st.expander(f"✏️ Personnaliser le titre du graphique '{config['title']} (Mensuel)'"):
                             default_title = f"{config['title']} (Évolution Mensuelle)"; st.session_state.chart_titles[f"monthly_{key}"] = st.text_input("Titre:", value=st.session_state.chart_titles.get(f"monthly_{key}", default_title), key=f"title_monthly_{key}")
-                        config_full = {**config, "color": get_colors().get(f"{key}_clics", get_colors()['global_seo']), "yaxis_title": "Clics"}
+                        config_full = {**config, "color": get_colors().get(key, get_colors()['global_seo']), "yaxis_title": "Clics"}
                         st.plotly_chart(create_monthly_breakdown_chart(monthly_data, get_style_options(), config_full, st.session_state.chart_titles[f"monthly_{key}"]), use_container_width=True)
 
 if __name__ == "__main__":
