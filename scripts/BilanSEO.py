@@ -4,7 +4,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import re
 from datetime import datetime, timedelta
-import calendar
 from pandas.tseries.offsets import MonthEnd
 
 # --- Configuration de la Page ---
@@ -24,7 +23,6 @@ DEFAULT_COLORS = {
 DEFAULT_STYLE_OPTIONS = {
     'font_family': 'Arial', 'title_font_size': 18, 'axis_font_size': 12, 'bar_text_font_size': 12
 }
-# --- NOUVEAU : Dictionnaire pour les titres par défaut ---
 DEFAULT_TITLES = {
     'evolution_summary': "Synthèse des Évolutions (%)",
     'pie_chart': "Répartition des Clics (basée sur Requêtes)",
@@ -55,12 +53,11 @@ def get_style_options():
     if 'style_options' not in st.session_state: st.session_state.style_options = DEFAULT_STYLE_OPTIONS.copy()
     return st.session_state.style_options
 
-# --- NOUVEAU : Fonction pour gérer les titres en session ---
 def get_titles():
     if 'custom_titles' not in st.session_state: st.session_state.custom_titles = DEFAULT_TITLES.copy()
     return st.session_state.custom_titles
 
-# --- Fonctions Utilitaires et de Traitement de Données (INCHANGÉES) ---
+# --- Fonctions Utilitaires et de Traitement de Données ---
 @st.cache_data
 def load_data(uploaded_file):
     df = pd.read_excel(uploaded_file)
@@ -81,7 +78,6 @@ def get_start_of_month(d, months_to_subtract=0):
 
 @st.cache_data
 def process_data_for_periods(_df_queries, _df_pages, periode_n_dates, periode_n1_dates, regex_pattern):
-    # Cette fonction est inchangée
     df_queries = _df_queries.copy()
     df_queries['is_marque'] = df_queries['query'].apply(lambda x: is_marque_query(x, regex_pattern))
     q_periode_n = df_queries[(df_queries['start_date'] >= periode_n_dates[0]) & (df_queries['start_date'] <= periode_n_dates[1])]
@@ -109,7 +105,6 @@ def process_data_for_periods(_df_queries, _df_pages, periode_n_dates, periode_n1
 
 @st.cache_data
 def get_monthly_breakdown(_df_queries, _df_pages, periode_n_dates, periode_n1_dates, regex_pattern):
-    # Cette fonction est inchangée
     def aggregate_monthly(df, start_date, end_date, is_queries=False):
         df_period = df[(df['start_date'] >= start_date) & (df['start_date'] <= end_date)].copy()
         if df_period.empty: return pd.DataFrame()
@@ -137,7 +132,7 @@ def get_monthly_breakdown(_df_queries, _df_pages, periode_n_dates, periode_n1_da
     return final_df
 
 
-# --- Fonctions de Création de Graphiques (MODIFIÉES pour utiliser les titres personnalisés) ---
+# --- Fonctions de Création de Graphiques ---
 def create_evolution_chart(metrics, period_type, style_options, titles):
     COLORS = get_colors()
     evolutions = []
@@ -171,23 +166,39 @@ def create_generic_bar_chart(metrics, period_type, style_options, titles, config
     fig.update_layout(title=f"{config['title']} ({config['yaxis_title']}) - {period_type}", xaxis_title=titles['axis_period'], yaxis_title=config['yaxis_title'], font=dict(family=style_options['font_family'], size=style_options['axis_font_size']), title_font_size=style_options['title_font_size'], height=500, showlegend=False, plot_bgcolor='white')
     return fig
 
-def create_monthly_breakdown_chart(monthly_data, style_options, titles, config):
+def create_monthly_breakdown_chart(monthly_data, style_options, titles, config, custom_x_labels=None):
     COLORS = get_colors()
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=monthly_data['month_label'], y=monthly_data[config['metric_n1']], name=titles['legend_n1'], marker_color=COLORS['secondary_light'], text=[f"{x:,.0f}" for x in monthly_data[config['metric_n1']]], textposition='outside'))
-    fig.add_trace(go.Bar(x=monthly_data['month_label'], y=monthly_data[config['metric_n']], name=titles['legend_n'], marker_color=config['color'], text=[f"{x:,.0f}" for x in monthly_data[config['metric_n']]], textposition='outside'))
-    fig.update_layout(title=f"{config['title']} ({titles['monthly_evolution']})", xaxis_title=titles['axis_month'], yaxis_title=config['yaxis_title'], barmode='group', font=dict(family=style_options['font_family'], size=style_options['axis_font_size']), title_font_size=style_options['title_font_size'], height=500, plot_bgcolor='white', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+
+    # Utiliser les étiquettes personnalisées si elles sont fournies, sinon utiliser celles des données
+    x_axis_labels = custom_x_labels if custom_x_labels is not None else monthly_data['month_label']
+
+    fig.add_trace(go.Bar(x=x_axis_labels, y=monthly_data[config['metric_n1']], name=titles['legend_n1'], marker_color=COLORS['secondary_light'], text=[f"{x:,.0f}" for x in monthly_data[config['metric_n1']]], textposition='outside'))
+    fig.add_trace(go.Bar(x=x_axis_labels, y=monthly_data[config['metric_n']], name=titles['legend_n'], marker_color=config['color'], text=[f"{x:,.0f}" for x in monthly_data[config['metric_n']]], textposition='outside'))
+    
+    chart_main_title = f"{config['title']} ({titles['monthly_evolution']})"
+
+    fig.update_layout(
+        title=chart_main_title, 
+        xaxis_title=titles['axis_month'], 
+        yaxis_title=config['yaxis_title'], 
+        barmode='group', 
+        font=dict(family=style_options['font_family'], size=style_options['axis_font_size']), 
+        title_font_size=style_options['title_font_size'], 
+        height=500, 
+        plot_bgcolor='white', 
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
     return fig
 
-# --- MODIFIÉ : Ajout de l'onglet Titres ---
 def show_chart_customization():
     """Affiche l'interface de personnalisation des graphiques."""
     with st.expander("🎨 Personnalisation des Graphiques", expanded=False):
         COLORS = get_colors()
         STYLES = get_style_options()
-        TITLES = get_titles() # --- NOUVEAU ---
+        TITLES = get_titles()
         
-        tab1, tab2, tab3 = st.tabs(["Couleurs", "Polices & Tailles", "Titres"]) # --- MODIFIÉ ---
+        tab1, tab2, tab3 = st.tabs(["Couleurs", "Polices & Tailles", "Titres & Labels"])
         
         with tab1:
             st.markdown("**Couleurs des graphiques**")
@@ -212,7 +223,6 @@ def show_chart_customization():
             st.session_state.style_options['axis_font_size'] = st.slider("Taille des axes", 8, 20, STYLES['axis_font_size'])
             st.session_state.style_options['bar_text_font_size'] = st.slider("Texte sur les barres", 8, 20, STYLES['bar_text_font_size'])
 
-        # --- NOUVEAU : Onglet de personnalisation des titres ---
         with tab3:
             st.markdown("**Titres principaux des graphiques**")
             col1, col2 = st.columns(2)
@@ -245,15 +255,14 @@ def show_chart_customization():
         if st.button("🔄 Réinitialiser les styles et titres"):
             st.session_state.custom_colors = DEFAULT_COLORS.copy()
             st.session_state.style_options = DEFAULT_STYLE_OPTIONS.copy()
-            st.session_state.custom_titles = DEFAULT_TITLES.copy() # --- NOUVEAU ---
+            st.session_state.custom_titles = DEFAULT_TITLES.copy()
             st.rerun()
 
-# --- Application Principale (MODIFIÉE pour utiliser les titres) ---
+# --- Application Principale ---
 def main():
     st.title("📊 Dashboard SEO - Générateur de Graphiques")
     st.markdown("**Analysez vos performances SEO en comparant des périodes de mois complets.**")
     
-    # --- MODIFIÉ : on récupère les titres personnalisés ici ---
     show_chart_customization()
     STYLES = get_style_options()
     TITLES = get_titles()
@@ -297,7 +306,8 @@ def main():
                 periode_n_dates, periode_n1_dates = (n_start, n_end), (n1_start, n1_end)
                 period_type = "3 derniers mois vs N-1 (YoY)"
             else:
-                with st.expander("📅 Définir une période personnalisée (YoY)", expanded=True): pass
+                with st.expander("📅 Définir une période personnalisée (YoY)", expanded=True): st.warning("Fonctionnalité à implémenter.")
+
 
         if periode_n_dates:
             st.markdown("---"); st.markdown("### 🔎 Périodes Sélectionnées")
@@ -311,7 +321,6 @@ def main():
             else:
                 st.markdown("---"); st.markdown("### 📈 Analyse Globale sur la Période")
                 
-                # --- MODIFIÉ : La configuration des graphiques utilise les titres personnalisés ---
                 chart_configs = {
                     "global": {"title": TITLES['global_clicks'], "yaxis_title": TITLES['axis_clicks'], "metric_n": "total_clics_n", "metric_n1": "total_clics_n1", "color": COLORS['global_seo']},
                     "marque": {"title": TITLES['brand_clicks'], "yaxis_title": TITLES['axis_clicks'], "metric_n": "clics_marque_n", "metric_n1": "clics_marque_n1", "color": COLORS['marque_clics']},
@@ -325,10 +334,24 @@ def main():
                     st.plotly_chart(create_generic_bar_chart(metrics, period_type, STYLES, TITLES, config), use_container_width=True)
 
                 monthly_data = get_monthly_breakdown(df_queries, df_pages, periode_n_dates, periode_n1_dates, regex_pattern)
+                
                 if monthly_data is not None and not monthly_data.empty and len(monthly_data) > 1:
                     st.markdown("---"); st.markdown("### 📊 Évolution Mensuelle Détaillée")
                     
-                    # --- MODIFIÉ : La configuration des graphiques mensuels utilise aussi les titres ---
+                    with st.expander("✏️ Personnaliser les étiquettes du graphique mensuel"):
+                        st.info("Modifiez ici les noms des mois qui apparaissent sur l'axe X des graphiques ci-dessous.")
+                        
+                        editable_labels = monthly_data['month_label'].tolist()
+                        
+                        cols = st.columns(len(editable_labels))
+                        for i, label in enumerate(editable_labels):
+                            new_label = cols[i].text_input(
+                                f"Label Mois {i+1}", 
+                                value=label,
+                                key=f"month_label_{i}"
+                            )
+                            editable_labels[i] = new_label
+
                     monthly_chart_configs = {
                         "global": {"title": TITLES['global_clicks'], "yaxis_title": TITLES['axis_clicks'], "metric_n": "total_clics", "metric_n1": "total_clics_n1", "color": COLORS['global_seo']},
                         "marque": {"title": TITLES['brand_clicks'], "yaxis_title": TITLES['axis_clicks'], "metric_n": "clics_marque", "metric_n1": "clics_marque_n1", "color": COLORS['marque_clics']},
@@ -336,7 +359,8 @@ def main():
                         "impressions": {"title": TITLES['brand_impressions'], "yaxis_title": TITLES['axis_impressions'], "metric_n": "impressions_marque", "metric_n1": "impressions_marque_n1", "color": COLORS['impressions_marque']}
                     }
                     for config in monthly_chart_configs.values():
-                        st.plotly_chart(create_monthly_breakdown_chart(monthly_data, STYLES, TITLES, config), use_container_width=True)
+                        fig = create_monthly_breakdown_chart(monthly_data, STYLES, TITLES, config, custom_x_labels=editable_labels)
+                        st.plotly_chart(fig, use_container_width=True)
 
 if __name__ == "__main__":
     main()
