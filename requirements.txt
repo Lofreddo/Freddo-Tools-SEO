@@ -29,3 +29,4 @@ numpy
 python-dateutil
 faker
 networkx
+plotly
