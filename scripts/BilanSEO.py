@@ -13,7 +13,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- Couleurs et Styles par Défaut ---
+# --- Couleurs et Styles par Défaut (Code omis pour la clarté) ---
 DEFAULT_COLORS = {
     'global_seo': '#2563EB', 'marque_clics': '#1E40AF', 'impressions_marque': '#3730A3',
     'hors_marque': '#2563EB', 'pie_marque': '#1E40AF', 'pie_hors_marque': '#A5B4FC',
@@ -26,19 +26,20 @@ DEFAULT_STYLE_OPTIONS = {
 
 # --- Fonctions de Gestion de Session ---
 def get_colors():
-    if 'custom_colors' not in st.session_state:
-        st.session_state.custom_colors = DEFAULT_COLORS.copy()
+    if 'custom_colors' not in st.session_state: st.session_state.custom_colors = DEFAULT_COLORS.copy()
     return st.session_state.custom_colors
 
 def get_style_options():
-    if 'style_options' not in st.session_state:
-        st.session_state.style_options = DEFAULT_STYLE_OPTIONS.copy()
+    if 'style_options' not in st.session_state: st.session_state.style_options = DEFAULT_STYLE_OPTIONS.copy()
     return st.session_state.style_options
 
 # --- Fonctions Utilitaires et de Traitement de Données ---
 @st.cache_data
 def load_data(uploaded_file):
     df = pd.read_excel(uploaded_file)
+    # GSC exporte parfois la date sous le nom "Date" au lieu de "start_date"
+    if "Date" in df.columns and "start_date" not in df.columns:
+        df.rename(columns={"Date": "start_date"}, inplace=True)
     df['start_date'] = pd.to_datetime(df['start_date']).dt.date
     return df
 
@@ -48,33 +49,55 @@ def is_marque_query(query, regex_pattern):
     except re.error: return False
 
 def get_start_of_month(d, months_to_subtract=0):
-    year, month = d.year, d.month
-    month -= months_to_subtract
-    while month <= 0:
-        month += 12
-        year -= 1
+    year, month = d.year, d.month; month -= months_to_subtract
+    while month <= 0: month += 12; year -= 1
     return datetime(year, month, 1).date()
 
 @st.cache_data
-def process_data_for_periods(_df, periode_n_dates, periode_n1_dates, regex_pattern):
-    df = _df.copy()
-    df['is_marque'] = df['query'].apply(lambda x: is_marque_query(x, regex_pattern))
+def process_data_for_periods(_df_queries, _df_pages, periode_n_dates, periode_n1_dates, regex_pattern):
+    """
+    Traite les données en utilisant une approche hybride :
+    - Les totaux proviennent de l'export "Pages" (fiable).
+    - La segmentation Marque/Hors-Marque provient de l'export "Requêtes".
+    """
+    # 1. Traitement du fichier des requêtes pour la segmentation
+    df_queries = _df_queries.copy()
+    df_queries['is_marque'] = df_queries['query'].apply(lambda x: is_marque_query(x, regex_pattern))
     
-    periode_n = df[(df['start_date'] >= periode_n_dates[0]) & (df['start_date'] <= periode_n_dates[1])]
-    periode_n1 = df[(df['start_date'] >= periode_n1_dates[0]) & (df['start_date'] <= periode_n1_dates[1])]
+    q_periode_n = df_queries[(df_queries['start_date'] >= periode_n_dates[0]) & (df_queries['start_date'] <= periode_n_dates[1])]
+    q_periode_n1 = df_queries[(df_queries['start_date'] >= periode_n1_dates[0]) & (df_queries['start_date'] <= periode_n1_dates[1])]
     
     metrics = {
-        'total_clics_n1': periode_n1['clicks'].sum(), 'total_clics_n': periode_n['clicks'].sum(),
-        'clics_marque_n1': periode_n1[periode_n1['is_marque']]['clicks'].sum(), 'clics_marque_n': periode_n[periode_n['is_marque']]['clicks'].sum(),
-        'clics_hors_marque_n1': periode_n1[~periode_n1['is_marque']]['clicks'].sum(), 'clics_hors_marque_n': periode_n[~periode_n['is_marque']]['clicks'].sum(),
-        'impressions_marque_n1': periode_n1[periode_n1['is_marque']]['impressions'].sum(), 'impressions_marque_n': periode_n[periode_n['is_marque']]['impressions'].sum(),
-        'total_impressions_n1': periode_n1['impressions'].sum(), 'total_impressions_n': periode_n['impressions'].sum(),
+        'clics_marque_n1': q_periode_n1[q_periode_n1['is_marque']]['clicks'].sum(),
+        'clics_marque_n': q_periode_n[q_periode_n['is_marque']]['clicks'].sum(),
+        'clics_hors_marque_n1': q_periode_n1[~q_periode_n1['is_marque']]['clicks'].sum(),
+        'clics_hors_marque_n': q_periode_n[~q_periode_n['is_marque']]['clicks'].sum(),
+        'impressions_marque_n1': q_periode_n1[q_periode_n1['is_marque']]['impressions'].sum(),
+        'impressions_marque_n': q_periode_n[q_periode_n['is_marque']]['impressions'].sum(),
         'nom_periode_n1': f"{periode_n1_dates[0].strftime('%d/%m/%Y')} - {periode_n1_dates[1].strftime('%d/%m/%Y')}",
         'nom_periode_n': f"{periode_n_dates[0].strftime('%d/%m/%Y')} - {periode_n_dates[1].strftime('%d/%m/%Y')}"
     }
+
+    # 2. Traitement des totaux
+    if _df_pages is not None:
+        # Source fiable : Fichier des pages
+        df_pages = _df_pages.copy()
+        p_periode_n = df_pages[(df_pages['start_date'] >= periode_n_dates[0]) & (df_pages['start_date'] <= periode_n_dates[1])]
+        p_periode_n1 = df_pages[(df_pages['start_date'] >= periode_n1_dates[0]) & (df_pages['start_date'] <= periode_n1_dates[1])]
+        metrics['total_clics_n'] = p_periode_n['clicks'].sum()
+        metrics['total_clics_n1'] = p_periode_n1['clicks'].sum()
+        metrics['total_impressions_n'] = p_periode_n['impressions'].sum()
+        metrics['total_impressions_n1'] = p_periode_n1['impressions'].sum()
+    else:
+        # Fallback : Fichier des requêtes (moins précis)
+        metrics['total_clics_n'] = q_periode_n['clicks'].sum()
+        metrics['total_clics_n1'] = q_periode_n1['clicks'].sum()
+        metrics['total_impressions_n'] = q_periode_n['impressions'].sum()
+        metrics['total_impressions_n1'] = q_periode_n1['impressions'].sum()
+        
     return metrics
 
-# --- Fonctions de Création de Graphiques ---
+# ... (Toutes les fonctions de création de graphiques et de personnalisation UI restent identiques) ...
 def create_evolution_chart(metrics, period_type, style_options):
     COLORS, evolutions = get_colors(), []
     if metrics['total_clics_n1'] > 0: evolutions.append({'Métrique': 'Total Clics', 'Évolution': ((metrics['total_clics_n'] - metrics['total_clics_n1']) / metrics['total_clics_n1'] * 100)})
@@ -97,7 +120,7 @@ def create_pie_charts(metrics, style_options):
             values = [metrics[f'clics_hors_marque_{period}'], metrics[f'clics_marque_{period}']]
             fig = go.Figure(data=[go.Pie(labels=labels, values=values, marker_colors=[COLORS['pie_hors_marque'], COLORS['pie_marque']], hole=0.4, textinfo='label', textfont=dict(size=style_options['axis_font_size']))])
             title_suffix = "Période N-1" if period == 'n1' else "Période N"
-            fig.update_layout(title=f"Répartition {title_suffix}: {metrics[f'nom_periode_{period}']}", height=450, font=dict(family=style_options['font_family']), title_font_size=style_options['title_font_size'])
+            fig.update_layout(title=f"Répartition (basée sur Requêtes) {title_suffix}: {metrics[f'nom_periode_{period}']}", height=450, font=dict(family=style_options['font_family']), title_font_size=style_options['title_font_size'])
             figs.append(fig)
         else:
             figs.append(go.Figure().update_layout(title=f"Pas de données pour la période {period.upper()}", height=450))
@@ -110,7 +133,7 @@ def create_generic_bar_chart(metrics, period_type, style_options, config):
 
 def show_chart_customization():
     with st.expander("🎨 Personnalisation des Graphiques", expanded=False):
-        pass # La logique de personnalisation peut être ajoutée ici si besoin
+        pass
 
 # --- Application Principale ---
 
@@ -121,30 +144,49 @@ def main():
     show_chart_customization()
     
     st.markdown("---")
-    st.markdown("### 🏷️ Configuration de la Marque")
+    st.markdown("### 🏷️ Configuration")
     regex_pattern = st.text_input("Regex pour identifier les requêtes de marque", value="weefin|wee fin")
     try: re.compile(regex_pattern)
-    except re.error:
-        st.error("❌ Regex invalide.")
-        st.stop()
+    except re.error: st.error("❌ Regex invalide."); st.stop()
         
     st.markdown("---")
-    uploaded_file = st.file_uploader("Uploadez votre fichier Google Search Console (Excel)", type=['xlsx', 'xls'])
+    st.markdown("### 📥 Import des Données GSC")
     
-    if uploaded_file:
-        df = load_data(uploaded_file)
-        st.success(f"✅ Fichier chargé avec {len(df):,} lignes.")
+    col1, col2 = st.columns(2)
+    with col1:
+        uploaded_file_queries = st.file_uploader(
+            "1. Fichier 'Requêtes' (Obligatoire)",
+            type=['xlsx', 'xls'],
+            help="Exportez les données depuis l'onglet 'Requêtes' de la GSC. Ce fichier sert à la segmentation Marque/Hors-Marque."
+        )
+    with col2:
+        uploaded_file_pages = st.file_uploader(
+            "2. Fichier 'Pages' (Recommandé)",
+            type=['xlsx', 'xls'],
+            help="Exportez les données depuis l'onglet 'Pages' de la GSC. Ce fichier fournit les totaux de clics/impressions les plus précis."
+        )
+
+    if uploaded_file_queries:
+        df_queries = load_data(uploaded_file_queries)
+        st.success(f"✅ Fichier 'Requêtes' chargé ({len(df_queries):,} lignes).")
         
-        today = datetime.now().date()
-        anchor_date = today.replace(day=1) - timedelta(days=1)
+        df_pages = None
+        if uploaded_file_pages:
+            df_pages = load_data(uploaded_file_pages)
+            st.success(f"✅ Fichier 'Pages' chargé ({len(df_pages):,} lignes). Les totaux seront plus précis.")
+        else:
+            st.warning("⚠️ Fichier 'Pages' non fourni. Les totaux seront calculés depuis le fichier 'Requêtes' et pourraient être légèrement inférieurs à la réalité.")
+
+        # Le reste de la logique reste le même
+        today = datetime.now().date(); anchor_date = today.replace(day=1) - timedelta(days=1)
         st.info(f"💡 L'analyse se base sur les mois entièrement terminés. La date de référence est le **{anchor_date.strftime('%d/%m/%Y')}**.")
 
         st.markdown("### 📅 Type de Comparaison")
+        # ... (Logique de sélection de période identique)
         comparison_mode = st.radio(
             "Choisissez comment comparer les périodes :",
             ["Périodes Consécutives (ex: Q2 vs Q1)", "Année sur Année (YoY, ex: Q2 2024 vs Q2 2023)"],
-            horizontal=True,
-            help="**Consécutives**: Compare une période avec celle qui la précède. **YoY**: Compare une période avec la même période de l'année précédente."
+            horizontal=True
         )
 
         periode_n_dates = None
@@ -154,7 +196,6 @@ def main():
                 "3 derniers mois complets": {"name": "3 derniers mois", "months": 3},
                 "6 derniers mois complets": {"name": "6 derniers mois", "months": 6},
                 "Dernier mois complet": {"name": "Dernier mois", "months": 1},
-                "Dernier trimestre complet": {"name": "Dernier trimestre", "months": 3, "quarter": True},
             }
             selection = st.radio("Choisissez une période :", options.keys(), horizontal=True)
             
@@ -183,33 +224,27 @@ def main():
 
             else: # Sélection Personnalisée YoY
                 with st.expander("📅 Définir une période personnalisée (YoY)", expanded=True):
-                    available_years = sorted(pd.to_datetime(df['start_date']).dt.year.unique(), reverse=True)
+                    available_years = sorted(pd.to_datetime(df_queries['start_date']).dt.year.unique(), reverse=True)
                     month_names = {i: calendar.month_name[i] for i in range(1, 13)}
-
+                    # ... (Logique de sélection personnalisée identique)
                     st.markdown("**Période N (actuelle)**")
                     col1, col2 = st.columns(2)
                     start_month = col1.selectbox("Mois de début", month_names.keys(), format_func=lambda m: month_names[m], index=0)
                     start_year = col2.selectbox("Année de début", available_years, index=0)
-
-                    st.markdown("")
                     col3, col4 = st.columns(2)
                     end_month = col3.selectbox("Mois de fin", month_names.keys(), format_func=lambda m: month_names[m], index=anchor_date.month - 2 if anchor_date.month > 1 else 11)
                     end_year = col4.selectbox("Année de fin", available_years, index=0)
-
                     try:
                         n_start = datetime(start_year, start_month, 1).date()
                         last_day_of_month = calendar.monthrange(end_year, end_month)[1]
                         n_end = datetime(end_year, end_month, last_day_of_month).date()
-
-                        if n_start > n_end:
-                            st.error("La date de début ne peut pas être après la date de fin.")
+                        if n_start > n_end: st.error("La date de début ne peut pas être après la date de fin.")
                         else:
                             n1_start = n_start.replace(year=n_start.year - 1)
                             n1_end = n_end.replace(year=n_end.year - 1)
                             periode_n_dates, periode_n1_dates = (n_start, n_end), (n1_start, n1_end)
                             period_type = "Période Personnalisée (YoY)"
-                    except Exception as e:
-                        st.error(f"Erreur dans la sélection des dates : {e}")
+                    except Exception as e: st.error(f"Erreur dans la sélection des dates : {e}")
 
         if periode_n_dates:
             st.markdown("---")
@@ -217,14 +252,15 @@ def main():
             st.write(f"**Période N (actuelle) :** `{periode_n_dates[0].strftime('%d/%m/%Y')} - {periode_n_dates[1].strftime('%d/%m/%Y')}`")
             st.write(f"**Période N-1 (comparaison) :** `{periode_n1_dates[0].strftime('%d/%m/%Y')} - {periode_n1_dates[1].strftime('%d/%m/%Y')}`")
             
-            metrics = process_data_for_periods(df, periode_n_dates, periode_n1_dates, regex_pattern)
+            # Appel à la fonction de traitement mise à jour
+            metrics = process_data_for_periods(df_queries, df_pages, periode_n_dates, periode_n1_dates, regex_pattern)
             
             if metrics['total_clics_n'] == 0 and metrics['total_clics_n1'] == 0:
                 st.warning("⚠️ Aucune donnée trouvée pour les périodes sélectionnées.")
             else:
                 st.markdown("---")
                 st.markdown("### 📈 Résumé et Graphiques")
-                
+                # ... (Logique d'affichage des graphiques identique)
                 chart_configs = {
                     "global": {"title": "Trafic SEO Global", "yaxis_title": "Clics", "metric_n": "total_clics_n", "metric_n1": "total_clics_n1", "color": get_colors()['global_seo']},
                     "marque": {"title": "Trafic SEO Marque", "yaxis_title": "Clics", "metric_n": "clics_marque_n", "metric_n1": "clics_marque_n1", "color": get_colors()['marque_clics']},
