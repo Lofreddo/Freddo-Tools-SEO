@@ -34,16 +34,19 @@ DEFAULT_TITLES = {
     'axis_impressions': "Impressions",
     'axis_period': "Période",
     'axis_month': "Mois",
+    'axis_evolution': "Évolution (%)",
+    'axis_metric': "Métrique",
     'legend_n': "Période N",
     'legend_n1': "Période N-1",
     'metric_total_clicks': "Total Clics",
     'metric_brand_clicks': "Clics Marque",
     'metric_non_brand_clicks': "Clics Hors-Marque",
-    'metric_total_impressions': "Total Impressions"
+    'metric_total_impressions': "Total Impressions",
+    'pie_label_brand': "Marque",
+    'pie_label_non_brand': "Hors-Marque",
 }
 
-
-# --- Fonctions Utilitaires et de Traitement de Données (INCHANGÉES) ---
+# --- Fonctions de Traitement de Données (INCHANGÉES) ---
 @st.cache_data
 def load_data(uploaded_file):
     df = pd.read_excel(uploaded_file)
@@ -64,6 +67,7 @@ def get_start_of_month(d, months_to_subtract=0):
 
 @st.cache_data
 def process_data_for_periods(_df_queries, _df_pages, periode_n_dates, periode_n1_dates, regex_pattern):
+    # Cette fonction est inchangée
     df_queries = _df_queries.copy()
     df_queries['is_marque'] = df_queries['query'].apply(lambda x: is_marque_query(x, regex_pattern))
     q_periode_n = df_queries[(df_queries['start_date'] >= periode_n_dates[0]) & (df_queries['start_date'] <= periode_n_dates[1])]
@@ -91,6 +95,7 @@ def process_data_for_periods(_df_queries, _df_pages, periode_n_dates, periode_n1
 
 @st.cache_data
 def get_monthly_breakdown(_df_queries, _df_pages, periode_n_dates, periode_n1_dates, regex_pattern):
+    # Cette fonction est inchangée
     def aggregate_monthly(df, start_date, end_date, is_queries=False):
         df_period = df[(df['start_date'] >= start_date) & (df['start_date'] <= end_date)].copy()
         if df_period.empty: return pd.DataFrame()
@@ -118,83 +123,55 @@ def get_monthly_breakdown(_df_queries, _df_pages, periode_n_dates, periode_n1_da
     return final_df
 
 # --- Fonctions de Création de Graphiques ---
-def create_evolution_chart(metrics, chart_title, labels, colors, style_options):
+def create_evolution_chart(metrics, chart_title, labels, colors, style_options, axis_titles):
     evolutions = []
     if metrics['total_clics_n1'] > 0: evolutions.append({'Métrique': labels['total_clicks'], 'Évolution': ((metrics['total_clics_n'] - metrics['total_clics_n1']) / metrics['total_clics_n1'] * 100)})
     if metrics['clics_marque_n1'] > 0: evolutions.append({'Métrique': labels['brand_clicks'], 'Évolution': ((metrics['clics_marque_n'] - metrics['clics_marque_n1']) / metrics['clics_marque_n1'] * 100)})
     if metrics['clics_hors_marque_n1'] > 0: evolutions.append({'Métrique': labels['non_brand_clicks'], 'Évolution': ((metrics['clics_hors_marque_n'] - metrics['clics_hors_marque_n1']) / metrics['clics_hors_marque_n1'] * 100)})
     if metrics['total_impressions_n1'] > 0: evolutions.append({'Métrique': labels['total_impressions'], 'Évolution': ((metrics['total_impressions_n'] - metrics['total_impressions_n1']) / metrics['total_impressions_n1'] * 100)})
-    
     if not evolutions: return go.Figure().update_layout(title="Pas de données pour calculer l'évolution")
-    
     df_evo = pd.DataFrame(evolutions)
     bar_colors = [colors['positive'] if x >= 0 else colors['negative'] for x in df_evo['Évolution']]
-    
     fig = go.Figure(data=[go.Bar(x=df_evo['Métrique'], y=df_evo['Évolution'], marker_color=bar_colors, text=[f"{x:+.1f}%" for x in df_evo['Évolution']], textposition='auto', textfont=dict(size=style_options['bar_text_font_size'], color='white'))])
-    fig.update_layout(title=chart_title, font=dict(family=style_options['font_family'], size=style_options['axis_font_size']), title_font_size=style_options['title_font_size'], height=500, plot_bgcolor='white', yaxis=dict(zeroline=True, zerolinewidth=2, zerolinecolor='black'))
+    fig.update_layout(title=chart_title, xaxis_title=axis_titles['x'], yaxis_title=axis_titles['y'], font=dict(family=style_options['font_family'], size=style_options['axis_font_size']), title_font_size=style_options['title_font_size'], height=500, plot_bgcolor='white', yaxis=dict(zeroline=True, zerolinewidth=2, zerolinecolor='black'))
     return fig
 
-def create_pie_charts(metrics, base_title, colors, style_options):
+def create_pie_charts(metrics, base_title, colors, style_options, labels, legends):
     figs = []
-    for period, legend in [('n1', DEFAULT_TITLES['legend_n1']), ('n', DEFAULT_TITLES['legend_n'])]:
+    for period, legend_text in [('n1', legends['n1']), ('n', legends['n'])]:
         total = metrics[f'clics_marque_{period}'] + metrics[f'clics_hors_marque_{period}']
         if total > 0:
-            labels = [f"Hors-Marque<br>{metrics[f'clics_hors_marque_{period}']:,} ({metrics[f'clics_hors_marque_{period}']/total*100:.1f}%)", f"Marque<br>{metrics[f'clics_marque_{period}']:,} ({metrics[f'clics_marque_{period}']/total*100:.1f}%)"]
+            pie_labels = [f"{labels['non_brand']}<br>{metrics[f'clics_hors_marque_{period}']:,} ({metrics[f'clics_hors_marque_{period}']/total*100:.1f}%)", f"{labels['brand']}<br>{metrics[f'clics_marque_{period}']:,} ({metrics[f'clics_marque_{period}']/total*100:.1f}%)"]
             values = [metrics[f'clics_hors_marque_{period}'], metrics[f'clics_marque_{period}']]
-            fig = go.Figure(data=[go.Pie(labels=labels, values=values, marker_colors=[colors['hors_marque'], colors['marque']], hole=0.4, textinfo='label', textfont=dict(size=style_options['axis_font_size']))])
-            fig.update_layout(title=f"{base_title} {legend}:<br>{metrics[f'nom_periode_{period}']}", height=450, font=dict(family=style_options['font_family']), title_font_size=style_options['title_font_size'])
+            fig = go.Figure(data=[go.Pie(labels=pie_labels, values=values, marker_colors=[colors['hors_marque'], colors['marque']], hole=0.4, textinfo='label', textfont=dict(size=style_options['axis_font_size']))])
+            fig.update_layout(title=f"{base_title} {legend_text}:<br>{metrics[f'nom_periode_{period}']}", height=450, font=dict(family=style_options['font_family']), title_font_size=style_options['title_font_size'])
             figs.append(fig)
         else:
-            fig = go.Figure().update_layout(title=f"Pas de données pour la période {period.upper()}", height=450)
-            figs.append(fig)
+            figs.append(go.Figure().update_layout(title=f"Pas de données pour la période {period.upper()}", height=450))
     return figs[0], figs[1]
 
-# --- CORRIGÉ ---
-def create_generic_bar_chart(metrics, config, chart_title, color, style_options):
-    legend_n1, legend_n = DEFAULT_TITLES['legend_n1'], DEFAULT_TITLES['legend_n']
-    
-    # On utilise le dictionnaire 'metrics' complet et on extrait les valeurs via 'config'
+def create_generic_bar_chart(metrics, config, chart_title, color, style_options, axis_titles, legends):
     y_values = [metrics[config['metric_n1']], metrics[config['metric_n']]]
     text_values = [f"{y:,}" for y in y_values]
-    
-    fig = go.Figure(data=[go.Bar(
-        x=[f"{legend_n1}<br>{metrics['nom_periode_n1']}", f"{legend_n}<br>{metrics['nom_periode_n']}"], 
-        y=y_values, 
-        marker_color=color, 
-        text=text_values, 
-        textposition='auto', 
-        textfont=dict(size=style_options['bar_text_font_size'], color='white')
-    )])
-    
-    fig.update_layout(
-        title=chart_title, 
-        xaxis_title=DEFAULT_TITLES['axis_period'], 
-        yaxis_title=DEFAULT_TITLES[config['yaxis_key']], 
-        font=dict(family=style_options['font_family'], size=style_options['axis_font_size']), 
-        title_font_size=style_options['title_font_size'], 
-        height=500, 
-        showlegend=False, 
-        plot_bgcolor='white'
-    )
+    fig = go.Figure(data=[go.Bar(x=[f"{legends['n1']}<br>{metrics['nom_periode_n1']}", f"{legends['n']}<br>{metrics['nom_periode_n']}"], y=y_values, marker_color=color, text=text_values, textposition='auto', textfont=dict(size=style_options['bar_text_font_size'], color='white'))])
+    fig.update_layout(title=chart_title, xaxis_title=axis_titles['x'], yaxis_title=axis_titles['y'], font=dict(family=style_options['font_family'], size=style_options['axis_font_size']), title_font_size=style_options['title_font_size'], height=500, showlegend=False, plot_bgcolor='white')
     return fig
 
-def create_monthly_breakdown_chart(monthly_data, chart_title, legends, colors, style_options, yaxis_title, custom_x_labels=None):
+def create_monthly_breakdown_chart(monthly_data, chart_title, legends, colors, style_options, axis_titles, custom_x_labels=None):
     x_axis_labels = custom_x_labels if custom_x_labels is not None else monthly_data['month_label']
     fig = go.Figure()
     fig.add_trace(go.Bar(x=x_axis_labels, y=monthly_data['metric_n1'], name=legends['n1'], marker_color=colors['n1'], text=[f"{x:,.0f}" for x in monthly_data['metric_n1']], textposition='outside'))
     fig.add_trace(go.Bar(x=x_axis_labels, y=monthly_data['metric_n'], name=legends['n'], marker_color=colors['n'], text=[f"{x:,.0f}" for x in monthly_data['metric_n']], textposition='outside'))
-    fig.update_layout(title=chart_title, xaxis_title=DEFAULT_TITLES['axis_month'], yaxis_title=yaxis_title, barmode='group', font=dict(family=style_options['font_family'], size=style_options['axis_font_size']), title_font_size=style_options['title_font_size'], height=500, plot_bgcolor='white', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    fig.update_layout(title=chart_title, xaxis_title=axis_titles['x'], yaxis_title=axis_titles['y'], barmode='group', font=dict(family=style_options['font_family'], size=style_options['axis_font_size']), title_font_size=style_options['title_font_size'], height=500, plot_bgcolor='white', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
     return fig
 
 # --- Application Principale ---
 def main():
     st.title("📊 Dashboard SEO - Générateur de Graphiques")
     st.markdown("**Analysez vos performances SEO en comparant des périodes de mois complets.**")
-    
     st.markdown("---"); st.markdown("### 🏷️ Configuration"); regex_pattern = st.text_input("Regex Marque", value="weefin|wee fin")
     try: re.compile(regex_pattern)
     except re.error: st.error("❌ Regex invalide."); st.stop()
-        
     st.markdown("---"); st.markdown("### 📥 Import des Données GSC")
     col1, col2 = st.columns(2)
     uploaded_file_queries = col1.file_uploader("1. Fichier 'Requêtes' (Obligatoire)", type=['xlsx', 'xls'])
@@ -240,7 +217,12 @@ def main():
                 with st.container(border=True):
                     with st.expander("✏️ Personnaliser ce graphique"):
                         st.subheader("Titres et Labels")
-                        chart_title_evo = st.text_input("Titre", f"{DEFAULT_TITLES['evolution_summary']} - {period_type}", key="evo_title")
+                        c1, c2, c3 = st.columns([2,1,1])
+                        chart_title_evo = c1.text_input("Titre du graphique", f"{DEFAULT_TITLES['evolution_summary']} - {period_type}", key="evo_title")
+                        axis_titles_evo = {
+                            'x': c2.text_input("Titre Axe X", DEFAULT_TITLES['axis_metric'], key="evo_axis_x"),
+                            'y': c3.text_input("Titre Axe Y", DEFAULT_TITLES['axis_evolution'], key="evo_axis_y")
+                        }
                         labels_evo = {
                             'total_clicks': st.text_input("Label Clics Totaux", DEFAULT_TITLES['metric_total_clicks'], key="evo_label_tc"),
                             'brand_clicks': st.text_input("Label Clics Marque", DEFAULT_TITLES['metric_brand_clicks'], key="evo_label_bc"),
@@ -248,58 +230,45 @@ def main():
                             'total_impressions': st.text_input("Label Impressions", DEFAULT_TITLES['metric_total_impressions'], key="evo_label_ti")
                         }
                         st.subheader("Couleurs")
+                        c1, c2 = st.columns(2)
                         colors_evo = {
-                            'positive': st.color_picker("Évolution Positive", DEFAULT_COLORS['evolution_positive'], key="evo_color_pos"),
-                            'negative': st.color_picker("Évolution Négative", DEFAULT_COLORS['evolution_negative'], key="evo_color_neg")
+                            'positive': c1.color_picker("Évolution Positive", DEFAULT_COLORS['evolution_positive'], key="evo_color_pos"),
+                            'negative': c2.color_picker("Évolution Négative", DEFAULT_COLORS['evolution_negative'], key="evo_color_neg")
                         }
                         st.subheader("Polices")
-                        style_options_evo = {
-                            'font_family': st.selectbox("Famille de police", ['Arial', 'Verdana', 'Helvetica', 'Garamond', 'Times New Roman'], index=0, key="evo_font"),
-                            'title_font_size': st.slider("Taille du titre", 10, 30, DEFAULT_STYLE_OPTIONS['title_font_size'], key="evo_font_title"),
-                            'axis_font_size': st.slider("Taille des axes", 8, 20, DEFAULT_STYLE_OPTIONS['axis_font_size'], key="evo_font_axis"),
-                            'bar_text_font_size': st.slider("Texte sur les barres", 8, 20, DEFAULT_STYLE_OPTIONS['bar_text_font_size'], key="evo_font_bar")
-                        }
-                    fig_evo = create_evolution_chart(metrics, chart_title_evo, labels_evo, colors_evo, style_options_evo)
+                        style_options_evo = {'font_family': st.selectbox("Famille de police", ['Arial', 'Verdana', 'Helvetica', 'Garamond', 'Times New Roman'], index=0, key="evo_font"), 'title_font_size': st.slider("Taille du titre", 10, 30, DEFAULT_STYLE_OPTIONS['title_font_size'], key="evo_font_title"), 'axis_font_size': st.slider("Taille des axes", 8, 20, DEFAULT_STYLE_OPTIONS['axis_font_size'], key="evo_font_axis"), 'bar_text_font_size': st.slider("Texte sur les barres", 8, 20, DEFAULT_STYLE_OPTIONS['bar_text_font_size'], key="evo_font_bar")}
+                    fig_evo = create_evolution_chart(metrics, chart_title_evo, labels_evo, colors_evo, style_options_evo, axis_titles_evo)
                     st.plotly_chart(fig_evo, use_container_width=True)
 
                 with st.container(border=True):
                     with st.expander("✏️ Personnaliser ces graphiques"):
                         st.subheader("Titres et Labels")
                         base_title_pie = st.text_input("Titre de base", DEFAULT_TITLES['pie_chart'], key="pie_title")
+                        c1, c2 = st.columns(2)
+                        labels_pie = {'brand': c1.text_input("Label 'Marque'", DEFAULT_TITLES['pie_label_brand'], key="pie_label_b"), 'non_brand': c2.text_input("Label 'Hors-Marque'", DEFAULT_TITLES['pie_label_non_brand'], key="pie_label_nb")}
+                        legends_pie = {'n': c1.text_input("Légende Période N", DEFAULT_TITLES['legend_n'], key="pie_leg_n"), 'n1': c2.text_input("Légende Période N-1", DEFAULT_TITLES['legend_n1'], key="pie_leg_n1")}
                         st.subheader("Couleurs")
-                        colors_pie = {
-                            'marque': st.color_picker("Couleur Marque", DEFAULT_COLORS['pie_marque'], key="pie_color_brand"),
-                            'hors_marque': st.color_picker("Couleur Hors-Marque", DEFAULT_COLORS['pie_hors_marque'], key="pie_color_nonbrand")
-                        }
+                        c1, c2 = st.columns(2)
+                        colors_pie = {'marque': c1.color_picker("Couleur Marque", DEFAULT_COLORS['pie_marque'], key="pie_color_brand"), 'hors_marque': c2.color_picker("Couleur Hors-Marque", DEFAULT_COLORS['pie_hors_marque'], key="pie_color_nonbrand")}
                         st.subheader("Polices")
-                        style_options_pie = {
-                            'font_family': st.selectbox("Famille de police", ['Arial', 'Verdana', 'Helvetica', 'Garamond', 'Times New Roman'], index=0, key="pie_font"),
-                            'title_font_size': st.slider("Taille du titre", 10, 30, DEFAULT_STYLE_OPTIONS['title_font_size'], key="pie_font_title"),
-                            'axis_font_size': st.slider("Taille texte camembert", 8, 20, DEFAULT_STYLE_OPTIONS['axis_font_size'], key="pie_font_text"),
-                        }
-                    pie1, pie2 = create_pie_charts(metrics, base_title_pie, colors_pie, style_options_pie)
+                        style_options_pie = {'font_family': st.selectbox("Famille de police", ['Arial', 'Verdana', 'Helvetica', 'Garamond', 'Times New Roman'], index=0, key="pie_font"), 'title_font_size': st.slider("Taille du titre", 10, 30, DEFAULT_STYLE_OPTIONS['title_font_size'], key="pie_font_title"), 'axis_font_size': st.slider("Taille texte camembert", 8, 20, DEFAULT_STYLE_OPTIONS['axis_font_size'], key="pie_font_text")}
+                    pie1, pie2 = create_pie_charts(metrics, base_title_pie, colors_pie, style_options_pie, labels_pie, legends_pie)
                     col1, col2 = st.columns(2); col1.plotly_chart(pie1, use_container_width=True); col2.plotly_chart(pie2, use_container_width=True)
 
-                chart_configs = {
-                    "global": {"title_key": "global_clicks", "yaxis_key": "axis_clicks", "metric_n": "total_clics_n", "metric_n1": "total_clics_n1", "color_key": "global_seo"},
-                    "marque": {"title_key": "brand_clicks", "yaxis_key": "axis_clicks", "metric_n": "clics_marque_n", "metric_n1": "clics_marque_n1", "color_key": "marque_clics"},
-                    "hors_marque": {"title_key": "non_brand_clicks", "yaxis_key": "axis_clicks", "metric_n": "clics_hors_marque_n", "metric_n1": "clics_hors_marque_n1", "color_key": "hors_marque"},
-                    "impressions": {"title_key": "brand_impressions", "yaxis_key": "axis_impressions", "metric_n": "impressions_marque_n", "metric_n1": "impressions_marque_n1", "color_key": "impressions_marque"}
-                }
+                chart_configs = {"global": {"title_key": "global_clicks", "yaxis_key": "axis_clicks", "metric_n": "total_clics_n", "metric_n1": "total_clics_n1", "color_key": "global_seo"}, "marque": {"title_key": "brand_clicks", "yaxis_key": "axis_clicks", "metric_n": "clics_marque_n", "metric_n1": "clics_marque_n1", "color_key": "marque_clics"}, "hors_marque": {"title_key": "non_brand_clicks", "yaxis_key": "axis_clicks", "metric_n": "clics_hors_marque_n", "metric_n1": "clics_hors_marque_n1", "color_key": "hors_marque"}, "impressions": {"title_key": "brand_impressions", "yaxis_key": "axis_impressions", "metric_n": "impressions_marque_n", "metric_n1": "impressions_marque_n1", "color_key": "impressions_marque"}}
                 for key, config in chart_configs.items():
                     with st.container(border=True):
                         with st.expander(f"✏️ Personnaliser le graphique : {DEFAULT_TITLES[config['title_key']]}"):
-                            chart_title_bar = st.text_input("Titre", f"{DEFAULT_TITLES[config['title_key']]} ({DEFAULT_TITLES[config['yaxis_key']]}) - {period_type}", key=f"bar_title_{key}")
+                            st.subheader("Titres et Labels")
+                            c1, c2, c3 = st.columns([2,1,1])
+                            chart_title_bar = c1.text_input("Titre", f"{DEFAULT_TITLES[config['title_key']]} ({DEFAULT_TITLES[config['yaxis_key']]}) - {period_type}", key=f"bar_title_{key}")
+                            axis_titles_bar = {'x': c2.text_input("Titre Axe X", DEFAULT_TITLES['axis_period'], key=f"bar_axis_x_{key}"), 'y': c3.text_input("Titre Axe Y", DEFAULT_TITLES[config['yaxis_key']], key=f"bar_axis_y_{key}")}
+                            legends_bar = {'n': c2.text_input("Légende Période N", DEFAULT_TITLES['legend_n'], key=f"bar_leg_n_{key}"), 'n1': c3.text_input("Légende Période N-1", DEFAULT_TITLES['legend_n1'], key=f"bar_leg_n1_{key}")}
+                            st.subheader("Couleurs")
                             color_bar = st.color_picker("Couleur des barres", DEFAULT_COLORS[config['color_key']], key=f"bar_color_{key}")
-                            style_options_bar = {
-                                'font_family': st.selectbox("Famille de police", ['Arial', 'Verdana', 'Helvetica', 'Garamond', 'Times New Roman'], index=0, key=f"bar_font_{key}"),
-                                'title_font_size': st.slider("Taille du titre", 10, 30, DEFAULT_STYLE_OPTIONS['title_font_size'], key=f"bar_font_title_{key}"),
-                                'axis_font_size': st.slider("Taille des axes", 8, 20, DEFAULT_STYLE_OPTIONS['axis_font_size'], key=f"bar_font_axis_{key}"),
-                                'bar_text_font_size': st.slider("Texte sur les barres", 8, 20, DEFAULT_STYLE_OPTIONS['bar_text_font_size'], key=f"bar_font_text_{key}")
-                            }
-                        # --- CORRIGÉ ---
-                        # On passe le dictionnaire 'metrics' complet et la 'config'
-                        fig_bar = create_generic_bar_chart(metrics, config, chart_title_bar, color_bar, style_options_bar)
+                            st.subheader("Polices")
+                            style_options_bar = {'font_family': st.selectbox("Famille de police", ['Arial', 'Verdana', 'Helvetica', 'Garamond', 'Times New Roman'], index=0, key=f"bar_font_{key}"), 'title_font_size': st.slider("Taille du titre", 10, 30, DEFAULT_STYLE_OPTIONS['title_font_size'], key=f"bar_font_title_{key}"), 'axis_font_size': st.slider("Taille des axes", 8, 20, DEFAULT_STYLE_OPTIONS['axis_font_size'], key=f"bar_font_axis_{key}"), 'bar_text_font_size': st.slider("Texte sur les barres", 8, 20, DEFAULT_STYLE_OPTIONS['bar_text_font_size'], key=f"bar_font_text_{key}")}
+                        fig_bar = create_generic_bar_chart(metrics, config, chart_title_bar, color_bar, style_options_bar, axis_titles_bar, legends_bar)
                         st.plotly_chart(fig_bar, use_container_width=True)
 
                 monthly_data = get_monthly_breakdown(df_queries, df_pages, periode_n_dates, periode_n1_dates, regex_pattern)
@@ -307,38 +276,24 @@ def main():
                     st.markdown("---"); st.markdown("### 📊 Évolution Mensuelle Détaillée")
                     with st.expander("✏️ Personnaliser les étiquettes des mois (appliqué à tous les graphiques mensuels)"):
                         editable_labels = monthly_data['month_label'].tolist()
-                        cols = st.columns(len(editable_labels))
-                        for i, label in enumerate(editable_labels):
-                            editable_labels[i] = cols[i].text_input(f"Label Mois {i+1}", label, key=f"month_label_{i}")
-                    
-                    monthly_chart_configs = {
-                        "global": {"title_key": "global_clicks", "yaxis_key": "axis_clicks", "metric_n": "total_clics", "metric_n1": "total_clics_n1", "color_key": "global_seo"},
-                        "marque": {"title_key": "brand_clicks", "yaxis_key": "axis_clicks", "metric_n": "clics_marque", "metric_n1": "clics_marque_n1", "color_key": "marque_clics"},
-                        "hors_marque": {"title_key": "non_brand_clicks", "yaxis_key": "axis_clicks", "metric_n": "clics_hors_marque", "metric_n1": "clics_hors_marque_n1", "color_key": "hors_marque"},
-                        "impressions": {"title_key": "brand_impressions", "yaxis_key": "axis_impressions", "metric_n": "impressions_marque", "metric_n1": "impressions_marque_n1", "color_key": "impressions_marque"}
-                    }
+                        cols = st.columns(len(editable_labels)); 
+                        for i, label in enumerate(editable_labels): editable_labels[i] = cols[i].text_input(f"Label Mois {i+1}", label, key=f"month_label_{i}")
+                    monthly_chart_configs = {"global": {"title_key": "global_clicks", "yaxis_key": "axis_clicks", "metric_n": "total_clics", "metric_n1": "total_clics_n1", "color_key": "global_seo"}, "marque": {"title_key": "brand_clicks", "yaxis_key": "axis_clicks", "metric_n": "clics_marque", "metric_n1": "clics_marque_n1", "color_key": "marque_clics"}, "hors_marque": {"title_key": "non_brand_clicks", "yaxis_key": "axis_clicks", "metric_n": "clics_hors_marque", "metric_n1": "clics_hors_marque_n1", "color_key": "hors_marque"}, "impressions": {"title_key": "brand_impressions", "yaxis_key": "axis_impressions", "metric_n": "impressions_marque", "metric_n1": "impressions_marque_n1", "color_key": "impressions_marque"}}
                     for key, config in monthly_chart_configs.items():
                         with st.container(border=True):
                              with st.expander(f"✏️ Personnaliser le graphique : {DEFAULT_TITLES[config['title_key']]} (Mensuel)"):
-                                chart_title_monthly = st.text_input("Titre", f"{DEFAULT_TITLES[config['title_key']]} ({DEFAULT_TITLES['monthly_evolution']})", key=f"monthly_title_{key}")
-                                st.subheader("Légendes")
-                                legends_monthly = {
-                                    'n': st.text_input("Légende Période N", DEFAULT_TITLES['legend_n'], key=f"monthly_leg_n_{key}"),
-                                    'n1': st.text_input("Légende Période N-1", DEFAULT_TITLES['legend_n1'], key=f"monthly_leg_n1_{key}")
-                                }
+                                st.subheader("Titres et Labels")
+                                c1, c2, c3 = st.columns([2,1,1])
+                                chart_title_monthly = c1.text_input("Titre", f"{DEFAULT_TITLES[config['title_key']]} ({DEFAULT_TITLES['monthly_evolution']})", key=f"monthly_title_{key}")
+                                axis_titles_monthly = {'x': c2.text_input("Titre Axe X", DEFAULT_TITLES['axis_month'], key=f"monthly_axis_x_{key}"), 'y': c3.text_input("Titre Axe Y", DEFAULT_TITLES[config['yaxis_key']], key=f"monthly_axis_y_{key}")}
+                                legends_monthly = {'n': c2.text_input("Légende Période N", DEFAULT_TITLES['legend_n'], key=f"monthly_leg_n_{key}"), 'n1': c3.text_input("Légende Période N-1", DEFAULT_TITLES['legend_n1'], key=f"monthly_leg_n1_{key}")}
                                 st.subheader("Couleurs")
-                                colors_monthly = {
-                                    'n': st.color_picker("Couleur Période N", DEFAULT_COLORS[config['color_key']], key=f"monthly_color_n_{key}"),
-                                    'n1': st.color_picker("Couleur Période N-1", DEFAULT_COLORS['secondary_light'], key=f"monthly_color_n1_{key}")
-                                }
+                                c1, c2 = st.columns(2)
+                                colors_monthly = {'n': c1.color_picker("Couleur Période N", DEFAULT_COLORS[config['color_key']], key=f"monthly_color_n_{key}"), 'n1': c2.color_picker("Couleur Période N-1", DEFAULT_COLORS['secondary_light'], key=f"monthly_color_n1_{key}")}
                                 st.subheader("Polices")
-                                style_options_monthly = {
-                                    'font_family': st.selectbox("Famille de police", ['Arial', 'Verdana', 'Helvetica', 'Garamond', 'Times New Roman'], index=0, key=f"monthly_font_{key}"),
-                                    'title_font_size': st.slider("Taille du titre", 10, 30, DEFAULT_STYLE_OPTIONS['title_font_size'], key=f"monthly_font_title_{key}"),
-                                    'axis_font_size': st.slider("Taille des axes", 8, 20, DEFAULT_STYLE_OPTIONS['axis_font_size'], key=f"monthly_font_axis_{key}"),
-                                }
+                                style_options_monthly = {'font_family': st.selectbox("Famille de police", ['Arial', 'Verdana', 'Helvetica', 'Garamond', 'Times New Roman'], index=0, key=f"monthly_font_{key}"), 'title_font_size': st.slider("Taille du titre", 10, 30, DEFAULT_STYLE_OPTIONS['title_font_size'], key=f"monthly_font_title_{key}"), 'axis_font_size': st.slider("Taille des axes", 8, 20, DEFAULT_STYLE_OPTIONS['axis_font_size'], key=f"monthly_font_axis_{key}")}
                              monthly_data_subset = {'metric_n': monthly_data[config['metric_n']], 'metric_n1': monthly_data[config['metric_n1']]}
-                             fig_monthly = create_monthly_breakdown_chart(monthly_data_subset, chart_title_monthly, legends_monthly, colors_monthly, style_options_monthly, DEFAULT_TITLES[config['yaxis_key']], custom_x_labels=editable_labels)
+                             fig_monthly = create_monthly_breakdown_chart(monthly_data_subset, chart_title_monthly, legends_monthly, colors_monthly, style_options_monthly, axis_titles_monthly, custom_x_labels=editable_labels)
                              st.plotly_chart(fig_monthly, use_container_width=True)
 
 if __name__ == "__main__":
