@@ -24,7 +24,7 @@ DEFAULT_STYLE_OPTIONS = {
     'font_family': 'Arial', 'title_font_size': 18, 'axis_font_size': 12, 'bar_text_font_size': 12
 }
 
-# --- Fonctions de Gestion de Session (Couleurs & Styles) ---
+# --- Fonctions de Gestion de Session ---
 def get_colors():
     if 'custom_colors' not in st.session_state:
         st.session_state.custom_colors = DEFAULT_COLORS.copy()
@@ -35,7 +35,7 @@ def get_style_options():
         st.session_state.style_options = DEFAULT_STYLE_OPTIONS.copy()
     return st.session_state.style_options
 
-# --- Fonctions Utilitaires et de Traitement de Données (avec Caching) ---
+# --- Fonctions Utilitaires et de Traitement de Données ---
 @st.cache_data
 def load_data(uploaded_file):
     df = pd.read_excel(uploaded_file)
@@ -47,59 +47,13 @@ def is_marque_query(query, regex_pattern):
     try: return bool(re.search(regex_pattern, str(query), re.IGNORECASE))
     except re.error: return False
 
-def get_complete_month_periods(anchor_date):
-    """Calcule des périodes de comparaison basées sur des mois complets."""
-    periods = {}
-
-    def get_start_of_month(d, months_to_subtract=0):
-        year, month = d.year, d.month
-        month -= months_to_subtract
-        while month <= 0:
-            month += 12
-            year -= 1
-        return datetime(year, month, 1).date()
-
-    n_end = anchor_date
-    
-    # 1 mois
-    n_start_1m = get_start_of_month(n_end, 0)
-    n1_end_1m = n_start_1m - timedelta(days=1)
-    n1_start_1m = get_start_of_month(n1_end_1m, 0)
-    periods["dernier_mois_complet"] = {"name": "Dernier mois complet", "periode_n": (n_start_1m, n_end), "periode_n1": (n1_start_1m, n1_end_1m)}
-    
-    # 3 mois
-    n_start_3m = get_start_of_month(n_end, 2)
-    n1_end_3m = n_start_3m - timedelta(days=1)
-    n1_start_3m = get_start_of_month(n1_end_3m, 2)
-    periods["3_derniers_mois_complets"] = {"name": "3 derniers mois complets", "periode_n": (n_start_3m, n_end), "periode_n1": (n1_start_3m, n1_end_3m)}
-    
-    # 6 mois
-    n_start_6m = get_start_of_month(n_end, 5)
-    n1_end_6m = n_start_6m - timedelta(days=1)
-    n1_start_6m = get_start_of_month(n1_end_6m, 5)
-    periods["6_derniers_mois_complets"] = {"name": "6 derniers mois complets", "periode_n": (n_start_6m, n_end), "periode_n1": (n1_start_6m, n1_end_6m)}
-
-    # 12 mois
-    n_start_12m = get_start_of_month(n_end, 11)
-    n1_end_12m = n_start_12m - timedelta(days=1)
-    n1_start_12m = get_start_of_month(n1_end_12m, 11)
-    periods["12_derniers_mois_complets"] = {"name": "12 derniers mois complets", "periode_n": (n_start_12m, n_end), "periode_n1": (n1_start_12m, n1_end_12m)}
-    
-    # Dernier trimestre complet
-    current_quarter = (anchor_date.month - 1) // 3
-    q_end_year = anchor_date.year
-    
-    q_end_month = current_quarter * 3
-    q_start_month = q_end_month - 2
-    
-    q_n_start = datetime(q_end_year, q_start_month, 1).date()
-    q_n_end = (datetime(q_end_year, q_end_month, 1).replace(day=calendar.monthrange(q_end_year, q_end_month)[1])).date()
-    
-    q_n1_end = q_n_start - timedelta(days=1)
-    q_n1_start = get_start_of_month(q_n1_end, 2)
-    periods["dernier_trimestre_complet"] = {"name": "Dernier trimestre complet", "periode_n": (q_n_start, q_n_end), "periode_n1": (q_n1_start, q_n1_end)}
-
-    return periods
+def get_start_of_month(d, months_to_subtract=0):
+    year, month = d.year, d.month
+    month -= months_to_subtract
+    while month <= 0:
+        month += 12
+        year -= 1
+    return datetime(year, month, 1).date()
 
 @st.cache_data
 def process_data_for_periods(_df, periode_n_dates, periode_n1_dates, regex_pattern):
@@ -119,8 +73,8 @@ def process_data_for_periods(_df, periode_n_dates, periode_n1_dates, regex_patte
         'nom_periode_n': f"{periode_n_dates[0].strftime('%d/%m/%Y')} - {periode_n_dates[1].strftime('%d/%m/%Y')}"
     }
     return metrics
-    
-# --- Fonctions de création de graphiques ---
+
+# --- Fonctions de Création de Graphiques ---
 def create_evolution_chart(metrics, period_type, style_options):
     COLORS, evolutions = get_colors(), []
     if metrics['total_clics_n1'] > 0: evolutions.append({'Métrique': 'Total Clics', 'Évolution': ((metrics['total_clics_n'] - metrics['total_clics_n1']) / metrics['total_clics_n1'] * 100)})
@@ -156,13 +110,10 @@ def create_generic_bar_chart(metrics, period_type, style_options, config):
 
 def show_chart_customization():
     with st.expander("🎨 Personnalisation des Graphiques", expanded=False):
-        COLORS, STYLES = get_colors(), get_style_options()
-        # ... (code for customization UI)
-        if st.button("🔄 Réinitialiser les styles"):
-            st.session_state.custom_colors, st.session_state.style_options = DEFAULT_COLORS.copy(), DEFAULT_STYLE_OPTIONS.copy()
-            st.rerun()
+        pass # La logique de personnalisation peut être ajoutée ici si besoin
 
 # --- Application Principale ---
+
 def main():
     st.title("📊 Dashboard SEO - Générateur de Graphiques")
     st.markdown("**Analysez vos performances SEO en comparant des périodes de mois complets.**")
@@ -181,62 +132,114 @@ def main():
     uploaded_file = st.file_uploader("Uploadez votre fichier Google Search Console (Excel)", type=['xlsx', 'xls'])
     
     if uploaded_file:
-        try:
-            df = load_data(uploaded_file)
-            st.success(f"✅ Fichier chargé avec {len(df):,} lignes.")
-            
-            COLORS, STYLES = get_colors(), get_style_options()
+        df = load_data(uploaded_file)
+        st.success(f"✅ Fichier chargé avec {len(df):,} lignes.")
+        
+        today = datetime.now().date()
+        anchor_date = today.replace(day=1) - timedelta(days=1)
+        st.info(f"💡 L'analyse se base sur les mois entièrement terminés. La date de référence est le **{anchor_date.strftime('%d/%m/%Y')}**.")
 
-            st.markdown("### 📅 Sélection de la Période d'Analyse")
-            
-            today = datetime.now().date()
-            anchor_date = today.replace(day=1) - timedelta(days=1)
-            st.info(f"💡 L'analyse se base sur les mois entièrement terminés. La date de référence est le **{anchor_date.strftime('%d/%m/%Y')}**.")
-            
-            predefined_periods = get_complete_month_periods(anchor_date)
-            period_options_map = {
-                "3_derniers_mois_complets": "3 derniers mois complets", "6_derniers_mois_complets": "6 derniers mois complets",
-                "12_derniers_mois_complets": "12 derniers mois complets", "dernier_mois_complet": "Dernier mois complet",
-                "dernier_trimestre_complet": "Dernier trimestre complet"
+        st.markdown("### 📅 Type de Comparaison")
+        comparison_mode = st.radio(
+            "Choisissez comment comparer les périodes :",
+            ["Périodes Consécutives (ex: Q2 vs Q1)", "Année sur Année (YoY, ex: Q2 2024 vs Q2 2023)"],
+            horizontal=True,
+            help="**Consécutives**: Compare une période avec celle qui la précède. **YoY**: Compare une période avec la même période de l'année précédente."
+        )
+
+        periode_n_dates = None
+        
+        if comparison_mode == "Périodes Consécutives (ex: Q2 vs Q1)":
+            options = {
+                "3 derniers mois complets": {"name": "3 derniers mois", "months": 3},
+                "6 derniers mois complets": {"name": "6 derniers mois", "months": 6},
+                "Dernier mois complet": {"name": "Dernier mois", "months": 1},
+                "Dernier trimestre complet": {"name": "Dernier trimestre", "months": 3, "quarter": True},
             }
-
-            selected_period_key = st.radio(
-                "Choisissez une période d'analyse :", list(period_options_map.keys()),
-                format_func=lambda key: period_options_map[key], index=0, horizontal=True
-            )
+            selection = st.radio("Choisissez une période :", options.keys(), horizontal=True)
             
-            selected_config = predefined_periods[selected_period_key]
-            periode_n_dates, periode_n1_dates = selected_config["periode_n"], selected_config["periode_n1"]
-            period_type = selected_config["name"]
+            config = options[selection]
+            n_end = anchor_date
+            n_start = get_start_of_month(anchor_date, config["months"] - 1)
+            n1_end = n_start - timedelta(days=1)
+            n1_start = get_start_of_month(n1_end, config["months"] - 1)
+            
+            periode_n_dates, periode_n1_dates = (n_start, n_end), (n1_start, n1_end)
+            period_type = f"{config['name']} vs Précédent"
 
+        else: # Année sur Année (YoY)
+            options_yoy = ["3 derniers mois complets", "Sélection Personnalisée"]
+            selection_yoy = st.radio("Choisissez une période (comparaison YoY) :", options_yoy, horizontal=True)
+
+            if selection_yoy == "3 derniers mois complets":
+                n_end = anchor_date
+                n_start = get_start_of_month(anchor_date, 2)
+                
+                n1_start = n_start.replace(year=n_start.year - 1)
+                n1_end = n_end.replace(year=n_end.year - 1)
+                
+                periode_n_dates, periode_n1_dates = (n_start, n_end), (n1_start, n1_end)
+                period_type = "3 derniers mois vs N-1 (YoY)"
+
+            else: # Sélection Personnalisée YoY
+                with st.expander("📅 Définir une période personnalisée (YoY)", expanded=True):
+                    available_years = sorted(pd.to_datetime(df['start_date']).dt.year.unique(), reverse=True)
+                    month_names = {i: calendar.month_name[i] for i in range(1, 13)}
+
+                    st.markdown("**Période N (actuelle)**")
+                    col1, col2 = st.columns(2)
+                    start_month = col1.selectbox("Mois de début", month_names.keys(), format_func=lambda m: month_names[m], index=0)
+                    start_year = col2.selectbox("Année de début", available_years, index=0)
+
+                    st.markdown("")
+                    col3, col4 = st.columns(2)
+                    end_month = col3.selectbox("Mois de fin", month_names.keys(), format_func=lambda m: month_names[m], index=anchor_date.month - 2 if anchor_date.month > 1 else 11)
+                    end_year = col4.selectbox("Année de fin", available_years, index=0)
+
+                    try:
+                        n_start = datetime(start_year, start_month, 1).date()
+                        last_day_of_month = calendar.monthrange(end_year, end_month)[1]
+                        n_end = datetime(end_year, end_month, last_day_of_month).date()
+
+                        if n_start > n_end:
+                            st.error("La date de début ne peut pas être après la date de fin.")
+                        else:
+                            n1_start = n_start.replace(year=n_start.year - 1)
+                            n1_end = n_end.replace(year=n_end.year - 1)
+                            periode_n_dates, periode_n1_dates = (n_start, n_end), (n1_start, n1_end)
+                            period_type = "Période Personnalisée (YoY)"
+                    except Exception as e:
+                        st.error(f"Erreur dans la sélection des dates : {e}")
+
+        if periode_n_dates:
+            st.markdown("---")
+            st.markdown("### 🔎 Périodes Sélectionnées pour l'Analyse")
             st.write(f"**Période N (actuelle) :** `{periode_n_dates[0].strftime('%d/%m/%Y')} - {periode_n_dates[1].strftime('%d/%m/%Y')}`")
-            st.write(f"**Période N-1 (précédente) :** `{periode_n1_dates[0].strftime('%d/%m/%Y')} - {periode_n1_dates[1].strftime('%d/%m/%Y')}`")
-
+            st.write(f"**Période N-1 (comparaison) :** `{periode_n1_dates[0].strftime('%d/%m/%Y')} - {periode_n1_dates[1].strftime('%d/%m/%Y')}`")
+            
             metrics = process_data_for_periods(df, periode_n_dates, periode_n1_dates, regex_pattern)
             
             if metrics['total_clics_n'] == 0 and metrics['total_clics_n1'] == 0:
                 st.warning("⚠️ Aucune donnée trouvée pour les périodes sélectionnées.")
-                st.stop()
+            else:
+                st.markdown("---")
+                st.markdown("### 📈 Résumé et Graphiques")
                 
-            st.markdown("---")
-            st.markdown("### 📈 Résumé et Graphiques")
-            
-            chart_configs = {
-                "global": {"title": "Trafic SEO Global", "yaxis_title": "Clics", "metric_n": "total_clics_n", "metric_n1": "total_clics_n1", "color": COLORS['global_seo']},
-                "marque": {"title": "Trafic SEO Marque", "yaxis_title": "Clics", "metric_n": "clics_marque_n", "metric_n1": "clics_marque_n1", "color": COLORS['marque_clics']},
-                # ... etc
-            }
-            
-            st.plotly_chart(create_evolution_chart(metrics, period_type, STYLES), use_container_width=True)
-            pie1, pie2 = create_pie_charts(metrics, STYLES)
-            col1, col2 = st.columns(2)
-            col1.plotly_chart(pie1, use_container_width=True)
-            col2.plotly_chart(pie2, use_container_width=True)
-            # ... (boucle pour les bar charts)
-
-        except Exception as e:
-            st.error(f"Une erreur est survenue : {e}")
-            st.exception(e)
+                chart_configs = {
+                    "global": {"title": "Trafic SEO Global", "yaxis_title": "Clics", "metric_n": "total_clics_n", "metric_n1": "total_clics_n1", "color": get_colors()['global_seo']},
+                    "marque": {"title": "Trafic SEO Marque", "yaxis_title": "Clics", "metric_n": "clics_marque_n", "metric_n1": "clics_marque_n1", "color": get_colors()['marque_clics']},
+                    "hors_marque": {"title": "Trafic SEO Hors-Marque", "yaxis_title": "Clics", "metric_n": "clics_hors_marque_n", "metric_n1": "clics_hors_marque_n1", "color": get_colors()['hors_marque']},
+                    "impressions": {"title": "Impressions SEO Marque", "yaxis_title": "Impressions", "metric_n": "impressions_marque_n", "metric_n1": "impressions_marque_n1", "color": get_colors()['impressions_marque']}
+                }
+                
+                st.plotly_chart(create_evolution_chart(metrics, period_type, get_style_options()), use_container_width=True)
+                pie1, pie2 = create_pie_charts(metrics, get_style_options())
+                col1, col2 = st.columns(2)
+                col1.plotly_chart(pie1, use_container_width=True)
+                col2.plotly_chart(pie2, use_container_width=True)
+                
+                for config in chart_configs.values():
+                    st.plotly_chart(create_generic_bar_chart(metrics, period_type, get_style_options(), config), use_container_width=True)
 
 if __name__ == "__main__":
     main()
