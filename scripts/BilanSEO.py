@@ -149,10 +149,33 @@ def create_pie_charts(metrics, base_title, colors, style_options):
             figs.append(fig)
     return figs[0], figs[1]
 
-def create_generic_bar_chart(metrics, chart_title, color, style_options):
+# --- CORRIGÉ ---
+def create_generic_bar_chart(metrics, config, chart_title, color, style_options):
     legend_n1, legend_n = DEFAULT_TITLES['legend_n1'], DEFAULT_TITLES['legend_n']
-    fig = go.Figure(data=[go.Bar(x=[f"{legend_n1}<br>{metrics['nom_periode_n1']}", f"{legend_n}<br>{metrics['nom_periode_n']}"], y=[metrics['metric_n1'], metrics['metric_n']], marker_color=color, text=[f"{metrics['metric_n1']:,}", f"{metrics['metric_n']:,}"], textposition='auto', textfont=dict(size=style_options['bar_text_font_size'], color='white'))])
-    fig.update_layout(title=chart_title, xaxis_title=DEFAULT_TITLES['axis_period'], yaxis_title=metrics['yaxis_title'], font=dict(family=style_options['font_family'], size=style_options['axis_font_size']), title_font_size=style_options['title_font_size'], height=500, showlegend=False, plot_bgcolor='white')
+    
+    # On utilise le dictionnaire 'metrics' complet et on extrait les valeurs via 'config'
+    y_values = [metrics[config['metric_n1']], metrics[config['metric_n']]]
+    text_values = [f"{y:,}" for y in y_values]
+    
+    fig = go.Figure(data=[go.Bar(
+        x=[f"{legend_n1}<br>{metrics['nom_periode_n1']}", f"{legend_n}<br>{metrics['nom_periode_n']}"], 
+        y=y_values, 
+        marker_color=color, 
+        text=text_values, 
+        textposition='auto', 
+        textfont=dict(size=style_options['bar_text_font_size'], color='white')
+    )])
+    
+    fig.update_layout(
+        title=chart_title, 
+        xaxis_title=DEFAULT_TITLES['axis_period'], 
+        yaxis_title=DEFAULT_TITLES[config['yaxis_key']], 
+        font=dict(family=style_options['font_family'], size=style_options['axis_font_size']), 
+        title_font_size=style_options['title_font_size'], 
+        height=500, 
+        showlegend=False, 
+        plot_bgcolor='white'
+    )
     return fig
 
 def create_monthly_breakdown_chart(monthly_data, chart_title, legends, colors, style_options, yaxis_title, custom_x_labels=None):
@@ -274,8 +297,9 @@ def main():
                                 'axis_font_size': st.slider("Taille des axes", 8, 20, DEFAULT_STYLE_OPTIONS['axis_font_size'], key=f"bar_font_axis_{key}"),
                                 'bar_text_font_size': st.slider("Texte sur les barres", 8, 20, DEFAULT_STYLE_OPTIONS['bar_text_font_size'], key=f"bar_font_text_{key}")
                             }
-                        metrics_bar = {'metric_n': metrics[config['metric_n']], 'metric_n1': metrics[config['metric_n1']], 'yaxis_title': DEFAULT_TITLES[config['yaxis_key']]}
-                        fig_bar = create_generic_bar_chart(metrics_bar, chart_title_bar, color_bar, style_options_bar)
+                        # --- CORRIGÉ ---
+                        # On passe le dictionnaire 'metrics' complet et la 'config'
+                        fig_bar = create_generic_bar_chart(metrics, config, chart_title_bar, color_bar, style_options_bar)
                         st.plotly_chart(fig_bar, use_container_width=True)
 
                 monthly_data = get_monthly_breakdown(df_queries, df_pages, periode_n_dates, periode_n1_dates, regex_pattern)
