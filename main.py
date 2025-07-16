@@ -1,5 +1,5 @@
 import streamlit as st
-from scripts import MyTextGuru, MyTextGuruBulk, ExtractSerps, MasterSpinGenerator, Scrapping, ExtractSerpsV2, PointsChauds, DomainChecker, SiteAnalyzer, Scrapython, HtmlTagsChecker, EmptyHtmlTags, SpinChecker, UnusedCSSDetector, AuditSemantique, GscExtract, SimilarityText, TitleGenerator, KeywordClustering, LiensSortants, Audittechexpress, TableSF, urlopen, DomainCheckerV2, Keywordsimilarity, AuditSemGroup, ImageResizer, QuiSommesNous, ImageNameGenerator, BilanSEO
+from scripts import MyTextGuru, MyTextGuruBulk, ExtractSerps, MasterSpinGenerator, Scrapping, ExtractSerpsV2, PointsChauds, DomainChecker, SiteAnalyzer, Scrapython, HtmlTagsChecker, EmptyHtmlTags, SpinChecker, UnusedCSSDetector, AuditSemantique, GscExtract, SimilarityText, TitleGenerator, KeywordClustering, LiensSortants, Audittechexpress, TableSF, urlopen, DomainCheckerV2, Keywordsimilarity, AuditSemGroup, ImageResizer, QuiSommesNous, ImageNameGenerator, BilanSEO, NomImages
 
 # Configuration des pages
 PAGES = {
@@ -32,7 +32,8 @@ PAGES = {
     "ImageResizer": ImageResizer,
     "QuiSommesNous": QuiSommesNous,
     "ImageNameGenerator": ImageNameGenerator,
-    "BilanSEO": BilanSEO
+    "BilanSEO": BilanSEO,
+    "NomImages": NomImages
 }
 
 # Créer une sidebar pour la navigation
