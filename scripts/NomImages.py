@@ -7,7 +7,7 @@ import re
 import unicodedata
 from io import BytesIO
 
-# --- Fonctions Utilitaires ---
+# --- Fonctions Utilitaires (inchangées) ---
 
 def clean_filename(name: str) -> str:
     """
@@ -20,23 +20,12 @@ def clean_filename(name: str) -> str:
     if not isinstance(name, str):
         return ""
     
-    # 1. Normalisation pour supprimer les accents
     nfkd_form = unicodedata.normalize('NFKD', name)
     cleaned_name = "".join([c for c in nfkd_form if not unicodedata.combining(c)])
-    
-    # 2. Mise en minuscules
     cleaned_name = cleaned_name.lower()
-    
-    # 3. Remplacement des espaces et de certains caractères par des tirets
     cleaned_name = re.sub(r'[\s_]+', '-', cleaned_name)
-    
-    # 4. Suppression de tous les caractères non-valides
     cleaned_name = re.sub(r'[^a-z0-9-]', '', cleaned_name)
-    
-    # 5. Suppression des tirets multiples
     cleaned_name = re.sub(r'-+', '-', cleaned_name)
-    
-    # 6. Suppression des tirets en début ou fin de chaîne
     cleaned_name = cleaned_name.strip('-')
     
     return cleaned_name
@@ -50,7 +39,7 @@ def convert_df_to_excel(df):
     processed_data = output.getvalue()
     return processed_data
 
-# --- Fonction Principale de l'Application ---
+# --- Fonction Principale de l'Application (modifiée) ---
 
 def main():
     """
@@ -63,20 +52,16 @@ def main():
     
     **Instructions :**
     1.  Entrez votre clé API OpenAI.
-    2.  Chargez votre fichier Excel (`.xlsx`) contenant les descriptions de vos produits.
-    3.  Sélectionnez les colonnes correspondant aux informations requises.
+    2.  Chargez votre fichier Excel (`.xlsx`).
+    3.  **Sélectionnez les colonnes contenant les descriptions** de vos produits (nom, type, couleur, description, etc.).
     4.  Lancez la génération et téléchargez les résultats !
     """)
 
     # --- Barre latérale pour la configuration ---
     with st.sidebar:
         st.header("Configuration")
-        
-        # Saisie de la clé API OpenAI
         api_key = st.text_input("Clé API OpenAI", type="password", help="Votre clé est nécessaire pour communiquer avec l'IA. Elle n'est pas stockée.")
-        
         st.markdown("---")
-        # Uploader de fichier
         uploaded_file = st.file_uploader("Chargez votre fichier Excel", type=["xlsx"])
 
     if uploaded_file is not None:
@@ -85,30 +70,26 @@ def main():
             st.success("Fichier chargé avec succès !")
             st.dataframe(df.head())
 
-            # --- Sélection des colonnes ---
-            st.header("2. Mappage des Colonnes")
-            st.info("Sélectionnez les colonnes de votre fichier qui contiennent les informations pour la génération.")
+            # --- NOUVEAU : Sélection de plusieurs colonnes ---
+            st.header("2. Sélection des Colonnes Descriptives")
+            st.info("Sélectionnez toutes les colonnes contenant des informations qui décrivent le produit. L'IA les analysera ensemble.")
             
-            cols = df.columns.tolist()
-            # Option pour indiquer qu'une information n'est pas disponible
-            options = ["Ne pas utiliser"] + cols 
-
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                col_produit = st.selectbox("Type de produit*", options=options)
-            with col2:
-                col_couleur = st.selectbox("Couleur", options=options)
-            with col3:
-                col_caracteristiques = st.selectbox("Caractéristiques", options=options)
-            with col4:
-                col_genre = st.selectbox("Genre", options=options)
+            all_columns = df.columns.tolist()
+            # Pré-sélectionne la première colonne par défaut si elle existe
+            default_selection = [all_columns[0]] if all_columns else []
+            
+            selected_columns = st.multiselect(
+                "Choisissez les colonnes à analyser",
+                options=all_columns,
+                default=default_selection
+            )
             
             # Bouton de génération
             if st.button("🚀 Générer les noms d'images", use_container_width=True):
                 if not api_key:
                     st.error("Veuillez entrer votre clé API OpenAI dans la barre latérale.")
-                elif col_produit == "Ne pas utiliser":
-                    st.warning("Veuillez sélectionner au moins la colonne 'Type de produit'.")
+                elif not selected_columns:
+                    st.warning("Veuillez sélectionner au moins une colonne à analyser.")
                 else:
                     try:
                         client = OpenAI(api_key=api_key)
@@ -118,36 +99,33 @@ def main():
 
                         # Itération sur chaque ligne du DataFrame
                         for i, row in df.iterrows():
-                            # Construction de la chaîne d'information pour l'IA
-                            info_parts = []
-                            if col_produit != "Ne pas utiliser" and pd.notna(row[col_produit]):
-                                info_parts.append(f"Type de produit: {row[col_produit]}")
-                            if col_couleur != "Ne pas utiliser" and pd.notna(row[col_couleur]):
-                                info_parts.append(f"Couleur: {row[col_couleur]}")
-                            if col_caracteristiques != "Ne pas utiliser" and pd.notna(row[col_caracteristiques]):
-                                info_parts.append(f"Caractéristiques: {row[col_caracteristiques]}")
-                            if col_genre != "Ne pas utiliser" and pd.notna(row[col_genre]):
-                                info_parts.append(f"Genre: {row[col_genre]}")
-                            
+                            # --- NOUVEAU : Concaténation des informations des colonnes sélectionnées ---
+                            info_parts = [str(row[col]) for col in selected_columns if pd.notna(row[col]) and str(row[col]).strip()]
                             product_info = ", ".join(info_parts)
                             
                             if not product_info:
                                 generated_names.append("") # Ligne vide si aucune info
+                                progress_bar.progress((i + 1) / len(df), text=f"Génération en cours... {i+1}/{len(df)}")
                                 continue
 
-                            # --- Prompt pour OpenAI ---
-                            system_prompt = "Tu es un assistant expert en SEO e-commerce. Ta mission est de créer des noms de fichiers d'images concis et optimisés."
+                            # --- NOUVEAU : Prompt pour OpenAI adapté à l'analyse de texte ---
+                            system_prompt = "Tu es un assistant expert en SEO e-commerce. Ta mission est de créer des noms de fichiers d'images concis et optimisés à partir d'une description."
                             user_prompt = f"""
-                            À partir des informations suivantes : "{product_info}".
-                            
-                            Crée un nom de fichier pour une image de ce produit en respectant IMPÉRATIVEMENT ces règles :
-                            1. Structure : `type-produit-couleur-caracteristiques-genre`.
-                            2. Maximum 4 mots au total.
-                            3. Langue : français.
-                            4. Format : Uniquement des minuscules, pas d'accents, pas de caractères spéciaux. Mots séparés par un tiret "-".
-                            
-                            Ne me donne QUE le nom de fichier final, sans aucune autre explication.
-                            Exemple de sortie attendue : robe-rouge-soie-femme
+                            Analyse le texte descriptif suivant sur un produit : "{product_info}".
+
+                            Ta tâche est d'extraire de ce texte les 4 informations suivantes :
+                            1.  **Type de produit** (ex: robe, t-shirt, pantalon)
+                            2.  **Couleur** principale (ex: rouge, bleu, noir)
+                            3.  **Caractéristique** distinctive (ex: soie, coton, long, à capuche)
+                            4.  **Genre** ou cible (ex: femme, homme, enfant, unisexe)
+
+                            Combine ces informations pour créer un nom de fichier en respectant IMPÉRATIVEMENT ces règles :
+                            - **Structure** : `type-produit-couleur-caracteristique-genre`. Si une information n'est pas trouvée, ignore cette partie.
+                            - **Longueur** : 4 mots maximum au total.
+                            - **Format** : Uniquement des minuscules, pas d'accents, pas de caractères spéciaux. Mots séparés par un tiret "-".
+
+                            Ne retourne QUE le nom de fichier final, sans aucune autre explication.
+                            Exemple de sortie attendue : `robe-rouge-soie-femme`
                             """
                             
                             response = client.chat.completions.create(
@@ -156,8 +134,8 @@ def main():
                                     {"role": "system", "content": system_prompt},
                                     {"role": "user", "content": user_prompt}
                                 ],
-                                temperature=0.2,
-                                max_tokens=20
+                                temperature=0.1, # Température basse pour une sortie plus prédictible
+                                max_tokens=25
                             )
                             
                             raw_name = response.choices[0].message.content
@@ -170,14 +148,12 @@ def main():
                         progress_bar.empty()
                         st.success("Génération terminée !")
                         
-                        # Ajout de la nouvelle colonne et affichage
                         df_results = df.copy()
                         df_results['nom_image_genere'] = generated_names
                         
                         st.header("✅ Résultats")
                         st.dataframe(df_results)
                         
-                        # Téléchargement des résultats
                         excel_data = convert_df_to_excel(df_results)
                         st.download_button(
                             label="📥 Télécharger le fichier Excel avec les noms",
@@ -193,6 +169,5 @@ def main():
         except Exception as e:
             st.error(f"Erreur lors de la lecture du fichier Excel : {e}")
 
-# Permet de tester le script en l'exécutant directement (optionnel)
 if __name__ == '__main__':
     main()
